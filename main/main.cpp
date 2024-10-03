@@ -13,6 +13,9 @@ extern "C" void app_main()
   // Arduino-like loop()
   while(true){
     Serial.println("loop");
+    esp_sleep_enable_timer_wakeup(1000000); // 1 second
+    esp_light_sleep_start();
+    // sleep(1);
   }
 
   // WARNING: if program reaches end of function app_main() the MCU will restart.
