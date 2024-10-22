@@ -222,7 +222,7 @@ class ServerCallbacks: public NimBLEServerCallbacks {
          *  Latency: number of intervals allowed to skip.
          *  Timeout: 10 millisecond increments, try for 3x interval time for best results.
          */
-        pServer->updateConnParams(connInfo.getConnHandle(), 24, 48, 0, 18);
+        pServer->updateConnParams(connInfo.getConnHandle(), 24, 4*48, 0, 18);
     };
 
     void onDisconnect(NimBLEServer* pServer, NimBLEConnInfo& connInfo, int reason) {
