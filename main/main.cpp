@@ -43,14 +43,16 @@ ADS1120 adc;
 // }
 
 class MyServerCallbacks : public BLEServerCallbacks {
-  void onConnect(BLEServer *pServer) {
+  // void onConnect(BLEServer *pServer) {
+  void onConnect(NimBLEServer* pServer, NimBLEConnInfo& connInfo) {
     deviceConnected = true;
     BLEDevice::startAdvertising();
     Serial.print("On connect callback on core ");
     Serial.println(xPortGetCoreID());
   };
 
-  void onDisconnect(BLEServer *pServer) {
+  // void onDisconnect(BLEServer *pServer) {
+  void onDisconnect(NimBLEServer* pServer, NimBLEConnInfo& connInfo, int reason) {
     deviceConnected = false;
     Serial.print("On disco callback on core ");
     Serial.println(xPortGetCoreID());
@@ -184,7 +186,7 @@ void loop() {
   // Serial.print(deviceConnected);
   // Serial.print(oldDeviceConnected);
   // Serial.println("");
-  vTaskDelay(5);
+  vTaskDelay(1); // Needed otherwise watchdog timer
   if (deviceConnected) {
 
     uint8_t batch[251];
@@ -194,14 +196,14 @@ void loop() {
     if (bytesRead > 0) {
         pCharacteristic->setValue(batch, bytesRead);
         pCharacteristic->notify();
-        vTaskDelay(10);
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
     // bluetooth stack will go into congestion, if too many packets
     // are sent, in 6 hours test i was able to go as low as 3ms
   }
   // disconnecting
   if (!deviceConnected && oldDeviceConnected) {
-    vTaskDelay(500);  // give the bluetooth stack the chance to get things ready
+    vTaskDelay(pdMS_TO_TICKS(500));  // give the bluetooth stack the chance to get things ready
     Serial.println("start advertising");
 
     pServer->startAdvertising();  // restart advertising
@@ -212,7 +214,7 @@ void loop() {
   // connecting
   if (deviceConnected && !oldDeviceConnected) {
     // do stuff here on connecting
-
+    Serial.println("When does this happen?");
     oldDeviceConnected = true;
   }
 
