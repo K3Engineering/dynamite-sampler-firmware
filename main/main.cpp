@@ -8,20 +8,19 @@
 
 #include "ADS1120.h"
 
-// #include "FreeRTOS.h"
 #include <freertos/stream_buffer.h>
 
 // extern "C" {void app_main(void);}
 
-// static NimBLEServer* pServer;
-
-
+// TODO since we don't need blue droid backwards compatability, all of the #defines
+// could be expanded to their nimble equivalent
 BLEServer *pServer = NULL;
 BLECharacteristic *pCharacteristic = NULL;
 bool deviceConnected = false;
-bool oldDeviceConnected = false;
+//bool oldDeviceConnected = false;
 
 StreamBufferHandle_t xStreamBuffer = NULL;
+TaskHandle_t xHandleNotify = NULL;  //Used by ISR to unblock notify task
 
 #define SERVICE_UUID "e331016b-6618-4f8f-8997-1a2c7c9e5fa3"
 #define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
@@ -32,21 +31,16 @@ ADS1120 adc;
 // Core1 is for everything else. Setup & loop run on core 1.
 // ISR is handled on the core that sets it.
 
-// TODO change to core 1 and setup ISR
-// TaskHandle_t Core0Task;
-// void codeForCore0Task(void *parameter) {
-//   while (true) {
-//     Serial.print("Task 0 loop on core ");
-//     Serial.println(xPortGetCoreID());
-//     delay(1000);
-//   }
-// }
-
 class MyServerCallbacks : public BLEServerCallbacks {
   // void onConnect(BLEServer *pServer) {
   void onConnect(NimBLEServer* pServer, NimBLEConnInfo& connInfo) {
     deviceConnected = true;
-    BLEDevice::startAdvertising();
+    
+    // TODO: Figure out:
+    // is this needed?
+    // Does this actually affect the packet size for the way we notify
+    // Do we need to notify in a different way?
+    pServer->setDataLen(connInfo.getConnHandle(), 251);
     Serial.print("On connect callback on core ");
     Serial.println(xPortGetCoreID());
   };
@@ -54,6 +48,9 @@ class MyServerCallbacks : public BLEServerCallbacks {
   // void onDisconnect(BLEServer *pServer) {
   void onDisconnect(NimBLEServer* pServer, NimBLEConnInfo& connInfo, int reason) {
     deviceConnected = false;
+    //TODO stop reading the ADC and stop the interupt when disconnected
+
+    BLEDevice::startAdvertising();
     Serial.print("On disco callback on core ");
     Serial.println(xPortGetCoreID());
   }
@@ -99,8 +96,43 @@ void setup_ble() {
 // Flash. And Flash on ESP32 is much slower than internal RAM.
 void IRAM_ATTR isr_adc_drdy() {
   uint32_t adcValue = adc.readADC();
-  xStreamBufferSendFromISR(xStreamBuffer, &adcValue, sizeof(adcValue), 0);
+  // TODO this feels like a hack? I think ISR should be toggled by somewhere
+  if(deviceConnected)
+  {
+    xStreamBufferSendFromISR(xStreamBuffer, &adcValue, sizeof(adcValue), 0);
+  }
+  // DLE allows to extend data packet from 27 to 251 bytes
+  // Schedule a task when buffer is closer to the upper limit
+  // TODO figure out the best number or a way to know when to schedule
+  if(xStreamBufferBytesAvailable(xStreamBuffer) > 200)
+  {
+    xTaskResumeFromISR(xHandleNotify);
+  }
 }
+
+void task_ble_characteristic_adc_notify(void * parameter)
+{
+  // When the buffer is sufficiently large, the ISR will unblock this task so it can
+  // update the characteristic
+  while(true)
+  {
+    vTaskSuspend(NULL);
+    if(deviceConnected)
+    {
+      uint8_t batch[251];
+      size_t bytesRead = 0;
+      bytesRead = xStreamBufferReceive(xStreamBuffer, batch, 251, 0);
+
+      if (bytesRead > 0)
+      {
+          pCharacteristic->setValue(batch, bytesRead);
+          pCharacteristic->notify();
+      }
+    }
+  }
+  vTaskDelete(NULL);
+}
+
 
 void setup_adc() {
   uint8_t PIN_NUM_CLK = 12;
@@ -153,70 +185,39 @@ void setup_adc() {
 }
 
 void setup() {
-    Serial.begin(115200);
-    Serial.println("Starting!");
+  Serial.begin(115200);
+  Serial.println("Starting!");
+  Serial.print("Running on Core: ");
+  Serial.println(xPortGetCoreID());
+  // TODO assert that this runs on core 1, so that all of the adc isr setup is on core 1
 
-    // // esp_pm_config_esp32_t pm_config = {
-    esp_pm_config_t pm_config = {
-        .max_freq_mhz = 80,
-        .min_freq_mhz = 10,
-        .light_sleep_enable = false,
-    };
-    esp_pm_configure(&pm_config);
-    // ESP_ERROR_CHECK(esp_pm_configure(&pm_config));
+  // // esp_pm_config_esp32_t pm_config = {
+  esp_pm_config_t pm_config = {
+      .max_freq_mhz = 80,
+      .min_freq_mhz = 10,
+      .light_sleep_enable = false,
+  };
+  esp_pm_configure(&pm_config);
+  // ESP_ERROR_CHECK(esp_pm_configure(&pm_config));
 
-    // Set up Core 0 task handler
-    // xTaskCreatePinnedToCore(codeForCore0Task, "Core 0 task", 10000, NULL, 1,
-    //                         &Core0Task, 0);
+  delay(500);
+  setup_ble();
+  delay(500);
+  setup_adc();  // TODO force run this on core 1 to make sure ISR is on core 1
+  delay(500);
 
-    delay(500);
-    setup_ble();
-    delay(500);
-    setup_adc();  // TODO force run this on core 1 to make sure ISR is on core 1
-    delay(500);
+  // TODO maybe this needs to be pinned on BLE core?
+  // TODO figure out the memory stack required
+  // xTaskCreatePinnedToCore
+  xTaskCreate(task_ble_characteristic_adc_notify, "taskNotify", 5000, NULL, 1, &xHandleNotify);
+  Serial.println("Started!");
 
-    Serial.println("Started!");
-    // Setup ADC
-    // Setup handling the interupt from the
 }
 
 void loop() {
-  // notify changed value
-  // Serial.print("loop ");
-  // Serial.print(deviceConnected);
-  // Serial.print(oldDeviceConnected);
-  // Serial.println("");
-  vTaskDelay(1); // Needed otherwise watchdog timer
-  if (deviceConnected) {
-
-    uint8_t batch[251];
-    size_t bytesRead = 0;
-    bytesRead = xStreamBufferReceive(xStreamBuffer, batch, 251, 0);
-
-    if (bytesRead > 0) {
-        pCharacteristic->setValue(batch, bytesRead);
-        pCharacteristic->notify();
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
-    // bluetooth stack will go into congestion, if too many packets
-    // are sent, in 6 hours test i was able to go as low as 3ms
-  }
-  // disconnecting
-  if (!deviceConnected && oldDeviceConnected) {
-    vTaskDelay(pdMS_TO_TICKS(500));  // give the bluetooth stack the chance to get things ready
-    Serial.println("start advertising");
-
-    pServer->startAdvertising();  // restart advertising
-    Serial.print("disconnecting loop callback on core ");
-    Serial.println(xPortGetCoreID());
-    oldDeviceConnected = false;
-  }
-  // connecting
-  if (deviceConnected && !oldDeviceConnected) {
-    // do stuff here on connecting
-    Serial.println("When does this happen?");
-    oldDeviceConnected = true;
-  }
+  // TODO currently everything is handled by tasks, so maybe switch to app_main if loop
+  // is empty
+  vTaskDelay(10); // Needed otherwise watchdog timer
 
 }
 
