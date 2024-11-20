@@ -154,13 +154,12 @@ void task_setup_adc(void *parameter) {
   uint8_t PIN_ADC_RESET = 14;
   uint8_t PIN_CS_ADC = 13;
 
+  adc.setClockSpeed(20000000); // SPI clock speed, has to run before adc.begin()
   adc.begin(&SpiADC, PIN_NUM_CLK, PIN_NUM_MISO, PIN_NUM_MOSI, PIN_CS_ADC, PIN_DRDY);
-
 
   // adc.setMultiplexer(0x00); // AIN0 AIN1
   // adc.setPGAbypass(0);
 
-  adc.setClockSpeed(16000000); // SPI clock speed
 
   adc.reset(PIN_ADC_RESET);
   
