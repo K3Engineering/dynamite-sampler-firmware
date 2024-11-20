@@ -24,7 +24,7 @@ bool deviceConnected = false;
 // bool oldDeviceConnected = false;
 
 StreamBufferHandle_t xStreamBuffer = NULL;
-TaskHandle_t xHandleNotify = NULL; // Used by ISR to unblock notify task
+TaskHandle_t xHandleADCRead = NULL; // Used by ISR to unblock ADC read and proccesing
 
 #define SERVICE_UUID "e331016b-6618-4f8f-8997-1a2c7c9e5fa3"
 #define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
@@ -103,44 +103,49 @@ void setup_ble() {
 // is placed in the ESP32’s Internal RAM (IRAM). Otherwise the code is kept in
 // Flash. And Flash on ESP32 is much slower than internal RAM.
 void IRAM_ATTR isr_adc_drdy() {
-  adcOutput adcReading = adc.readADC();
-  uint32_t adcValue = adcReading.ch0;
-  // TODO this feels like a hack? I think ISR should be toggled by somewhere
-  if (deviceConnected) {
-    xStreamBufferSendFromISR(xStreamBuffer, &adcValue, sizeof(adcValue), 0);
-
-    // DLE allows to extend data packet from 27 to 251 bytes
-    // Schedule a task when buffer is closer to the upper limit
-    // TODO figure out the best number or a way to know when to schedule
-    if (xStreamBufferBytesAvailable(xStreamBuffer) > 200) {
-      if (xHandleNotify != NULL) {
-        xTaskResumeFromISR(xHandleNotify);
-      }
-    }
+  // unblock the task that will read the ADC & handle putting in the buffer
+  if (xHandleADCRead != NULL) {
+    xTaskResumeFromISR(xHandleADCRead);
   }
 }
 
-void task_ble_characteristic_adc_notify(void *parameter) {
-  // When the buffer is sufficiently large, the ISR will unblock this task so it
-  // can update the characteristic
+
+//TODO rename function
+void task_ble_characteristic_adc_notify(void *parameter) { 
+
   while (true) {
     vTaskSuspend(NULL);
-    if (deviceConnected) {
-      uint8_t batch[251];
-      size_t bytesRead = 0;
-      bytesRead = xStreamBufferReceive(xStreamBuffer, batch, 251, 0);
 
-      if (bytesRead > 0) {
-        pCharacteristic->setValue(batch, bytesRead);
-        pCharacteristic->notify();
+    adcOutput adcReading = adc.readADC();
+    uint32_t adcValue = adcReading.ch0;
+    // TODO this feels like a hack? I think ISR should be toggled by somewhere
+    if (deviceConnected) {
+      xStreamBufferSend(xStreamBuffer, &adcValue, sizeof(adcValue), 0);
+
+      // When the buffer is sufficiently large, time to send data.
+      // DLE allows to extend data packet from 27 to 251 bytes
+      // Schedule a task when buffer is closer to the upper limit
+      // TODO figure out the best number or a way to know when to schedule
+      if (xStreamBufferBytesAvailable(xStreamBuffer) > 200) {
+        if (deviceConnected) {
+          uint8_t batch[251];
+          size_t bytesRead = 0;
+          bytesRead = xStreamBufferReceive(xStreamBuffer, batch, 251, 0);
+
+          if (bytesRead > 0) {
+            pCharacteristic->setValue(batch, bytesRead);
+            pCharacteristic->notify();
+          }
+        }
       }
     }
+
   }
   vTaskDelete(NULL);
 }
 
 void task_setup_adc(void *parameter) {
-  Serial.println("setting up adc on core: ");
+  Serial.print("setting up adc on core: ");
   Serial.println(xPortGetCoreID());
   uint8_t PIN_NUM_CLK = 11;
   uint8_t PIN_NUM_MISO = 10;
@@ -204,7 +209,8 @@ void task_setup_adc(void *parameter) {
 void app_main(void) {
   initArduino();
   Serial.begin(115200);
-  Serial.println("Starting!");
+  Serial.println("Starting Arduino version:");
+  Serial.println(ESP_ARDUINO_VERSION_STR);
   Serial.print("Running on Core: ");
   Serial.println(xPortGetCoreID());
   // Serial.print("Config PM SLP IRAM OPT (put lightsleep into ram):");
@@ -225,10 +231,10 @@ void app_main(void) {
   // TODO maybe this needs to be pinned on BLE core?
   // TODO figure out the memory stack required
   // xTaskCreatePinnedToCore
-  xTaskCreate(task_ble_characteristic_adc_notify, "taskNotify", 5000, NULL, 1,
-              &xHandleNotify);
+  xTaskCreate(task_ble_characteristic_adc_notify, "taskNotify", 5000, NULL, CORE_APP,
+              &xHandleADCRead);
   // xTaskCreatePinnedToCore(task_ble_characteristic_adc_notify, "taskNotify",
-  // 5000, NULL, 1, &xHandleNotify, CORE_BLE);
+  // 5000, NULL, 1, &xHandleADCRead, CORE_BLE);
 
   // // esp_pm_config_esp32_t pm_config = {
   esp_pm_config_t pm_config = {
