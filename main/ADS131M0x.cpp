@@ -568,7 +568,10 @@ bool ADS131M0x::isDataReady()
   return true;
 }
 
-int32_t readChannelHelper(const uint8_t *buffer, int index) {
+inline int32_t readChannelHelper(const uint8_t *buffer, int index, size_t buffer_length) {
+  assert(index >= 0);
+  assert(index + 2 < buffer_length);
+
   int32_t aux = ((buffer[index] << 16) | (buffer[index + 1] << 8) | buffer[index + 2]) & 0x00FFFFFF;
   if (aux > 0x7FFFFF)
   {
@@ -582,7 +585,7 @@ int32_t readChannelHelper(const uint8_t *buffer, int index) {
 /// @return 
 adcOutput ADS131M0x::readADC(void)
 {
-  uint8_t read_length = data_word_length * (1 + num_channels_enabled);
+  const uint8_t read_length = data_word_length * (1 + num_channels_enabled);
   uint8_t txBuffer[read_length] = {0}; // Buffer for SPI transfer
   uint8_t rxBuffer[read_length] = {0}; // Buffer for SPI receive data
 
@@ -602,10 +605,10 @@ adcOutput ADS131M0x::readADC(void)
   // CRC is bytes 15, 16
 
   res.status = (rxBuffer[0] << 8) | rxBuffer[1];
-  res.ch0 = readChannelHelper(rxBuffer, 3);
-  res.ch1 = readChannelHelper(rxBuffer, 6);
-  res.ch2 = readChannelHelper(rxBuffer, 9);
-  res.ch3 = readChannelHelper(rxBuffer, 12);
+  res.ch0 = readChannelHelper(rxBuffer, 3, sizeof(rxBuffer));
+  res.ch1 = readChannelHelper(rxBuffer, 6, sizeof(rxBuffer));
+  res.ch2 = readChannelHelper(rxBuffer, 9, sizeof(rxBuffer));
+  res.ch3 = readChannelHelper(rxBuffer, 12, sizeof(rxBuffer));
 
 #ifndef NO_CS_DELAY
   delayMicroseconds(1);
