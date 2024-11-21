@@ -163,9 +163,14 @@ void task_setup_adc(void *parameter) {
 
   adc.reset(PIN_ADC_RESET);
   
-  adc.setInputChannelSelection(0, INPUT_CHANNEL_MUX_AIN0P_AIN0N);
-  adc.setChannelPGA(0, PGA_GAIN_128);
-  // adc.setChannelPGA(0, PGA_GAIN_1);
+  adc.setInputChannelSelection(0, INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS);
+  adc.setInputChannelSelection(1, INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS);
+  adc.setInputChannelSelection(2, INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS);
+  adc.setInputChannelSelection(3, INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS);
+
+  adc.setChannelPGA(0, PGA_GAIN_1);
+  // adc.setChannelPGA(1, PGA_GAIN_128);
+  
 
   adc.setPowerMode(POWER_MODE_HIGH_RESOLUTION);
   

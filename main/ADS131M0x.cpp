@@ -634,8 +634,8 @@ int32_t ADS131M0x::readfastCh0(void)
 /// @return 
 adcOutput ADS131M0x::readADC(void)
 {
-  uint8_t txBuffer[21] = {0}; // Buffer for SPI transfer
-  uint8_t rxBuffer[21] = {0}; // Buffer for SPI receive data
+  uint8_t txBuffer[18] = {0}; // Buffer for SPI transfer
+  uint8_t rxBuffer[18] = {0}; // Buffer for SPI receive data
   int32_t aux;
   adcOutput res;
 
@@ -645,13 +645,14 @@ adcOutput ADS131M0x::readADC(void)
 #endif
 
   spiPort->transferBytes(txBuffer, rxBuffer, sizeof(rxBuffer));
-  // status is bytes 0, 1, 2
+  // data word length * (1 for status + num channels)
+
+  // status is bytes 0, 1
   // ch0 is bytes 3, 4, 5
-  // blank is bytes 6, 7, 8
-  // ch1 is bytes 9, 10, 11
-  // ch2 is bytes 12, 13, 14
-  // ch3 is bytes 15, 16, 17
-  // blank is bytes 18, 19, 20
+  // ch1 is bytes 6, 7, 8
+  // ch2 is bytes 9, 10, 11
+  // ch3 is bytes 12, 13, 14
+  // CRC is bytes 15, 16
 
   res.status = (rxBuffer[0] << 8) | rxBuffer[1];
 
@@ -667,7 +668,7 @@ adcOutput ADS131M0x::readADC(void)
   }
 
   // read CH1 --------
-  aux = ((rxBuffer[9] << 16) | (rxBuffer[10] << 8) | rxBuffer[11]) & 0x00FFFFFF;
+  aux = ((rxBuffer[6] << 16) | (rxBuffer[7] << 8) | rxBuffer[8]) & 0x00FFFFFF;
   if (aux > 0x7FFFFF)
   {
     res.ch1 = ((~(aux)&0x00FFFFFF) + 1) * -1;
@@ -678,7 +679,7 @@ adcOutput ADS131M0x::readADC(void)
   }
   
 
-  aux = ((rxBuffer[12] << 16) | (rxBuffer[13] << 8) | rxBuffer[14]) & 0x00FFFFFF;
+  aux = ((rxBuffer[9] << 16) | (rxBuffer[10] << 8) | rxBuffer[11]) & 0x00FFFFFF;
   if (aux > 0x7FFFFF)
   {
     res.ch2 = ((~(aux)&0x00FFFFFF) + 1) * -1;
@@ -688,7 +689,7 @@ adcOutput ADS131M0x::readADC(void)
     res.ch2 = aux;
   }
 
-  aux = ((rxBuffer[15] << 16) | (rxBuffer[16] << 8) | rxBuffer[17]) & 0x00FFFFFF;
+  aux = ((rxBuffer[12] << 16) | (rxBuffer[13] << 8) | rxBuffer[14]) & 0x00FFFFFF;
   if (aux > 0x7FFFFF)
   {
     res.ch3 = ((~(aux)&0x00FFFFFF) + 1) * -1;
