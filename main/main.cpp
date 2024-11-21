@@ -117,10 +117,10 @@ void task_ble_characteristic_adc_notify(void *parameter) {
     vTaskSuspend(NULL);
 
     adcOutput adcReading = adc.readADC();
-    uint32_t adcValue = adcReading.ch0;
+    uint32_t adcValue = adcReading.ch2;
     // TODO this feels like a hack? I think ISR should be toggled by somewhere
     if (deviceConnected) {
-      xStreamBufferSend(xStreamBuffer, &adcValue, sizeof(adcValue), 0);
+      xStreamBufferSend(xStreamBuffer, &adcValue, 3, 0); // 3 bytes instead of sizeof(adcValue)
 
       // When the buffer is sufficiently large, time to send data.
       // DLE allows to extend data packet from 27 to 251 bytes

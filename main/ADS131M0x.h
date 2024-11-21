@@ -19,6 +19,7 @@ struct adcOutput
   int32_t ch2;
   int32_t ch3;
 #endif
+  bool crc_match;
 };
 
 #define DRDY_STATE_LOGIC_HIGH 0 // DEFAULS
@@ -296,10 +297,16 @@ private:
 
   uint8_t csPin;
   uint8_t drdyPin;
-  uint8_t num_channels_enabled;
-  uint8_t data_word_length; // in bytes
+  uint8_t num_channels_enabled = 4;
+  uint8_t data_word_length = 3; // in bytes
  
   SPIClass *spiPort;
   uint32_t spiClockSpeed = 1000000; // default 1MHz SPI-clock
+
+  uint16_t CRC_INIT_VAL = 0xFFFF;
+  uint16_t CRC_POLYNOM = 0x1021;
+
+  
+  uint16_t crc16_ccitt( char *ptr, int16_t count );
 };
 #endif

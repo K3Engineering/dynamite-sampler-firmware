@@ -585,7 +585,7 @@ inline int32_t readChannelHelper(const uint8_t *buffer, int index, size_t buffer
 /// @return 
 adcOutput ADS131M0x::readADC(void)
 {
-  const uint8_t read_length = data_word_length * (1 + num_channels_enabled);
+  const uint8_t read_length = data_word_length * (1 + num_channels_enabled + 1); // status, channels, CRC
   uint8_t txBuffer[read_length] = {0}; // Buffer for SPI transfer
   uint8_t rxBuffer[read_length] = {0}; // Buffer for SPI receive data
 
@@ -610,9 +610,38 @@ adcOutput ADS131M0x::readADC(void)
   res.ch2 = readChannelHelper(rxBuffer, 9, sizeof(rxBuffer));
   res.ch3 = readChannelHelper(rxBuffer, 12, sizeof(rxBuffer));
 
+  uint16_t crc = (rxBuffer[15] << 8) | rxBuffer[16];
+  uint16_t calculated_crc = crc16_ccitt(reinterpret_cast<char *>(rxBuffer), read_length);
+
+  res.crc_match = (crc == calculated_crc);
+
 #ifndef NO_CS_DELAY
   delayMicroseconds(1);
 #endif
   digitalWrite(csPin, HIGH);
   return res;
+}
+
+uint16_t ADS131M0x::crc16_ccitt( char *ptr, int16_t count )
+{
+   uint16_t crc;
+   char i;
+   crc = CRC_INIT_VAL;
+   while ( --count >= 0 )
+   {
+      crc = crc ^ ( uint16_t ) *ptr++ << 8;
+      i = 8;
+      do
+      {
+         if ( crc & 0x8000 )
+         {
+             crc = crc << 1 ^ CRC_POLYNOM;
+        }
+         else
+         {
+             crc = crc << 1;
+        }
+      } while ( --i );
+   }
+   return crc;
 }
