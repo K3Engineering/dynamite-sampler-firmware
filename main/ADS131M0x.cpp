@@ -634,9 +634,8 @@ int32_t ADS131M0x::readfastCh0(void)
 /// @return 
 adcOutput ADS131M0x::readADC(void)
 {
-  uint8_t x = 0;
-  uint8_t x2 = 0;
-  uint8_t x3 = 0;
+  uint8_t txBuffer[21] = {0}; // Buffer for SPI transfer
+  uint8_t rxBuffer[21] = {0}; // Buffer for SPI receive data
   int32_t aux;
   adcOutput res;
 
@@ -644,17 +643,20 @@ adcOutput ADS131M0x::readADC(void)
 #ifndef NO_CS_DELAY
   delayMicroseconds(1);
 #endif
-  x = spiPort->transfer(0x00);
-  x2 = spiPort->transfer(0x00);
-  spiPort->transfer(0x00);
 
-  res.status = ((x << 8) | x2);
+  spiPort->transferBytes(txBuffer, rxBuffer, sizeof(rxBuffer));
+  // status is bytes 0, 1, 2
+  // ch0 is bytes 3, 4, 5
+  // blank is bytes 6, 7, 8
+  // ch1 is bytes 9, 10, 11
+  // ch2 is bytes 12, 13, 14
+  // ch3 is bytes 15, 16, 17
+  // blank is bytes 18, 19, 20
+
+  res.status = (rxBuffer[0] << 8) | rxBuffer[1];
 
   // read CH0 --------
-  x = spiPort->transfer(0x00);
-  x2 = spiPort->transfer(0x00);
-  x3 = spiPort->transfer(0x00);
-  aux = (((x << 16) | (x2 << 8) | x3) & 0x00FFFFFF);
+  aux = ((rxBuffer[3] << 16) | (rxBuffer[4] << 8) | rxBuffer[5]) & 0x00FFFFFF;
   if (aux > 0x7FFFFF)
   {
     res.ch0 = ((~(aux)&0x00FFFFFF) + 1) * -1;
@@ -664,15 +666,8 @@ adcOutput ADS131M0x::readADC(void)
     res.ch0 = aux;
   }
 
-  // faster!!!
-  spiPort->transfer(0x00);
-  spiPort->transfer(0x00);
-  spiPort->transfer(0x00);
   // read CH1 --------
-  x = spiPort->transfer(0x00);
-  x2 = spiPort->transfer(0x00);
-  x3 = spiPort->transfer(0x00);
-  aux = (((x << 16) | (x2 << 8) | x3) & 0x00FFFFFF);
+  aux = ((rxBuffer[9] << 16) | (rxBuffer[10] << 8) | rxBuffer[11]) & 0x00FFFFFF;
   if (aux > 0x7FFFFF)
   {
     res.ch1 = ((~(aux)&0x00FFFFFF) + 1) * -1;
@@ -682,11 +677,8 @@ adcOutput ADS131M0x::readADC(void)
     res.ch1 = aux;
   }
   
-#ifndef IS_M02
-  x = spiPort->transfer(0x00);
-  x2 = spiPort->transfer(0x00);
-  x3 = spiPort->transfer(0x00);
-  aux = (((x << 16) | (x2 << 8) | x3) & 0x00FFFFFF);
+
+  aux = ((rxBuffer[12] << 16) | (rxBuffer[13] << 8) | rxBuffer[14]) & 0x00FFFFFF;
   if (aux > 0x7FFFFF)
   {
     res.ch2 = ((~(aux)&0x00FFFFFF) + 1) * -1;
@@ -696,10 +688,7 @@ adcOutput ADS131M0x::readADC(void)
     res.ch2 = aux;
   }
 
-  x = spiPort->transfer(0x00);
-  x2 = spiPort->transfer(0x00);
-  x3 = spiPort->transfer(0x00);
-  aux = (((x << 16) | (x2 << 8) | x3) & 0x00FFFFFF);
+  aux = ((rxBuffer[15] << 16) | (rxBuffer[16] << 8) | rxBuffer[17]) & 0x00FFFFFF;
   if (aux > 0x7FFFFF)
   {
     res.ch3 = ((~(aux)&0x00FFFFFF) + 1) * -1;
@@ -708,11 +697,7 @@ adcOutput ADS131M0x::readADC(void)
   {
     res.ch3 = aux;
   }
-#endif
 
-  spiPort->transfer(0x00);
-  spiPort->transfer(0x00);
-  spiPort->transfer(0x00);
 #ifndef NO_CS_DELAY
   delayMicroseconds(1);
 #endif
