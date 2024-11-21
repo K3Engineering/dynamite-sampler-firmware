@@ -284,7 +284,6 @@ public:
 
   uint16_t isResetOK(void);
   adcOutput readADC(void);
-  int32_t readfastCh0(void);
 
   void setClockSpeed(uint32_t cspeed);
 
@@ -297,6 +296,8 @@ private:
 
   uint8_t csPin;
   uint8_t drdyPin;
+  uint8_t num_channels_enabled;
+  uint8_t data_word_length; // in bytes
  
   SPIClass *spiPort;
   uint32_t spiClockSpeed = 1000000; // default 1MHz SPI-clock

@@ -16,6 +16,8 @@ int32_t ADS131M0x::val32Ch0 = 0x7FFFFF;
  */
 ADS131M0x::ADS131M0x()
 {
+  num_channels_enabled = 4;
+  data_word_length = 3;
 }
 
 /**
@@ -566,67 +568,13 @@ bool ADS131M0x::isDataReady()
   return true;
 }
 
-/// @brief Read only CH0 fast
-/// @param  
-/// @return ch0 (int32)
-int32_t ADS131M0x::readfastCh0(void)
-{
-  uint8_t x = 0;
-  uint8_t x2 = 0;
-  uint8_t x3 = 0;
-  int32_t aux;
-  adcOutput res;
-
-  digitalWrite(csPin, LOW);
-  //NOP();
-  x = spiPort->transfer(0x00);
-  x2 = spiPort->transfer(0x00);
-  spiPort->transfer(0x00);
-
-  res.status = ((x << 8) | x2);
-
-  // read CH0 --------
-  x = spiPort->transfer(0x00);
-  x2 = spiPort->transfer(0x00);
-  x3 = spiPort->transfer(0x00);
-  aux = (((x << 16) | (x2 << 8) | x3) & 0x00FFFFFF);
+int32_t readChannelHelper(const uint8_t *buffer, int index) {
+  int32_t aux = ((buffer[index] << 16) | (buffer[index + 1] << 8) | buffer[index + 2]) & 0x00FFFFFF;
   if (aux > 0x7FFFFF)
   {
-    val32Ch0 = ((~(aux)&0x00FFFFFF) + 1) * -1;
+    aux = ((~(aux)&0x00FFFFFF) + 1) * -1;
   }
-  else
-  {
-    val32Ch0 = aux;
-  }
-  
-  spiPort->write16(0x00);
-  spiPort->write(0x00);
-
-  spiPort->write16(0x00);
-  spiPort->write(0x00);
-
-  spiPort->write16(0x00);
-  spiPort->write(0x00);
-  
-  /* slower
-  spiPort->transfer(0x00);
-  spiPort->transfer(0x00);
-  spiPort->transfer(0x00);
-
-  spiPort->transfer(0x00);
-  spiPort->transfer(0x00);
-  spiPort->transfer(0x00);
-
-  spiPort->transfer(0x00);
-  spiPort->transfer(0x00);
-  spiPort->transfer(0x00);
-  */
-
-  //delay(1);
-  //NOP();
-  digitalWrite(csPin, HIGH);
-
-  return val32Ch0;
+  return aux;
 }
 
 /// @brief Read ADC port (all Ports)
@@ -634,9 +582,10 @@ int32_t ADS131M0x::readfastCh0(void)
 /// @return 
 adcOutput ADS131M0x::readADC(void)
 {
-  uint8_t txBuffer[18] = {0}; // Buffer for SPI transfer
-  uint8_t rxBuffer[18] = {0}; // Buffer for SPI receive data
-  int32_t aux;
+  uint8_t read_length = data_word_length * (1 + num_channels_enabled);
+  uint8_t txBuffer[read_length] = {0}; // Buffer for SPI transfer
+  uint8_t rxBuffer[read_length] = {0}; // Buffer for SPI receive data
+
   adcOutput res;
 
   digitalWrite(csPin, LOW);
@@ -645,8 +594,6 @@ adcOutput ADS131M0x::readADC(void)
 #endif
 
   spiPort->transferBytes(txBuffer, rxBuffer, sizeof(rxBuffer));
-  // data word length * (1 for status + num channels)
-
   // status is bytes 0, 1
   // ch0 is bytes 3, 4, 5
   // ch1 is bytes 6, 7, 8
@@ -655,49 +602,10 @@ adcOutput ADS131M0x::readADC(void)
   // CRC is bytes 15, 16
 
   res.status = (rxBuffer[0] << 8) | rxBuffer[1];
-
-  // read CH0 --------
-  aux = ((rxBuffer[3] << 16) | (rxBuffer[4] << 8) | rxBuffer[5]) & 0x00FFFFFF;
-  if (aux > 0x7FFFFF)
-  {
-    res.ch0 = ((~(aux)&0x00FFFFFF) + 1) * -1;
-  }
-  else
-  {
-    res.ch0 = aux;
-  }
-
-  // read CH1 --------
-  aux = ((rxBuffer[6] << 16) | (rxBuffer[7] << 8) | rxBuffer[8]) & 0x00FFFFFF;
-  if (aux > 0x7FFFFF)
-  {
-    res.ch1 = ((~(aux)&0x00FFFFFF) + 1) * -1;
-  }
-  else
-  {
-    res.ch1 = aux;
-  }
-  
-
-  aux = ((rxBuffer[9] << 16) | (rxBuffer[10] << 8) | rxBuffer[11]) & 0x00FFFFFF;
-  if (aux > 0x7FFFFF)
-  {
-    res.ch2 = ((~(aux)&0x00FFFFFF) + 1) * -1;
-  }
-  else
-  {
-    res.ch2 = aux;
-  }
-
-  aux = ((rxBuffer[12] << 16) | (rxBuffer[13] << 8) | rxBuffer[14]) & 0x00FFFFFF;
-  if (aux > 0x7FFFFF)
-  {
-    res.ch3 = ((~(aux)&0x00FFFFFF) + 1) * -1;
-  }
-  else
-  {
-    res.ch3 = aux;
-  }
+  res.ch0 = readChannelHelper(rxBuffer, 3);
+  res.ch1 = readChannelHelper(rxBuffer, 6);
+  res.ch2 = readChannelHelper(rxBuffer, 9);
+  res.ch3 = readChannelHelper(rxBuffer, 12);
 
 #ifndef NO_CS_DELAY
   delayMicroseconds(1);
