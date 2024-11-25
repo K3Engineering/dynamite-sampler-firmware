@@ -169,12 +169,12 @@ void task_setup_adc(void *parameter) {
   adc.setInputChannelSelection(3, INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS);
 
   adc.setChannelPGA(0, PGA_GAIN_1);
-  // adc.setChannelPGA(1, PGA_GAIN_128);
+  adc.setChannelPGA(2, PGA_GAIN_32);
   
 
   adc.setPowerMode(POWER_MODE_HIGH_RESOLUTION);
   
-  adc.setOsr(OSR_2018); // 2000 SPS
+  adc.setOsr(OSR_4096);
 
   uint16_t contents = adc.readRegister(0);
   Serial.print("register 0 contents ");
