@@ -2,7 +2,6 @@
 #include "Arduino.h"
 #include "SPI.h"
 
-
 #ifdef IS_M02
 #define DO_PRAGMA(x) _Pragma(#x)
 #define INFO(x)      DO_PRAGMA(message("\nREMARK: " #x))
@@ -495,7 +494,7 @@ inline int32_t readChannelHelper(const uint8_t *buffer, int index, size_t buffer
 	int32_t aux =
 	    ((buffer[index] << 16) | (buffer[index + 1] << 8) | buffer[index + 2]) & 0x00FFFFFF;
 	if (aux > 0x7FFFFF) {
-		aux = ((~(aux)&0x00FFFFFF) + 1) * -1;
+		aux = ((~(aux) & 0x00FFFFFF) + 1) * -1;
 	}
 	return aux;
 }

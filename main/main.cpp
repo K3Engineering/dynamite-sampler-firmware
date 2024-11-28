@@ -17,7 +17,7 @@ void app_main(void);
 
 // TODO since we don't need blue droid backwards compatability, all of the
 // #defines could be expanded to their nimble equivalent
-BLEServer *        pServer         = NULL;
+BLEServer         *pServer         = NULL;
 BLECharacteristic *pCharacteristic = NULL;
 
 bool deviceConnected = false;
