@@ -66,7 +66,7 @@ class MyServerCallbacks : public BLEServerCallbacks {
 void setup_ble() {
 	Serial.println("Setting up BLE");
 	// Create the BLE Device
-	BLEDevice::init("0987654321");
+	BLEDevice::init("0987654321 long");
 
 	// Create the BLE Server
 	pServer = BLEDevice::createServer();
@@ -90,10 +90,10 @@ void setup_ble() {
 	// Start advertising
 	BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
 	pAdvertising->addServiceUUID(SERVICE_UUID);
-	pAdvertising->setScanResponse(false);
-	// This has been removed in nimble
-	// pAdvertising->setMinPreferred(0x0);  // set value to 0x00 to not
-	// advertise this parameter
+	// Standard BLE advertisement packet is only 31 bytes, so long names don't always fit.
+	// Scan response allows for devices to request more during the scan.
+	// This will allow for more than the 31 bytes, like longer names.
+	pAdvertising->setScanResponse(true);
 	BLEDevice::startAdvertising();
 	Serial.println("Waiting a client connection to notify...");
 }
