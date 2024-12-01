@@ -3,8 +3,9 @@
 cmake_minimum_required(VERSION 3.5)
 
 # By default esp idf builds all managed components, even though they aren't used.
+# Build only necessary components by specifying only main.
 # Components added via 'REQUIRES' are added to this list.
-set(COMPONENTS )
+set(COMPONENTS main)
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
