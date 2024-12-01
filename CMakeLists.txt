@@ -2,6 +2,10 @@
 # CMakeLists in this exact order for cmake to work correctly
 cmake_minimum_required(VERSION 3.5)
 
+# By default esp idf builds all managed components, even though they aren't used.
+# Components added via 'REQUIRES' are added to this list.
+set(COMPONENTS )
+
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
 # Prevents arduino from releasing BLE memory
