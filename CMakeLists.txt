@@ -6,4 +6,4 @@ include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
 # Prevents arduino from releasing BLE memory
 add_compile_definitions(ARDUINO_ARCH_ESP32=1)
-project(esp-arduino-test)
+project(dynamite-sampler-firmware)
