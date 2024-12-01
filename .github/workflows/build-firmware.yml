@@ -20,5 +20,5 @@ jobs:
     - name: Upload bin
       uses: actions/upload-artifact@v4
       with:
-        name: dynamite-sampler-firmware${{ github.sha }}.bin
-        path: build/dynamite-sampler-firmware.bin
+        name: ${{ env.PROJECT_NAME }}-${{ github.sha }}.bin
+        path: build/${{ env.PROJECT_NAME }}.bin

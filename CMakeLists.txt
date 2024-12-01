@@ -7,3 +7,7 @@ include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 # Prevents arduino from releasing BLE memory
 add_compile_definitions(ARDUINO_ARCH_ESP32=1)
 project(dynamite-sampler-firmware)
+
+# Set the env variable for github workflows
+if(DEFINED ENV{GITHUB_ENV})
+  file(APPEND "$ENV{GITHUB_ENV}" "PROJECT_NAME=${PROJECT_NAME}\n")
