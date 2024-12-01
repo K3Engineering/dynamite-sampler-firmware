@@ -10,5 +10,6 @@ project(dynamite-sampler-firmware)
 
 # Set the env variable for github workflows
 if(DEFINED ENV{GITHUB_ENV})
-  file(APPEND "$ENV{GITHUB_ENV}" "PROJECT_NAME=${PROJECT_NAME}\n")
+  message(STATUS "Setting GITHUB_ENV for CI workflows")
+  file(APPEND "$ENV{GITHUB_ENV}" "PROJECT_NAME=dynamite-sampler-firmware\n")
 endif()
