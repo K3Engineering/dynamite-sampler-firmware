@@ -3,6 +3,7 @@
 
 #include "NimBLEDevice.h"
 #include "NimBLELog.h"
+#include "esp_mac.h"
 #include "esp_pm.h"
 
 // #include "ADS1120.h"
@@ -66,7 +67,12 @@ class MyServerCallbacks : public BLEServerCallbacks {
 void setup_ble() {
 	Serial.println("Setting up BLE");
 	// Create the BLE Device
-	BLEDevice::init("0987654321");
+	// Name the device with the mac address to make it unique for testing purposes.
+	// TODO this probably isn't the elegant way to do this.
+	char ble_name[35] = {0};
+	sprintf(ble_name, "DS %" PRIx64 "\n", ESP.getEfuseMac());
+	const std::string ble_name_str = std::string(ble_name);
+	BLEDevice::init(ble_name_str);
 
 	// Create the BLE Server
 	pServer = BLEDevice::createServer();
@@ -90,10 +96,10 @@ void setup_ble() {
 	// Start advertising
 	BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
 	pAdvertising->addServiceUUID(SERVICE_UUID);
-	pAdvertising->setScanResponse(false);
-	// This has been removed in nimble
-	// pAdvertising->setMinPreferred(0x0);  // set value to 0x00 to not
-	// advertise this parameter
+	// Standard BLE advertisement packet is only 31 bytes, so long names don't always fit.
+	// Scan response allows for devices to request more during the scan.
+	// This will allow for more than the 31 bytes, like longer names.
+	pAdvertising->setScanResponse(true);
 	BLEDevice::startAdvertising();
 	Serial.println("Waiting a client connection to notify...");
 }
@@ -218,6 +224,9 @@ void app_main(void) {
 	// Serial.println(CONFIG_PM_SLP_IRAM_OPT);
 	// TODO assert that this runs on core 1, so that all of the adc isr setup is
 	// on core 1
+
+	Serial.println("MAC address:");
+	Serial.printf("0x%" PRIx64 "\n", ESP.getEfuseMac());
 
 	// TODO figure out why BLE setup has to go first.
 	setup_ble();
