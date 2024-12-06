@@ -171,6 +171,9 @@ void task_setup_adc(void *parameter) {
 	uint8_t PIN_ADC_RESET = 14;
 	uint8_t PIN_CS_ADC    = 13;
 
+	pinMode(PIN_DEBUG_TOP, OUTPUT);
+	pinMode(PIN_DEBUG_BOT, OUTPUT);
+
 	adc.setClockSpeed(20000000); // SPI clock speed, has to run before adc.begin()
 	adc.begin(&SpiADC, PIN_NUM_CLK, PIN_NUM_MISO, PIN_NUM_MOSI, PIN_CS_ADC, PIN_DRDY);
 
