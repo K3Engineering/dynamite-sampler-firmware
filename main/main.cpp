@@ -168,10 +168,8 @@ void task_ble_characteristic_adc_notify(void *parameter) {
 					uint8_t batch[251];
 					size_t  bytesRead = 0;
 
-					// Read a batch of data from the stream buffer
 					bytesRead = xStreamBufferReceive(xStreamBuffer, batch, 251, 0);
 
-					// If data is available, notify the BLE characteristic
 					if (bytesRead > 0) {
 						pCharacteristic->setValue(batch, bytesRead);
 						pCharacteristic->notify();
@@ -179,8 +177,8 @@ void task_ble_characteristic_adc_notify(void *parameter) {
 				}
 			}
 		}
-		vTaskDelete(NULL);
 	}
+	vTaskDelete(NULL);
 }
 
 void task_setup_adc(void *parameter) {
