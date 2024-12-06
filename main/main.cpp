@@ -120,12 +120,44 @@ void task_ble_characteristic_adc_notify(void *parameter) {
 		vTaskSuspend(NULL);
 
 		adcOutput adcReading = adc.readADC();
-		uint32_t  adcValue   = adcReading.ch2;
+
+		// Prepare a buffer to hold all required data
+		// 2 bytes (status) + 4 * 3 bytes (channels) + 1 byte (CRC) = 15 bytes
+		uint8_t buffer[15];
+
+		// Pack status (2 bytes)
+		buffer[0] = (uint8_t)(adcReading.status & 0xFF);        // Low byte
+		buffer[1] = (uint8_t)((adcReading.status >> 8) & 0xFF); // High byte
+
+		// Pack 24-bit channel data (4 channels, 3 bytes each)
+		for (int i = 0; i < 4; ++i) {
+			int32_t channelValue = 0;
+			switch (i) {
+			case 0:
+				channelValue = adcReading.ch0;
+				break;
+			case 1:
+				channelValue = adcReading.ch1;
+				break;
+			case 2:
+				channelValue = adcReading.ch2;
+				break;
+			case 3:
+				channelValue = adcReading.ch3;
+				break;
+			}
+			buffer[2 + (i * 3)] = (uint8_t)(channelValue & 0xFF);         // Low byte
+			buffer[3 + (i * 3)] = (uint8_t)((channelValue >> 8) & 0xFF);  // Middle byte
+			buffer[4 + (i * 3)] = (uint8_t)((channelValue >> 16) & 0xFF); // High byte
+		}
+
+		// Pack CRC match as a single byte
+		buffer[14] = (uint8_t)(adcReading.crc_match ? 1 : 0);
+
 		// TODO this feels like a hack? I think ISR should be toggled by
 		// somewhere
 		if (deviceConnected) {
-			xStreamBufferSend(xStreamBuffer, &adcValue, 3,
-			                  0); // 3 bytes instead of sizeof(adcValue)
+			xStreamBufferSend(xStreamBuffer, buffer, sizeof(buffer), 0);
 
 			// When the buffer is sufficiently large, time to send data.
 			// DLE allows to extend data packet from 27 to 251 bytes
@@ -136,8 +168,10 @@ void task_ble_characteristic_adc_notify(void *parameter) {
 					uint8_t batch[251];
 					size_t  bytesRead = 0;
 
+					// Read a batch of data from the stream buffer
 					bytesRead = xStreamBufferReceive(xStreamBuffer, batch, 251, 0);
 
+					// If data is available, notify the BLE characteristic
 					if (bytesRead > 0) {
 						pCharacteristic->setValue(batch, bytesRead);
 						pCharacteristic->notify();
@@ -145,8 +179,8 @@ void task_ble_characteristic_adc_notify(void *parameter) {
 				}
 			}
 		}
+		vTaskDelete(NULL);
 	}
-	vTaskDelete(NULL);
 }
 
 void task_setup_adc(void *parameter) {
