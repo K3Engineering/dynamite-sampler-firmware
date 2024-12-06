@@ -41,10 +41,10 @@ const int CORE_APP = 1;
 
 // There are 2 pin on the v2.0.1 board that can be used for debugging.
 const int PIN_DEBUG_TOP = 47;
-const int PIN_DEBUT_BOT = 12;
+const int PIN_DEBUG_BOT = 21;
 // For debugging ISR and adc handle function
 const int PIN_DEBUG_ISR      = PIN_DEBUG_TOP;
-const int PIN_DEBUG_ADC_TASK = PIN_DEBUT_BOT;
+const int PIN_DEBUG_ADC_TASK = PIN_DEBUG_BOT;
 
 class MyServerCallbacks : public BLEServerCallbacks {
 	// void onConnect(BLEServer *pServer) {
