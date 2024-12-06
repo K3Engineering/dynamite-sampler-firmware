@@ -125,8 +125,36 @@ void IRAM_ATTR isr_adc_drdy() {
 	digitalWrite(PIN_DEBUG_ISR, LOW);
 }
 
-// TODO rename function
-void task_ble_characteristic_adc_notify(void *parameter) {
+// Read ADC values. If BLE device is connected, place them in the buffer.
+// If the buffer is large enough, write the buffer to the BLE characteristic.
+void adc_read_and_buffer() {
+	adcOutput adcReading = adc.readADC();
+	uint32_t  adcValue   = adcReading.ch2;
+	// Only place ADC reading if the the BLE device is connected.
+	// TODO - this probably should be handled in a different way.
+	if (deviceConnected) {
+		xStreamBufferSend(xStreamBuffer, &adcValue, 3, 0); // 3 bytes instead of sizeof(adcValue)
+
+		// When the buffer is sufficiently large, time to send data.
+		// BLE allows to extend data packet from 27 to 251 bytes
+		// Schedule a task when buffer is closer to the upper limit
+		// TODO figure out the best number or a way to know when to schedule
+		if (xStreamBufferBytesAvailable(xStreamBuffer) > 200) {
+			uint8_t batch[251];
+			size_t  bytesRead = 0;
+
+			bytesRead = xStreamBufferReceive(xStreamBuffer, batch, 251, 0);
+
+			if (bytesRead > 0) {
+				pCharacteristic->setValue(batch, bytesRead);
+				pCharacteristic->notify();
+			}
+		}
+	}
+}
+
+// Task that handles calling the read adc function and placing the values in the buffer.
+void task_adc_read_and_buffer(void *parameter) {
 	// Durtation until the wait for ISR times out
 	const TickType_t xBlockTime = pdMS_TO_TICKS(500);
 	// How many times did the ISR notify this task
@@ -142,33 +170,7 @@ void task_ble_characteristic_adc_notify(void *parameter) {
 			// WIP DEBUG - the counter
 			Serial.print("Value of ulNotifiedValue: ");
 			Serial.println(ulNotifiedValue);
-
-			adcOutput adcReading = adc.readADC();
-			uint32_t  adcValue   = adcReading.ch2;
-			// TODO this feels like a hack? I think ISR should be toggled by
-			// somewhere
-			if (deviceConnected) {
-				xStreamBufferSend(xStreamBuffer, &adcValue, 3,
-				                  0); // 3 bytes instead of sizeof(adcValue)
-
-				// When the buffer is sufficiently large, time to send data.
-				// DLE allows to extend data packet from 27 to 251 bytes
-				// Schedule a task when buffer is closer to the upper limit
-				// TODO figure out the best number or a way to know when to schedule
-				if (xStreamBufferBytesAvailable(xStreamBuffer) > 200) {
-					if (deviceConnected) {
-						uint8_t batch[251];
-						size_t  bytesRead = 0;
-
-						bytesRead = xStreamBufferReceive(xStreamBuffer, batch, 251, 0);
-
-						if (bytesRead > 0) {
-							pCharacteristic->setValue(batch, bytesRead);
-							pCharacteristic->notify();
-						}
-					}
-				}
-			}
+			adc_read_and_buffer();
 		}
 		// end of handling reading adc
 		digitalWrite(PIN_DEBUG_ADC_TASK, LOW);
@@ -271,9 +273,8 @@ void app_main(void) {
 	// TODO maybe this needs to be pinned on BLE core?
 	// TODO figure out the memory stack required
 	// xTaskCreatePinnedToCore
-	xTaskCreate(task_ble_characteristic_adc_notify, "taskNotify", 5000, NULL, CORE_APP,
-	            &xHandleADCRead);
-	// xTaskCreatePinnedToCore(task_ble_characteristic_adc_notify, "taskNotify",
+	xTaskCreate(task_adc_read_and_buffer, "taskNotify", 5000, NULL, CORE_APP, &xHandleADCRead);
+	// xTaskCreatePinnedToCore(task_adc_read_and_buffer, "taskNotify",
 	// 5000, NULL, 1, &xHandleADCRead, CORE_BLE);
 
 	// // esp_pm_config_esp32_t pm_config = {
