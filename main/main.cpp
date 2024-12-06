@@ -118,39 +118,54 @@ void IRAM_ATTR isr_adc_drdy() {
 	digitalWrite(PIN_DEBUG_ISR, HIGH);
 	// unblock the task that will read the ADC & handle putting in the buffer
 	if (xHandleADCRead != NULL) {
-		xTaskResumeFromISR(xHandleADCRead);
+		BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+		vTaskNotifyGiveFromISR(xHandleADCRead, &xHigherPriorityTaskWoken);
+		portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 	}
 	digitalWrite(PIN_DEBUG_ISR, LOW);
 }
 
 // TODO rename function
 void task_ble_characteristic_adc_notify(void *parameter) {
+	// Durtation until the wait for ISR times out
+	const TickType_t xBlockTime = pdMS_TO_TICKS(500);
+	// How many times did the ISR notify this task
+	uint32_t ulNotifiedValue;
 	while (true) {
-		vTaskSuspend(NULL);
+		// Wait until ISR notifies this task, or time out. ISR can notify multiple times,
+		// but this will reset the counter to zero each time.
+		ulNotifiedValue = ulTaskNotifyTake(pdFALSE, xBlockTime);
 		digitalWrite(PIN_DEBUG_ADC_TASK, HIGH);
+		if (ulNotifiedValue == 0) {
+			// time out happened, TBD how this should be handled
+		} else {
+			// WIP DEBUG - the counter
+			Serial.print("Value of ulNotifiedValue: ");
+			Serial.println(ulNotifiedValue);
 
-		adcOutput adcReading = adc.readADC();
-		uint32_t  adcValue   = adcReading.ch2;
-		// TODO this feels like a hack? I think ISR should be toggled by
-		// somewhere
-		if (deviceConnected) {
-			xStreamBufferSend(xStreamBuffer, &adcValue, 3,
-			                  0); // 3 bytes instead of sizeof(adcValue)
+			adcOutput adcReading = adc.readADC();
+			uint32_t  adcValue   = adcReading.ch2;
+			// TODO this feels like a hack? I think ISR should be toggled by
+			// somewhere
+			if (deviceConnected) {
+				xStreamBufferSend(xStreamBuffer, &adcValue, 3,
+				                  0); // 3 bytes instead of sizeof(adcValue)
 
-			// When the buffer is sufficiently large, time to send data.
-			// DLE allows to extend data packet from 27 to 251 bytes
-			// Schedule a task when buffer is closer to the upper limit
-			// TODO figure out the best number or a way to know when to schedule
-			if (xStreamBufferBytesAvailable(xStreamBuffer) > 200) {
-				if (deviceConnected) {
-					uint8_t batch[251];
-					size_t  bytesRead = 0;
+				// When the buffer is sufficiently large, time to send data.
+				// DLE allows to extend data packet from 27 to 251 bytes
+				// Schedule a task when buffer is closer to the upper limit
+				// TODO figure out the best number or a way to know when to schedule
+				if (xStreamBufferBytesAvailable(xStreamBuffer) > 200) {
+					if (deviceConnected) {
+						uint8_t batch[251];
+						size_t  bytesRead = 0;
 
-					bytesRead = xStreamBufferReceive(xStreamBuffer, batch, 251, 0);
+						bytesRead = xStreamBufferReceive(xStreamBuffer, batch, 251, 0);
 
-					if (bytesRead > 0) {
-						pCharacteristic->setValue(batch, bytesRead);
-						pCharacteristic->notify();
+						if (bytesRead > 0) {
+							pCharacteristic->setValue(batch, bytesRead);
+							pCharacteristic->notify();
+						}
 					}
 				}
 			}
