@@ -39,6 +39,13 @@ SPIClass  SpiADC(HSPI);
 const int CORE_BLE = 0;
 const int CORE_APP = 1;
 
+// There are 2 pin on the v2.0.1 board that can be used for debugging.
+const int PIN_DEBUG_TOP = 47;
+const int PIN_DEBUT_BOT = 12;
+// For debugging ISR and adc handle function
+const int PIN_DEBUG_ISR      = PIN_DEBUG_TOP;
+const int PIN_DEBUG_ADC_TASK = PIN_DEBUT_BOT;
+
 class MyServerCallbacks : public BLEServerCallbacks {
 	// void onConnect(BLEServer *pServer) {
 	void onConnect(NimBLEServer *pServer, NimBLEConnInfo &connInfo) {
@@ -108,16 +115,19 @@ void setup_ble() {
 // is placed in the ESP32’s Internal RAM (IRAM). Otherwise the code is kept in
 // Flash. And Flash on ESP32 is much slower than internal RAM.
 void IRAM_ATTR isr_adc_drdy() {
+	digitalWrite(PIN_DEBUG_ISR, HIGH);
 	// unblock the task that will read the ADC & handle putting in the buffer
 	if (xHandleADCRead != NULL) {
 		xTaskResumeFromISR(xHandleADCRead);
 	}
+	digitalWrite(PIN_DEBUG_ISR, LOW);
 }
 
 // TODO rename function
 void task_ble_characteristic_adc_notify(void *parameter) {
 	while (true) {
 		vTaskSuspend(NULL);
+		digitalWrite(PIN_DEBUG_ADC_TASK, HIGH);
 
 		adcOutput adcReading = adc.readADC();
 		uint32_t  adcValue   = adcReading.ch2;
@@ -145,6 +155,8 @@ void task_ble_characteristic_adc_notify(void *parameter) {
 				}
 			}
 		}
+		// end of handling reading adc
+		digitalWrite(PIN_DEBUG_ADC_TASK, LOW);
 	}
 	vTaskDelete(NULL);
 }
