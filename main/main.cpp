@@ -150,17 +150,14 @@ void adc_read_and_buffer() {
 
 // Task that handles calling the read adc function and placing the values in the buffer.
 void task_adc_read_and_buffer(void *parameter) {
-	// Durtation until the wait for ISR times out
-	const TickType_t xBlockTime = pdMS_TO_TICKS(500);
+
 	while (true) {
 		// Wait until ISR notifies this task, or time out. ISR can notify multiple times,
 		// but this will reset the counter to zero each time.
 		// How many times did the ISR notify this task
-		uint32_t ulNotifiedValue = ulTaskNotifyTake(pdTRUE, xBlockTime);
+		uint32_t ulNotifiedValue = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 		if (ulNotifiedValue > 0) {
 			adc_read_and_buffer();
-		} else {
-			// time out happened, TBD how this should be handled
 		}
 	}
 	vTaskDelete(NULL);
@@ -168,11 +165,11 @@ void task_adc_read_and_buffer(void *parameter) {
 
 // Read the adc buffer and update the BLE characteristic
 void taks_notify_ble(void *parameter) {
-	const TickType_t xBlockTime = pdMS_TO_TICKS(500);
+
 	while (true) {
 		// This task is unblocked when the adc buffer is full and the characteristic
 		// should be notified.
-		uint32_t ulNotifiedValue = ulTaskNotifyTake(pdTRUE, xBlockTime);
+		uint32_t ulNotifiedValue = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 		if (ulNotifiedValue > 0) {
 			digitalWrite(PIN_DEBUG_ADC_TASK, HIGH);
 			// TODO verify that 251 is the actual max that can be sent and not
@@ -189,8 +186,6 @@ void taks_notify_ble(void *parameter) {
 				pCharacteristic->notify();
 			}
 			digitalWrite(PIN_DEBUG_ADC_TASK, LOW);
-		} else {
-			// time out happened, TBD how this should be handled
 		}
 	}
 }
