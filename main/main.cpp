@@ -24,8 +24,9 @@ BLECharacteristic *pCharacteristic = NULL;
 bool deviceConnected = false;
 // bool oldDeviceConnected = false;
 
-StreamBufferHandle_t xStreamBuffer  = NULL;
-TaskHandle_t         xHandleADCRead = NULL; // Used by ISR to unblock ADC read and proccesing
+StreamBufferHandle_t xStreamBuffer    = NULL;
+TaskHandle_t         xHandleADCRead   = NULL;
+TaskHandle_t         xHandleNotifyBLE = NULL;
 
 #define SERVICE_UUID        "e331016b-6618-4f8f-8997-1a2c7c9e5fa3"
 #define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
@@ -38,6 +39,10 @@ SPIClass  SpiADC(HSPI);
 // ISR is handled on the core that sets it.
 const int CORE_BLE = 0;
 const int CORE_APP = 1;
+
+// There are 2 pin on the v2.0.1 board that can be used for debugging.
+const int PIN_DEBUG_TOP = 47;
+const int PIN_DEBUG_BOT = 21;
 
 class MyServerCallbacks : public BLEServerCallbacks {
 	// void onConnect(BLEServer *pServer) {
@@ -108,42 +113,76 @@ void setup_ble() {
 // is placed in the ESP32’s Internal RAM (IRAM). Otherwise the code is kept in
 // Flash. And Flash on ESP32 is much slower than internal RAM.
 void IRAM_ATTR isr_adc_drdy() {
+
 	// unblock the task that will read the ADC & handle putting in the buffer
 	if (xHandleADCRead != NULL) {
-		xTaskResumeFromISR(xHandleADCRead);
+		BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+		vTaskNotifyGiveFromISR(xHandleADCRead, &xHigherPriorityTaskWoken);
+		portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 	}
 }
 
-// TODO rename function
-void task_ble_characteristic_adc_notify(void *parameter) {
+// Read ADC values. If BLE device is connected, place them in the buffer.
+// If the buffer is large enough, notify the ble task
+void adc_read_and_buffer() {
+
+	adcOutput adcReading = adc.readADC();
+	uint32_t  adcValue   = adcReading.ch2;
+	// Only place ADC reading if the the BLE device is connected.
+	// TODO - this probably should be handled in a different way.
+	if (deviceConnected) {
+		xStreamBufferSend(xStreamBuffer, &adcValue, 3, 0); // 3 bytes instead of sizeof(adcValue)
+
+		// When the buffer is sufficiently large, time to send data.
+		// BLE allows to extend data packet from 27 to 251 bytes
+		// Schedule a task when buffer is closer to the upper limit
+		// TODO figure out the best number or a way to know when to schedule
+		if (xStreamBufferBytesAvailable(xStreamBuffer) > 200) {
+			xTaskNotifyGive(xHandleNotifyBLE);
+		}
+	}
+}
+
+// Task that handles calling the read adc function and placing the values in the buffer.
+void task_adc_read_and_buffer(void *parameter) {
+
 	while (true) {
-		vTaskSuspend(NULL);
+		// Wait until ISR notifies this task, or time out. ISR can notify multiple times,
+		// but this will reset the counter to zero each time.
+		// How many times did the ISR notify this task
+		uint32_t ulNotifiedValue = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+		if (ulNotifiedValue > 0) {
+			adc_read_and_buffer();
+		}
+	}
+	vTaskDelete(NULL);
+}
 
-		adcOutput adcReading = adc.readADC();
-		uint32_t  adcValue   = adcReading.ch2;
-		// TODO this feels like a hack? I think ISR should be toggled by
-		// somewhere
-		if (deviceConnected) {
-			xStreamBufferSend(xStreamBuffer, &adcValue, 3,
-			                  0); // 3 bytes instead of sizeof(adcValue)
+// Read the adc buffer and update the BLE characteristic
+void notify_ble_adc_buffer() {
+	// TODO verify that 251 is the actual max that can be sent and not
+	// 251 minus some header.
+	// TODO figure if should check deviceConnected?
+	uint8_t batch[251];
 
-			// When the buffer is sufficiently large, time to send data.
-			// DLE allows to extend data packet from 27 to 251 bytes
-			// Schedule a task when buffer is closer to the upper limit
-			// TODO figure out the best number or a way to know when to schedule
-			if (xStreamBufferBytesAvailable(xStreamBuffer) > 200) {
-				if (deviceConnected) {
-					uint8_t batch[251];
-					size_t  bytesRead = 0;
+	size_t bytesRead = xStreamBufferReceive(xStreamBuffer, batch, sizeof(batch), 0);
 
-					bytesRead = xStreamBufferReceive(xStreamBuffer, batch, 251, 0);
+	if (bytesRead > 0) {
 
-					if (bytesRead > 0) {
-						pCharacteristic->setValue(batch, bytesRead);
-						pCharacteristic->notify();
-					}
-				}
-			}
+		pCharacteristic->setValue(batch, bytesRead);
+		pCharacteristic->notify();
+	}
+}
+
+// Task that is notified when the ADC buffer is ready to be sent
+void taks_notify_ble(void *parameter) {
+
+	while (true) {
+		// This task is unblocked when the adc buffer is full and the characteristic
+		// should be notified.
+		uint32_t ulNotifiedValue = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+		if (ulNotifiedValue > 0) {
+			notify_ble_adc_buffer();
 		}
 	}
 	vTaskDelete(NULL);
@@ -158,6 +197,9 @@ void task_setup_adc(void *parameter) {
 	uint8_t PIN_DRDY      = 12;
 	uint8_t PIN_ADC_RESET = 14;
 	uint8_t PIN_CS_ADC    = 13;
+
+	pinMode(PIN_DEBUG_TOP, OUTPUT);
+	pinMode(PIN_DEBUG_BOT, OUTPUT);
 
 	adc.setClockSpeed(20000000); // SPI clock speed, has to run before adc.begin()
 	adc.begin(&SpiADC, PIN_NUM_CLK, PIN_NUM_MISO, PIN_NUM_MOSI, PIN_CS_ADC, PIN_DRDY);
@@ -199,9 +241,6 @@ void task_setup_adc(void *parameter) {
 	Serial.print("register 4 contents ");
 	Serial.println(contents);
 
-	xStreamBuffer = xStreamBufferCreate(2000, 1);
-	assert(xStreamBuffer != NULL);
-
 	// TODO figure out if this function call is needed
 	// The digitalPinToInterrupt() function takes a pin as an argument, and
 	// returns the same pin if it can be used as an interrupt.
@@ -228,23 +267,25 @@ void app_main(void) {
 	Serial.println("MAC address:");
 	Serial.printf("0x%" PRIx64 "\n", ESP.getEfuseMac());
 
+	// This buffer is to share the ADC values from the adc read task and BLE notify task
+	xStreamBuffer = xStreamBufferCreate(2000, 1);
+	assert(xStreamBuffer != NULL);
+
 	// TODO figure out why BLE setup has to go first.
 	setup_ble();
 	delay(500);
 
-	xTaskCreatePinnedToCore(task_setup_adc, "taskADC_setup", 5000, NULL, 1, NULL, CORE_APP);
-	// setup_adc();  // TODO force run this on core 1 to make sure ISR is on
-	// core
-	// 1
+	xTaskCreatePinnedToCore(task_setup_adc, "task_ADC_setup", 5000, NULL, 1, NULL, CORE_APP);
 	delay(500);
 
-	// TODO maybe this needs to be pinned on BLE core?
 	// TODO figure out the memory stack required
-	// xTaskCreatePinnedToCore
-	xTaskCreate(task_ble_characteristic_adc_notify, "taskNotify", 5000, NULL, CORE_APP,
-	            &xHandleADCRead);
-	// xTaskCreatePinnedToCore(task_ble_characteristic_adc_notify, "taskNotify",
-	// 5000, NULL, 1, &xHandleADCRead, CORE_BLE);
+	UBaseType_t priority = 30;
+	xTaskCreatePinnedToCore(task_adc_read_and_buffer, "task_ADC_read_buffer", 5000, NULL, priority,
+	                        &xHandleADCRead, CORE_APP);
+
+	// TODO figure out priority for the BLE task
+	xTaskCreatePinnedToCore(taks_notify_ble, "task_notify_BLE", 5000, NULL, 3, &xHandleNotifyBLE,
+	                        CORE_BLE);
 
 	// // esp_pm_config_esp32_t pm_config = {
 	esp_pm_config_t pm_config = {
