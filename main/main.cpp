@@ -24,8 +24,9 @@ BLECharacteristic *pCharacteristic = NULL;
 bool deviceConnected = false;
 // bool oldDeviceConnected = false;
 
-StreamBufferHandle_t xStreamBuffer  = NULL;
-TaskHandle_t         xHandleADCRead = NULL; // Used by ISR to unblock ADC read and proccesing
+StreamBufferHandle_t xStreamBuffer    = NULL;
+TaskHandle_t         xHandleADCRead   = NULL; // Used by ISR to unblock ADC read and proccesing
+TaskHandle_t         xHandleNotifyBLE = NULL;
 
 #define SERVICE_UUID        "e331016b-6618-4f8f-8997-1a2c7c9e5fa3"
 #define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
@@ -115,19 +116,20 @@ void setup_ble() {
 // is placed in the ESP32’s Internal RAM (IRAM). Otherwise the code is kept in
 // Flash. And Flash on ESP32 is much slower than internal RAM.
 void IRAM_ATTR isr_adc_drdy() {
-	digitalWrite(PIN_DEBUG_ISR, HIGH);
+
 	// unblock the task that will read the ADC & handle putting in the buffer
 	if (xHandleADCRead != NULL) {
 		BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 		vTaskNotifyGiveFromISR(xHandleADCRead, &xHigherPriorityTaskWoken);
 		portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 	}
-	digitalWrite(PIN_DEBUG_ISR, LOW);
 }
 
 // Read ADC values. If BLE device is connected, place them in the buffer.
 // If the buffer is large enough, write the buffer to the BLE characteristic.
 void adc_read_and_buffer() {
+	digitalWrite(PIN_DEBUG_ISR, HIGH);
+
 	adcOutput adcReading = adc.readADC();
 	uint32_t  adcValue   = adcReading.ch2;
 	// Only place ADC reading if the the BLE device is connected.
@@ -140,42 +142,57 @@ void adc_read_and_buffer() {
 		// Schedule a task when buffer is closer to the upper limit
 		// TODO figure out the best number or a way to know when to schedule
 		if (xStreamBufferBytesAvailable(xStreamBuffer) > 200) {
-			uint8_t batch[251];
-			size_t  bytesRead = 0;
-
-			bytesRead = xStreamBufferReceive(xStreamBuffer, batch, 251, 0);
-
-			if (bytesRead > 0) {
-				pCharacteristic->setValue(batch, bytesRead);
-				pCharacteristic->notify();
-			}
+			xTaskNotifyGive(xHandleNotifyBLE);
 		}
 	}
+	digitalWrite(PIN_DEBUG_ISR, LOW);
 }
 
 // Task that handles calling the read adc function and placing the values in the buffer.
 void task_adc_read_and_buffer(void *parameter) {
 	// Durtation until the wait for ISR times out
 	const TickType_t xBlockTime = pdMS_TO_TICKS(500);
-	// How many times did the ISR notify this task
-	uint32_t ulNotifiedValue;
 	while (true) {
 		// Wait until ISR notifies this task, or time out. ISR can notify multiple times,
 		// but this will reset the counter to zero each time.
-		ulNotifiedValue = ulTaskNotifyTake(pdFALSE, xBlockTime);
-		digitalWrite(PIN_DEBUG_ADC_TASK, HIGH);
-		if (ulNotifiedValue == 0) {
-			// time out happened, TBD how this should be handled
-		} else {
-			// WIP DEBUG - the counter
-			Serial.print("Value of ulNotifiedValue: ");
-			Serial.println(ulNotifiedValue);
+		// How many times did the ISR notify this task
+		uint32_t ulNotifiedValue = ulTaskNotifyTake(pdTRUE, xBlockTime);
+		if (ulNotifiedValue > 0) {
 			adc_read_and_buffer();
+		} else {
+			// time out happened, TBD how this should be handled
 		}
-		// end of handling reading adc
-		digitalWrite(PIN_DEBUG_ADC_TASK, LOW);
 	}
 	vTaskDelete(NULL);
+}
+
+// Read the adc buffer and update the BLE characteristic
+void taks_notify_ble(void *parameter) {
+	const TickType_t xBlockTime = pdMS_TO_TICKS(500);
+	while (true) {
+		// This task is unblocked when the adc buffer is full and the characteristic
+		// should be notified.
+		uint32_t ulNotifiedValue = ulTaskNotifyTake(pdTRUE, xBlockTime);
+		if (ulNotifiedValue > 0) {
+			digitalWrite(PIN_DEBUG_ADC_TASK, HIGH);
+			// TODO verify that 251 is the actual max that can be sent and not
+			// 251 minus some header.
+			// TODO figure if should check deviceConnected?
+			uint8_t batch[251];
+			size_t  bytesRead = 0;
+
+			bytesRead = xStreamBufferReceive(xStreamBuffer, batch, 251, 0);
+
+			if (bytesRead > 0) {
+
+				pCharacteristic->setValue(batch, bytesRead);
+				pCharacteristic->notify();
+			}
+			digitalWrite(PIN_DEBUG_ADC_TASK, LOW);
+		} else {
+			// time out happened, TBD how this should be handled
+		}
+	}
 }
 
 void task_setup_adc(void *parameter) {
@@ -264,18 +281,17 @@ void app_main(void) {
 	setup_ble();
 	delay(500);
 
-	xTaskCreatePinnedToCore(task_setup_adc, "taskADC_setup", 5000, NULL, 1, NULL, CORE_APP);
-	// setup_adc();  // TODO force run this on core 1 to make sure ISR is on
-	// core
-	// 1
+	xTaskCreatePinnedToCore(task_setup_adc, "task_ADC_setup", 5000, NULL, 1, NULL, CORE_APP);
 	delay(500);
 
-	// TODO maybe this needs to be pinned on BLE core?
 	// TODO figure out the memory stack required
-	// xTaskCreatePinnedToCore
-	xTaskCreate(task_adc_read_and_buffer, "taskNotify", 5000, NULL, CORE_APP, &xHandleADCRead);
-	// xTaskCreatePinnedToCore(task_adc_read_and_buffer, "taskNotify",
-	// 5000, NULL, 1, &xHandleADCRead, CORE_BLE);
+	UBaseType_t priority = 30;
+	xTaskCreatePinnedToCore(task_adc_read_and_buffer, "task_ADC_read_buffer", 5000, NULL, priority,
+	                        &xHandleADCRead, CORE_APP);
+
+	// TODO figure out priority for the BLE task
+	xTaskCreatePinnedToCore(taks_notify_ble, "task_notify_BLE", 5000, NULL, 3, &xHandleNotifyBLE,
+	                        CORE_BLE);
 
 	// // esp_pm_config_esp32_t pm_config = {
 	esp_pm_config_t pm_config = {
