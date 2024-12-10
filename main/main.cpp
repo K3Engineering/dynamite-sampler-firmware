@@ -25,7 +25,7 @@ bool deviceConnected = false;
 // bool oldDeviceConnected = false;
 
 StreamBufferHandle_t xStreamBuffer    = NULL;
-TaskHandle_t         xHandleADCRead   = NULL; // Used by ISR to unblock ADC read and proccesing
+TaskHandle_t         xHandleADCRead   = NULL;
 TaskHandle_t         xHandleNotifyBLE = NULL;
 
 #define SERVICE_UUID        "e331016b-6618-4f8f-8997-1a2c7c9e5fa3"
@@ -43,9 +43,6 @@ const int CORE_APP = 1;
 // There are 2 pin on the v2.0.1 board that can be used for debugging.
 const int PIN_DEBUG_TOP = 47;
 const int PIN_DEBUG_BOT = 21;
-// For debugging ISR and adc handle function
-const int PIN_DEBUG_ISR      = PIN_DEBUG_TOP;
-const int PIN_DEBUG_ADC_TASK = PIN_DEBUG_BOT;
 
 class MyServerCallbacks : public BLEServerCallbacks {
 	// void onConnect(BLEServer *pServer) {
@@ -126,9 +123,8 @@ void IRAM_ATTR isr_adc_drdy() {
 }
 
 // Read ADC values. If BLE device is connected, place them in the buffer.
-// If the buffer is large enough, write the buffer to the BLE characteristic.
+// If the buffer is large enough, notify the ble task
 void adc_read_and_buffer() {
-	digitalWrite(PIN_DEBUG_ISR, HIGH);
 
 	adcOutput adcReading = adc.readADC();
 	uint32_t  adcValue   = adcReading.ch2;
@@ -145,7 +141,6 @@ void adc_read_and_buffer() {
 			xTaskNotifyGive(xHandleNotifyBLE);
 		}
 	}
-	digitalWrite(PIN_DEBUG_ISR, LOW);
 }
 
 // Task that handles calling the read adc function and placing the values in the buffer.
@@ -164,6 +159,22 @@ void task_adc_read_and_buffer(void *parameter) {
 }
 
 // Read the adc buffer and update the BLE characteristic
+void notify_ble_adc_buffer() {
+	// TODO verify that 251 is the actual max that can be sent and not
+	// 251 minus some header.
+	// TODO figure if should check deviceConnected?
+	uint8_t batch[251];
+
+	size_t bytesRead = xStreamBufferReceive(xStreamBuffer, batch, sizeof(batch), 0);
+
+	if (bytesRead > 0) {
+
+		pCharacteristic->setValue(batch, bytesRead);
+		pCharacteristic->notify();
+	}
+}
+
+// Task that is notified when the ADC buffer is ready to be sent
 void taks_notify_ble(void *parameter) {
 
 	while (true) {
@@ -171,23 +182,7 @@ void taks_notify_ble(void *parameter) {
 		// should be notified.
 		uint32_t ulNotifiedValue = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 		if (ulNotifiedValue > 0) {
-
-			// TODO verify that 251 is the actual max that can be sent and not
-			// 251 minus some header.
-			// TODO figure if should check deviceConnected?
-			uint8_t batch[251];
-
-			size_t bytesRead =
-			    xStreamBufferReceive(xStreamBuffer, batch, sizeof(batch), portMAX_DELAY);
-			Serial.println(bytesRead);
-
-			digitalWrite(PIN_DEBUG_ADC_TASK, HIGH);
-			if (bytesRead > 0) {
-
-				pCharacteristic->setValue(batch, bytesRead);
-				pCharacteristic->notify();
-			}
-			digitalWrite(PIN_DEBUG_ADC_TASK, LOW);
+			notify_ble_adc_buffer();
 		}
 	}
 	vTaskDelete(NULL);
