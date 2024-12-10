@@ -137,13 +137,9 @@ void adc_read_and_buffer() {
 	if (deviceConnected) {
 		xStreamBufferSend(xStreamBuffer, &adcValue, 3, 0); // 3 bytes instead of sizeof(adcValue)
 
-		// When the buffer is sufficiently large, time to send data.
-		// BLE allows to extend data packet from 27 to 251 bytes
-		// Schedule a task when buffer is closer to the upper limit
-		// TODO figure out the best number or a way to know when to schedule
-		if (xStreamBufferBytesAvailable(xStreamBuffer) > 200) {
-			xTaskNotifyGive(xHandleNotifyBLE);
-		}
+		// if (xStreamBufferBytesAvailable(xStreamBuffer) > 200) {
+		// 	xTaskNotifyGive(xHandleNotifyBLE);
+		// }
 	}
 	digitalWrite(PIN_DEBUG_ISR, LOW);
 }
@@ -169,25 +165,28 @@ void taks_notify_ble(void *parameter) {
 	while (true) {
 		// This task is unblocked when the adc buffer is full and the characteristic
 		// should be notified.
-		uint32_t ulNotifiedValue = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-		if (ulNotifiedValue > 0) {
-			digitalWrite(PIN_DEBUG_ADC_TASK, HIGH);
-			// TODO verify that 251 is the actual max that can be sent and not
-			// 251 minus some header.
-			// TODO figure if should check deviceConnected?
-			uint8_t batch[251];
-			size_t  bytesRead = 0;
+		// uint32_t ulNotifiedValue = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+		// if (ulNotifiedValue > 0) {
 
-			bytesRead = xStreamBufferReceive(xStreamBuffer, batch, 251, 0);
+		// TODO verify that 251 is the actual max that can be sent and not
+		// 251 minus some header.
+		// TODO figure if should check deviceConnected?
+		uint8_t batch[251];
 
-			if (bytesRead > 0) {
+		// This will block until the trigger size is reached
+		size_t bytesRead = xStreamBufferReceive(xStreamBuffer, batch, sizeof(batch), portMAX_DELAY);
+		Serial.println(bytesRead);
 
-				pCharacteristic->setValue(batch, bytesRead);
-				pCharacteristic->notify();
-			}
-			digitalWrite(PIN_DEBUG_ADC_TASK, LOW);
+		digitalWrite(PIN_DEBUG_ADC_TASK, HIGH);
+		if (bytesRead > 0) {
+
+			pCharacteristic->setValue(batch, bytesRead);
+			pCharacteristic->notify();
 		}
+		digitalWrite(PIN_DEBUG_ADC_TASK, LOW);
+		// }
 	}
+	vTaskDelete(NULL);
 }
 
 void task_setup_adc(void *parameter) {
@@ -243,9 +242,6 @@ void task_setup_adc(void *parameter) {
 	Serial.print("register 4 contents ");
 	Serial.println(contents);
 
-	xStreamBuffer = xStreamBufferCreate(2000, 1);
-	assert(xStreamBuffer != NULL);
-
 	// TODO figure out if this function call is needed
 	// The digitalPinToInterrupt() function takes a pin as an argument, and
 	// returns the same pin if it can be used as an interrupt.
@@ -272,6 +268,12 @@ void app_main(void) {
 	Serial.println("MAC address:");
 	Serial.printf("0x%" PRIx64 "\n", ESP.getEfuseMac());
 
+	// When the buffer is sufficiently large, time to send data.
+	// BLE allows to extend data packet from 27 to 251 bytes
+	// The BLE notify task will be blocked until the buffer is at least 200 bytes
+	xStreamBuffer = xStreamBufferCreate(2000, 200);
+	assert(xStreamBuffer != NULL);
+
 	// TODO figure out why BLE setup has to go first.
 	setup_ble();
 	delay(500);
@@ -285,8 +287,7 @@ void app_main(void) {
 	                        &xHandleADCRead, CORE_APP);
 
 	// TODO figure out priority for the BLE task
-	xTaskCreatePinnedToCore(taks_notify_ble, "task_notify_BLE", 5000, NULL, 3, &xHandleNotifyBLE,
-	                        CORE_BLE);
+	xTaskCreatePinnedToCore(taks_notify_ble, "task_notify_BLE", 5000, NULL, 3, NULL, CORE_BLE);
 
 	// // esp_pm_config_esp32_t pm_config = {
 	esp_pm_config_t pm_config = {
