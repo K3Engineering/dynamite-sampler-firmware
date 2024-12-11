@@ -12,91 +12,88 @@
 #include "ADS131M0x.h"
 #include "SPI.h"
 
-extern "C" {
-void app_main(void);
-}
-
 // TODO since we don't need blue droid backwards compatability, all of the
 // #defines could be expanded to their nimble equivalent
-BLEServer         *pServer         = NULL;
-BLECharacteristic *pCharacteristic = NULL;
+static BLEServer         *bleServer                  = NULL;
+static BLECharacteristic *blePublisherCharacteristic = NULL;
 
-bool deviceConnected = false;
+static bool deviceConnected = false;
 // bool oldDeviceConnected = false;
 
-StreamBufferHandle_t xStreamBuffer    = NULL;
-TaskHandle_t         xHandleADCRead   = NULL;
-TaskHandle_t         xHandleNotifyBLE = NULL;
+static StreamBufferHandle_t adcStreamBufferHandle  = NULL;
+static TaskHandle_t         adcReadTaskHandle      = NULL;
+static TaskHandle_t         blePublisherTaskHandle = NULL;
 
-#define SERVICE_UUID        "e331016b-6618-4f8f-8997-1a2c7c9e5fa3"
-#define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+static ADS131M0x adc;
+static SPIClass  spiADC(HSPI);
 
-ADS131M0x adc;
-SPIClass  SpiADC(HSPI);
+constexpr char SERVICE_UUID[]        = "e331016b-6618-4f8f-8997-1a2c7c9e5fa3";
+constexpr char CHARACTERISTIC_UUID[] = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
 
 // Core0 is for BLE
 // Core1 is for everything else. Setup & loop run on core 1.
 // ISR is handled on the core that sets it.
-const int CORE_BLE = 0;
-const int CORE_APP = 1;
+constexpr uint32_t CORE_BLE = 0;
+constexpr uint32_t CORE_APP = 1;
+
+// TODO verify that 251 is the actual max that can be sent and not
+// 251 minus some header.
+constexpr uint16_t BLE_PUBL_DATA_MTU     = 251;
+constexpr size_t   BLE_PUBL_DATA_TRIGGER = 200;
 
 // There are 2 pin on the v2.0.1 board that can be used for debugging.
-const int PIN_DEBUG_TOP = 47;
-const int PIN_DEBUG_BOT = 21;
+constexpr uint8_t PIN_DEBUG_TOP = 47;
+constexpr uint8_t PIN_DEBUG_BOT = 21;
 
 class MyServerCallbacks : public BLEServerCallbacks {
-	// void onConnect(BLEServer *pServer) {
-	void onConnect(NimBLEServer *pServer, NimBLEConnInfo &connInfo) {
+	void onConnect(NimBLEServer *server, NimBLEConnInfo &connInfo) override {
 		deviceConnected = true;
 
 		// TODO: Figure out:
 		// is this needed?
 		// Does this actually affect the packet size for the way we notify
 		// Do we need to notify in a different way?
-		pServer->setDataLen(connInfo.getConnHandle(), 251);
+		server->setDataLen(connInfo.getConnHandle(), BLE_PUBL_DATA_MTU);
 		Serial.print("On connect callback on core ");
 		Serial.println(xPortGetCoreID());
 	};
 
-	// void onDisconnect(BLEServer *pServer) {
-	void onDisconnect(NimBLEServer *pServer, NimBLEConnInfo &connInfo, int reason) {
+	void onDisconnect(NimBLEServer *server, NimBLEConnInfo &connInfo, int reason) override {
 		deviceConnected = false;
 		// TODO stop reading the ADC and stop the interupt when disconnected
-
 		BLEDevice::startAdvertising();
 		Serial.print("On disco callback on core ");
 		Serial.println(xPortGetCoreID());
 	}
 };
 
-void setup_ble() {
+static void setupBle() {
 	Serial.println("Setting up BLE");
 	// Create the BLE Device
 	// Name the device with the mac address to make it unique for testing purposes.
 	// TODO this probably isn't the elegant way to do this.
-	char ble_name[35] = {0};
-	sprintf(ble_name, "DS %" PRIx64 "\n", ESP.getEfuseMac());
-	const std::string ble_name_str = std::string(ble_name);
-	BLEDevice::init(ble_name_str);
+	char bleName[35];
+	sprintf(bleName, "DS %" PRIx64 "\n", ESP.getEfuseMac());
+	BLEDevice::init(bleName);
 
 	// Create the BLE Server
-	pServer = BLEDevice::createServer();
-	pServer->setCallbacks(new MyServerCallbacks());
+	bleServer = BLEDevice::createServer();
+	bleServer->setCallbacks(new MyServerCallbacks());
 
 	// Create the BLE Service
-	BLEService *pService = pServer->createService(SERVICE_UUID);
+	BLEService *bleService = bleServer->createService(SERVICE_UUID);
 
 	// Create a BLE Characteristic
-	uint32_t prop = NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::NOTIFY |
-	                NIMBLE_PROPERTY::INDICATE;
-	pCharacteristic = pService->createCharacteristic(CHARACTERISTIC_UUID, prop);
+	constexpr uint32_t prop = NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE |
+	                          NIMBLE_PROPERTY::NOTIFY | NIMBLE_PROPERTY::INDICATE;
+	blePublisherCharacteristic = bleService->createCharacteristic(CHARACTERISTIC_UUID, prop);
 
 	// Create a BLE Descriptor
 	// Automatically created by nimble. Needed for bluedroid
 	// pCharacteristic->addDescriptor(new BLE2902());
 
 	// Start the service
-	pService->start();
+	bleService->start();
 
 	// Start advertising
 	BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
@@ -112,130 +109,109 @@ void setup_ble() {
 // When we flag a piece of code with the IRAM_ATTR attribute, the compiled code
 // is placed in the ESP32’s Internal RAM (IRAM). Otherwise the code is kept in
 // Flash. And Flash on ESP32 is much slower than internal RAM.
-void IRAM_ATTR isr_adc_drdy() {
+void IRAM_ATTR isrAdcDrdy() {
 
 	// unblock the task that will read the ADC & handle putting in the buffer
-	if (xHandleADCRead != NULL) {
-		BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-		vTaskNotifyGiveFromISR(xHandleADCRead, &xHigherPriorityTaskWoken);
-		portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+	if (adcReadTaskHandle != NULL) {
+		BaseType_t taskWoken = pdFALSE;
+		vTaskNotifyGiveFromISR(adcReadTaskHandle, &taskWoken);
+		portYIELD_FROM_ISR(taskWoken);
 	}
 }
 
 // Read ADC values. If BLE device is connected, place them in the buffer.
-// If the buffer is large enough, notify the ble task
-void adc_read_and_buffer() {
+// When accumulated enough, notify the ble task
+static void adcReadAndBuffer() {
 
-	adcOutput adcReading = adc.readADC();
+	constexpr size_t STATUS_SIZE   = 2; // bytes
+	constexpr size_t NUM_CHAN      = 4;
+	constexpr size_t SAMPLE_SIZE   = 3; // bytes
+	constexpr size_t CRC_FLAG_SIZE = 1; // byte
 
-	// Prepare a buffer to hold all required data
-	// 2 bytes (status) + 4 * 3 bytes (channels) + 1 byte (CRC) = 15 bytes
-	uint8_t buffer[15];
+	const adcOutput adcReading = adc.readADC();
 
-	// Pack status (2 bytes)
-	buffer[0] = (uint8_t)(adcReading.status & 0xFF);        // Low byte
-	buffer[1] = (uint8_t)((adcReading.status >> 8) & 0xFF); // High byte
+	if (!deviceConnected)
+		return;
 
-	// Pack 24-bit channel data (4 channels, 3 bytes each)
-	for (int i = 0; i < 4; ++i) {
-		int32_t channelValue = 0;
-		switch (i) {
-		case 0:
-			channelValue = adcReading.ch0;
-			break;
-		case 1:
-			channelValue = adcReading.ch1;
-			break;
-		case 2:
-			channelValue = adcReading.ch2;
-			break;
-		case 3:
-			channelValue = adcReading.ch3;
-			break;
-		}
-		buffer[2 + (i * 3)] = (uint8_t)(channelValue & 0xFF);         // Low byte
-		buffer[3 + (i * 3)] = (uint8_t)((channelValue >> 8) & 0xFF);  // Middle byte
-		buffer[4 + (i * 3)] = (uint8_t)((channelValue >> 16) & 0xFF); // High byte
+	uint8_t buffer[STATUS_SIZE + NUM_CHAN * SAMPLE_SIZE + CRC_FLAG_SIZE];
+	memcpy(buffer, &adcReading.status, STATUS_SIZE);
+
+	const int32_t channelValue[NUM_CHAN]{adcReading.ch0, adcReading.ch1, adcReading.ch2,
+	                                     adcReading.ch3};
+	for (int i = 0; i < NUM_CHAN; ++i) {
+		memcpy(&buffer[STATUS_SIZE + (i * SAMPLE_SIZE)], &channelValue[i], SAMPLE_SIZE);
 	}
-
 	// Pack CRC match as a single byte
-	buffer[14] = (uint8_t)(adcReading.crc_match ? 1 : 0);
+	buffer[STATUS_SIZE + NUM_CHAN * SAMPLE_SIZE] = adcReading.crc_match;
 
 	// Only place ADC reading if the the BLE device is connected.
 	// TODO - this probably should be handled in a different way.
-	if (deviceConnected) {
-		xStreamBufferSend(xStreamBuffer, buffer, sizeof(buffer), 0);
+	xStreamBufferSend(adcStreamBufferHandle, buffer, sizeof(buffer), 0);
 
-		// When the buffer is sufficiently large, time to send data.
-		// BLE allows to extend data packet from 27 to 251 bytes
-		// Schedule a task when buffer is closer to the upper limit
-		// TODO figure out the best number or a way to know when to schedule
-		if (xStreamBufferBytesAvailable(xStreamBuffer) > 200) {
-			xTaskNotifyGive(xHandleNotifyBLE);
-		}
+	// When the buffer is sufficiently large, time to send data.
+	// BLE allows to extend data packet from 27 to 251 bytes
+	// Schedule a task when buffer is closer to the upper limit
+	// TODO figure out the best number or a way to know when to schedule
+	if (xStreamBufferBytesAvailable(adcStreamBufferHandle) > BLE_PUBL_DATA_TRIGGER) {
+		xTaskNotifyGive(blePublisherTaskHandle);
 	}
 }
 
 // Task that handles calling the read adc function and placing the values in the buffer.
-void task_adc_read_and_buffer(void *parameter) {
+static void taskAdcReadAndBuffer(void *) {
 
 	while (true) {
-		// Wait until ISR notifies this task, or time out. ISR can notify multiple times,
-		// but this will reset the counter to zero each time.
-		// How many times did the ISR notify this task
-		uint32_t ulNotifiedValue = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-		if (ulNotifiedValue > 0) {
-			adc_read_and_buffer();
+		// Wait until ISR notifies this task. Normally numNotifications == 1,
+		// numNotifications > 1 in case we cannot keep up with adc and have some data lost.
+		uint32_t numNotifications = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+		if (numNotifications > 0) [[likely]] {
+			adcReadAndBuffer();
 		}
 	}
 	vTaskDelete(NULL);
 }
 
 // Read the adc buffer and update the BLE characteristic
-void notify_ble_adc_buffer() {
-	// TODO verify that 251 is the actual max that can be sent and not
-	// 251 minus some header.
+static void blePublishAdcBuffer() {
 	// TODO figure if should check deviceConnected?
-	uint8_t batch[251];
-
-	size_t bytesRead = xStreamBufferReceive(xStreamBuffer, batch, sizeof(batch), 0);
-
+	uint8_t batch[BLE_PUBL_DATA_MTU];
+	size_t  bytesRead = xStreamBufferReceive(adcStreamBufferHandle, batch, sizeof(batch), 0);
 	if (bytesRead > 0) {
 
-		pCharacteristic->setValue(batch, bytesRead);
-		pCharacteristic->notify();
+		blePublisherCharacteristic->setValue(batch, bytesRead);
+		blePublisherCharacteristic->notify();
 	}
 }
 
 // Task that is notified when the ADC buffer is ready to be sent
-void taks_notify_ble(void *parameter) {
+static void taksBlePublishAdcBuffer(void *) {
 
 	while (true) {
 		// This task is unblocked when the adc buffer is full and the characteristic
 		// should be notified.
-		uint32_t ulNotifiedValue = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-		if (ulNotifiedValue > 0) {
-			notify_ble_adc_buffer();
+		uint32_t numNotifications = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+		if (numNotifications > 0) {
+			blePublishAdcBuffer();
 		}
 	}
 	vTaskDelete(NULL);
 }
 
-void task_setup_adc(void *parameter) {
+static void taskSetupAdc(void *setupDone) {
 	Serial.print("setting up adc on core: ");
 	Serial.println(xPortGetCoreID());
-	uint8_t PIN_NUM_CLK   = 11;
-	uint8_t PIN_NUM_MISO  = 10;
-	uint8_t PIN_NUM_MOSI  = 9;
-	uint8_t PIN_DRDY      = 12;
-	uint8_t PIN_ADC_RESET = 14;
-	uint8_t PIN_CS_ADC    = 13;
+	constexpr uint8_t PIN_NUM_CLK   = 11;
+	constexpr uint8_t PIN_NUM_MISO  = 10;
+	constexpr uint8_t PIN_NUM_MOSI  = 9;
+	constexpr uint8_t PIN_DRDY      = 12;
+	constexpr uint8_t PIN_ADC_RESET = 14;
+	constexpr uint8_t PIN_CS_ADC    = 13;
 
 	pinMode(PIN_DEBUG_TOP, OUTPUT);
 	pinMode(PIN_DEBUG_BOT, OUTPUT);
 
 	adc.setClockSpeed(20000000); // SPI clock speed, has to run before adc.begin()
-	adc.begin(&SpiADC, PIN_NUM_CLK, PIN_NUM_MISO, PIN_NUM_MOSI, PIN_CS_ADC, PIN_DRDY);
+	adc.begin(&spiADC, PIN_NUM_CLK, PIN_NUM_MISO, PIN_NUM_MOSI, PIN_CS_ADC, PIN_DRDY);
 
 	// adc.setMultiplexer(0x00); // AIN0 AIN1
 	// adc.setPGAbypass(0);
@@ -278,15 +254,17 @@ void task_setup_adc(void *parameter) {
 	// The digitalPinToInterrupt() function takes a pin as an argument, and
 	// returns the same pin if it can be used as an interrupt.
 	//  Setup ISR to handle the falling edge of drdy
-	attachInterrupt(digitalPinToInterrupt(PIN_DRDY), isr_adc_drdy, FALLING);
+	attachInterrupt(digitalPinToInterrupt(PIN_DRDY), isrAdcDrdy, FALLING);
 
 	// TODO figure out if you need to setup wake from sleep for gpio
 
+	*(volatile bool *)setupDone = true;
 	vTaskDelete(NULL);
 }
 
-void app_main(void) {
+extern "C" void app_main(void) {
 	initArduino();
+
 	Serial.begin(115200);
 	Serial.println("Starting Arduino version:");
 	Serial.println(ESP_ARDUINO_VERSION_STR);
@@ -301,32 +279,36 @@ void app_main(void) {
 	Serial.printf("0x%" PRIx64 "\n", ESP.getEfuseMac());
 
 	// This buffer is to share the ADC values from the adc read task and BLE notify task
-	xStreamBuffer = xStreamBufferCreate(2000, 1);
-	assert(xStreamBuffer != NULL);
+	adcStreamBufferHandle = xStreamBufferCreate(1024 * 2, 1);
+	assert(adcStreamBufferHandle != NULL);
 
 	// TODO figure out why BLE setup has to go first.
-	setup_ble();
+	setupBle();
 	delay(500);
 
-	xTaskCreatePinnedToCore(task_setup_adc, "task_ADC_setup", 5000, NULL, 1, NULL, CORE_APP);
+	volatile bool done = false;
+	xTaskCreatePinnedToCore(taskSetupAdc, "task_ADC_setup", 1024 * 5, (void *)&done, 1, NULL,
+	                        CORE_APP);
+	while (!done)
+		;
 	delay(500);
 
 	// TODO figure out the memory stack required
-	UBaseType_t priority = 30;
-	xTaskCreatePinnedToCore(task_adc_read_and_buffer, "task_ADC_read_buffer", 5000, NULL, priority,
-	                        &xHandleADCRead, CORE_APP);
+	const UBaseType_t priority = 30;
+	xTaskCreatePinnedToCore(taskAdcReadAndBuffer, "task_ADC_read", 1024 * 5, NULL, priority,
+	                        &adcReadTaskHandle, CORE_APP);
 
 	// TODO figure out priority for the BLE task
-	xTaskCreatePinnedToCore(taks_notify_ble, "task_notify_BLE", 5000, NULL, 3, &xHandleNotifyBLE,
-	                        CORE_BLE);
+	xTaskCreatePinnedToCore(taksBlePublishAdcBuffer, "task_BLE_publish", 1024 * 5, NULL, 3,
+	                        &blePublisherTaskHandle, CORE_BLE);
 
 	// // esp_pm_config_esp32_t pm_config = {
-	esp_pm_config_t pm_config = {
+	const esp_pm_config_t pmConfig = {
 	    .max_freq_mhz       = 80,
 	    .min_freq_mhz       = 10,
 	    .light_sleep_enable = false,
 	};
-	esp_err_t err = esp_pm_configure(&pm_config);
+	esp_err_t err = esp_pm_configure(&pmConfig);
 	Serial.print("pm err ");
 	Serial.println(err);
 	// ESP_ERROR_CHECK(esp_pm_configure(&pm_config));
