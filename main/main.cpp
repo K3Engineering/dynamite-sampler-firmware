@@ -14,21 +14,20 @@
 
 // TODO since we don't need blue droid backwards compatability, all of the
 // #defines could be expanded to their nimble equivalent
-static BLEServer         *bleServer                  = NULL;
-static BLECharacteristic *blePublisherCharacteristic = NULL;
+static NimBLEServer         *bleServer                  = NULL;
+static NimBLECharacteristic *blePublisherCharacteristic = NULL;
 
 static bool deviceConnected = false;
-// bool oldDeviceConnected = false;
 
-static StreamBufferHandle_t adcStreamBufferHandle  = NULL;
-static TaskHandle_t         adcReadTaskHandle      = NULL;
-static TaskHandle_t         blePublisherTaskHandle = NULL;
+static StreamBufferHandle_t adcStreamBufferHandle         = NULL;
+static TaskHandle_t         adcReadTaskHandle             = NULL;
+static TaskHandle_t         bleAdcFeedPublisherTaskHandle = NULL;
 
 static ADS131M0x adc;
 static SPIClass  spiADC(HSPI);
 
-constexpr char SERVICE_UUID[]        = "e331016b-6618-4f8f-8997-1a2c7c9e5fa3";
-constexpr char CHARACTERISTIC_UUID[] = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+constexpr char SERVICE_UUID[]                 = "e331016b-6618-4f8f-8997-1a2c7c9e5fa3";
+constexpr char ADC_FEED_CHARACTERISTIC_UUID[] = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
 
 // Core0 is for BLE
 // Core1 is for everything else. Setup & loop run on core 1.
@@ -36,16 +35,15 @@ constexpr char CHARACTERISTIC_UUID[] = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
 constexpr uint32_t CORE_BLE = 0;
 constexpr uint32_t CORE_APP = 1;
 
-// TODO verify that 251 is the actual max that can be sent and not
-// 251 minus some header.
-constexpr uint16_t BLE_PUBL_DATA_MTU     = 251;
+// Nimble creates a GATT connection, which has some overhead.
+constexpr uint16_t BLE_PUBL_DATA_DLE     = 244;
 constexpr size_t   BLE_PUBL_DATA_TRIGGER = 200;
 
 // There are 2 pin on the v2.0.1 board that can be used for debugging.
 constexpr uint8_t PIN_DEBUG_TOP = 47;
 constexpr uint8_t PIN_DEBUG_BOT = 21;
 
-class MyServerCallbacks : public BLEServerCallbacks {
+class MyServerCallbacks : public NimBLEServerCallbacks {
 	void onConnect(NimBLEServer *server, NimBLEConnInfo &connInfo) override {
 		deviceConnected = true;
 
@@ -53,7 +51,7 @@ class MyServerCallbacks : public BLEServerCallbacks {
 		// is this needed?
 		// Does this actually affect the packet size for the way we notify
 		// Do we need to notify in a different way?
-		server->setDataLen(connInfo.getConnHandle(), BLE_PUBL_DATA_MTU);
+		server->setDataLen(connInfo.getConnHandle(), BLE_PUBL_DATA_DLE);
 		Serial.print("On connect callback on core ");
 		Serial.println(xPortGetCoreID());
 	};
@@ -61,7 +59,7 @@ class MyServerCallbacks : public BLEServerCallbacks {
 	void onDisconnect(NimBLEServer *server, NimBLEConnInfo &connInfo, int reason) override {
 		deviceConnected = false;
 		// TODO stop reading the ADC and stop the interupt when disconnected
-		BLEDevice::startAdvertising();
+		NimBLEDevice::startAdvertising();
 		Serial.print("On disco callback on core ");
 		Serial.println(xPortGetCoreID());
 	}
@@ -73,36 +71,33 @@ static void setupBle() {
 	// Name the device with the mac address to make it unique for testing purposes.
 	// TODO this probably isn't the elegant way to do this.
 	char bleName[35];
-	sprintf(bleName, "DS %" PRIx64 "\n", ESP.getEfuseMac());
-	BLEDevice::init(bleName);
+	sprintf(bleName, "DS %" PRIx64, ESP.getEfuseMac());
+	NimBLEDevice::init(bleName);
 
 	// Create the BLE Server
-	bleServer = BLEDevice::createServer();
+	bleServer = NimBLEDevice::createServer();
 	bleServer->setCallbacks(new MyServerCallbacks());
 
 	// Create the BLE Service
-	BLEService *bleService = bleServer->createService(SERVICE_UUID);
+	NimBLEService *bleService = bleServer->createService(SERVICE_UUID);
 
 	// Create a BLE Characteristic
 	constexpr uint32_t prop = NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE |
 	                          NIMBLE_PROPERTY::NOTIFY | NIMBLE_PROPERTY::INDICATE;
-	blePublisherCharacteristic = bleService->createCharacteristic(CHARACTERISTIC_UUID, prop);
-
-	// Create a BLE Descriptor
-	// Automatically created by nimble. Needed for bluedroid
-	// pCharacteristic->addDescriptor(new BLE2902());
+	blePublisherCharacteristic =
+	    bleService->createCharacteristic(ADC_FEED_CHARACTERISTIC_UUID, prop);
 
 	// Start the service
 	bleService->start();
 
 	// Start advertising
-	BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
+	NimBLEAdvertising *pAdvertising = NimBLEDevice::getAdvertising();
 	pAdvertising->addServiceUUID(SERVICE_UUID);
 	// Standard BLE advertisement packet is only 31 bytes, so long names don't always fit.
 	// Scan response allows for devices to request more during the scan.
 	// This will allow for more than the 31 bytes, like longer names.
 	pAdvertising->setScanResponse(true);
-	BLEDevice::startAdvertising();
+	NimBLEDevice::startAdvertising();
 	Serial.println("Waiting a client connection to notify...");
 }
 
@@ -153,7 +148,7 @@ static void adcReadAndBuffer() {
 	// Schedule a task when buffer is closer to the upper limit
 	// TODO figure out the best number or a way to know when to schedule
 	if (xStreamBufferBytesAvailable(adcStreamBufferHandle) > BLE_PUBL_DATA_TRIGGER) {
-		xTaskNotifyGive(blePublisherTaskHandle);
+		xTaskNotifyGive(bleAdcFeedPublisherTaskHandle);
 	}
 }
 
@@ -174,7 +169,7 @@ static void taskAdcReadAndBuffer(void *) {
 // Read the adc buffer and update the BLE characteristic
 static void blePublishAdcBuffer() {
 	// TODO figure if should check deviceConnected?
-	uint8_t batch[BLE_PUBL_DATA_MTU];
+	uint8_t batch[BLE_PUBL_DATA_DLE];
 	size_t  bytesRead = xStreamBufferReceive(adcStreamBufferHandle, batch, sizeof(batch), 0);
 	if (bytesRead > 0) {
 
@@ -190,7 +185,7 @@ static void taksBlePublishAdcBuffer(void *) {
 		// This task is unblocked when the adc buffer is full and the characteristic
 		// should be notified.
 		uint32_t numNotifications = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-		if (numNotifications > 0) {
+		if (numNotifications > 0) [[likely]] {
 			blePublishAdcBuffer();
 		}
 	}
@@ -300,7 +295,7 @@ extern "C" void app_main(void) {
 
 	// TODO figure out priority for the BLE task
 	xTaskCreatePinnedToCore(taksBlePublishAdcBuffer, "task_BLE_publish", 1024 * 5, NULL, 3,
-	                        &blePublisherTaskHandle, CORE_BLE);
+	                        &bleAdcFeedPublisherTaskHandle, CORE_BLE);
 
 	// // esp_pm_config_esp32_t pm_config = {
 	const esp_pm_config_t pmConfig = {
