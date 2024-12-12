@@ -220,6 +220,7 @@ static void taskSetupAdc(void *setupDone) {
 	adc.setInputChannelSelection(3, INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS);
 
 	adc.setChannelPGA(0, PGA_GAIN_1);
+	adc.setChannelPGA(1, PGA_GAIN_32);
 	adc.setChannelPGA(2, PGA_GAIN_32);
 
 	adc.setPowerMode(POWER_MODE_HIGH_RESOLUTION);
