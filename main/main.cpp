@@ -38,10 +38,17 @@ constexpr uint32_t CORE_APP = 1;
 // Nimble creates a GATT connection, which has some overhead.
 constexpr uint16_t BLE_PUBL_DATA_DLE         = 251;
 constexpr uint16_t BLE_PUBL_DATA_ATT_PAYLOAD = BLE_PUBL_DATA_DLE - 4 - 3;
-constexpr size_t   ADC_STREAM_UNIT_SZ =
-    sizeof(ADS131M0x::AdcRawOutput::status) + sizeof(ADS131M0x::AdcRawOutput::data) + 1;
+
+#pragma pack(push, 1)
+struct BlePublAdcData {
+	uint16_t status;
+	uint8_t  data[sizeof(ADS131M0x::AdcRawOutput::data)];
+	uint8_t  crc;
+};
+#pragma pack(pop)
+
 constexpr size_t ADC_STREAM_TRIGGER =
-    (BLE_PUBL_DATA_ATT_PAYLOAD / ADC_STREAM_UNIT_SZ) * ADC_STREAM_UNIT_SZ;
+    (BLE_PUBL_DATA_ATT_PAYLOAD / sizeof(BlePublAdcData)) * sizeof(BlePublAdcData);
 static_assert(ADC_STREAM_TRIGGER <= BLE_PUBL_DATA_ATT_PAYLOAD);
 
 // There are 2 pin on the v2.0.1 board that can be used for debugging.
@@ -128,12 +135,10 @@ static void adcReadAndBuffer() {
 	if (!deviceConnected)
 		return;
 
-	bool crcOk = adc.isCrcOk(&adcReading);
-
-	xStreamBufferSend(adcStreamBufferHandle, &adcReading.status, sizeof(adcReading.status), 0);
-	xStreamBufferSend(adcStreamBufferHandle, &adcReading.data, sizeof(adcReading.data), 0);
-	xStreamBufferSend(adcStreamBufferHandle, &crcOk, sizeof(crcOk), 0);
-
+	BlePublAdcData toSend{.status = adcReading.status,
+	                      .data   = adcReading.data[sizeof(BlePublAdcData::data)],
+	                      .crc    = adc.isCrcOk(&adcReading)};
+	xStreamBufferSend(adcStreamBufferHandle, &toSend, sizeof(toSend), 0);
 	// When the buffer is sufficiently large, time to send data.
 	if (xStreamBufferBytesAvailable(adcStreamBufferHandle) >= ADC_STREAM_TRIGGER) {
 		xTaskNotifyGive(bleAdcFeedPublisherTaskHandle);
