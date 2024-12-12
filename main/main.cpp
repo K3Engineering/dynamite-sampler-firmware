@@ -36,8 +36,9 @@ constexpr uint32_t CORE_BLE = 0;
 constexpr uint32_t CORE_APP = 1;
 
 // Nimble creates a GATT connection, which has some overhead.
-constexpr uint16_t BLE_PUBL_DATA_DLE     = 244;
-constexpr size_t   BLE_PUBL_DATA_TRIGGER = 200;
+constexpr uint16_t BLE_PUBL_DATA_DLE         = 251;
+constexpr uint16_t BLE_PUBL_DATA_ATT_PAYLOAD = BLE_PUBL_DATA_DLE - 4 - 3;
+constexpr size_t   BLE_PUBL_DATA_TRIGGER     = 200;
 
 // There are 2 pin on the v2.0.1 board that can be used for debugging.
 constexpr uint8_t PIN_DEBUG_TOP = 47;
@@ -169,7 +170,7 @@ static void taskAdcReadAndBuffer(void *) {
 // Read the adc buffer and update the BLE characteristic
 static void blePublishAdcBuffer() {
 	// TODO figure if should check deviceConnected?
-	uint8_t batch[BLE_PUBL_DATA_DLE];
+	uint8_t batch[BLE_PUBL_DATA_ATT_PAYLOAD];
 	size_t  bytesRead = xStreamBufferReceive(adcStreamBufferHandle, batch, sizeof(batch), 0);
 	if (bytesRead > 0) {
 
