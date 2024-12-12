@@ -8,17 +8,6 @@
 // INFO Version for ADS131M02
 #endif
 
-int32_t ADS131M0x::val32Ch0 = 0x7FFFFF;
-
-/**
- * @brief Construct a new ADS131M0x::ADS131M0x object
- *
- */
-ADS131M0x::ADS131M0x() {
-	num_channels_enabled = 4;
-	data_word_length     = 3;
-}
-
 /**
  * @brief Set SPI speed (call bevor "begin" to change default 2MHz)
  *
@@ -487,7 +476,7 @@ bool ADS131M0x::isDataReady() {
 	return true;
 }
 
-inline int32_t readChannelHelper(const uint8_t *buffer, int index, size_t buffer_length) {
+static inline int32_t readChannelHelper(const uint8_t *buffer, int index, size_t buffer_length) {
 	assert(index >= 0);
 	assert(index + 2 < buffer_length);
 
@@ -499,21 +488,24 @@ inline int32_t readChannelHelper(const uint8_t *buffer, int index, size_t buffer
 	return aux;
 }
 
-/// @brief Read ADC port (all Ports)
-/// @param
-/// @return
-adcOutput ADS131M0x::readADC(void) {
-	const uint8_t read_length =
-	    data_word_length * (1 + num_channels_enabled + 1); // status, channels, CRC
-	uint8_t txBuffer[read_length] = {0};                   // Buffer for SPI transfer
-	uint8_t rxBuffer[read_length] = {0};                   // Buffer for SPI receive data
-
-	adcOutput res;
-
-	digitalWrite(csPin, LOW);
+static inline void optionalDelay() {
 #ifndef NO_CS_DELAY
 	delayMicroseconds(1);
 #endif
+}
+
+/// @brief Read ADC port (all Ports)
+/// @param
+/// @return
+AdcOutput ADS131M0x::readADC(void) {
+	const uint8_t read_length           = ADC_READ_DATA_SIZE;
+	const uint8_t txBuffer[read_length] = {0}; // Buffer for SPI transfer
+	uint8_t       rxBuffer[read_length] = {};  // Buffer for SPI receive data
+
+	AdcOutput res;
+
+	digitalWrite(csPin, LOW);
+	optionalDelay();
 
 	spiPort->transferBytes(txBuffer, rxBuffer, sizeof(rxBuffer));
 	// status is bytes 0, 1
@@ -530,24 +522,36 @@ adcOutput ADS131M0x::readADC(void) {
 	res.ch3    = readChannelHelper(rxBuffer, 12, sizeof(rxBuffer));
 
 	uint16_t crc            = (rxBuffer[15] << 8) | rxBuffer[16];
-	uint16_t calculated_crc = crc16_ccitt(reinterpret_cast<char *>(rxBuffer), read_length);
+	uint16_t calculated_crc = crc16ccitt(rxBuffer, read_length);
 
 	res.crc_match = (crc == calculated_crc);
 
-#ifndef NO_CS_DELAY
-	delayMicroseconds(1);
-#endif
+	optionalDelay();
 	digitalWrite(csPin, HIGH);
 	return res;
 }
 
-uint16_t ADS131M0x::crc16_ccitt(char *ptr, int16_t count) {
-	uint16_t crc;
-	char     i;
-	crc = CRC_INIT_VAL;
+auto ADS131M0x::rawReadADC() -> AdcRawOutput {
+	AdcRawOutput  res;
+	const uint8_t txBuffer[sizeof(res)] = {0}; // Buffer for SPI duplex transfer
+
+	digitalWrite(csPin, LOW);
+	optionalDelay();
+
+	spiPort->transferBytes(txBuffer, reinterpret_cast<uint8_t *>(&res), sizeof(res));
+
+	optionalDelay();
+	digitalWrite(csPin, HIGH);
+	return res;
+}
+
+uint16_t ADS131M0x::crc16ccitt(const void *data, int16_t count) {
+	const uint8_t *ptr = static_cast<const uint8_t *>(data);
+
+	uint16_t crc = CRC_INIT_VAL;
 	while (--count >= 0) {
-		crc = crc ^ (uint16_t)*ptr++ << 8;
-		i   = 8;
+		crc    = crc ^ (uint16_t)*ptr++ << 8;
+		char i = 8;
 		do {
 			if (crc & 0x8000) {
 				crc = crc << 1 ^ CRC_POLYNOM;
@@ -557,4 +561,13 @@ uint16_t ADS131M0x::crc16_ccitt(char *ptr, int16_t count) {
 		} while (--i);
 	}
 	return crc;
+}
+
+bool ADS131M0x::isCrcOk(const AdcRawOutput *data) {
+	const uint8_t *ptr = reinterpret_cast<const uint8_t *>(&data->crc);
+
+	uint16_t crc           = (ptr[0] << 8) | ptr[1];
+	uint16_t calculatedCrc = ADS131M0x::crc16ccitt(data, sizeof(*data));
+
+	return crc == calculatedCrc;
 }

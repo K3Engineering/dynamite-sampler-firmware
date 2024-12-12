@@ -38,7 +38,11 @@ constexpr uint32_t CORE_APP = 1;
 // Nimble creates a GATT connection, which has some overhead.
 constexpr uint16_t BLE_PUBL_DATA_DLE         = 251;
 constexpr uint16_t BLE_PUBL_DATA_ATT_PAYLOAD = BLE_PUBL_DATA_DLE - 4 - 3;
-constexpr size_t   BLE_PUBL_DATA_TRIGGER     = 200;
+constexpr size_t   ADC_STREAM_UNIT_SZ =
+    sizeof(ADS131M0x::AdcRawOutput::status) + sizeof(ADS131M0x::AdcRawOutput::data) + 1;
+constexpr size_t ADC_STREAM_TRIGGER =
+    (BLE_PUBL_DATA_ATT_PAYLOAD / ADC_STREAM_UNIT_SZ) * ADC_STREAM_UNIT_SZ;
+static_assert(ADC_STREAM_TRIGGER <= BLE_PUBL_DATA_ATT_PAYLOAD);
 
 // There are 2 pin on the v2.0.1 board that can be used for debugging.
 constexpr uint8_t PIN_DEBUG_TOP = 47;
@@ -119,36 +123,19 @@ void IRAM_ATTR isrAdcDrdy() {
 // When accumulated enough, notify the ble task
 static void adcReadAndBuffer() {
 
-	constexpr size_t STATUS_SIZE   = 2; // bytes
-	constexpr size_t NUM_CHAN      = 4;
-	constexpr size_t SAMPLE_SIZE   = 3; // bytes
-	constexpr size_t CRC_FLAG_SIZE = 1; // byte
-
-	const adcOutput adcReading = adc.readADC();
+	ADS131M0x::AdcRawOutput adcBuffer = adc.rawReadADC();
 
 	if (!deviceConnected)
 		return;
 
-	uint8_t buffer[STATUS_SIZE + NUM_CHAN * SAMPLE_SIZE + CRC_FLAG_SIZE];
-	memcpy(buffer, &adcReading.status, STATUS_SIZE);
+	bool crcOk = adc.isCrcOk(&adcBuffer);
 
-	const int32_t channelValue[NUM_CHAN]{adcReading.ch0, adcReading.ch1, adcReading.ch2,
-	                                     adcReading.ch3};
-	for (int i = 0; i < NUM_CHAN; ++i) {
-		memcpy(&buffer[STATUS_SIZE + (i * SAMPLE_SIZE)], &channelValue[i], SAMPLE_SIZE);
-	}
-	// Pack CRC match as a single byte
-	buffer[STATUS_SIZE + NUM_CHAN * SAMPLE_SIZE] = adcReading.crc_match;
-
-	// Only place ADC reading if the the BLE device is connected.
-	// TODO - this probably should be handled in a different way.
-	xStreamBufferSend(adcStreamBufferHandle, buffer, sizeof(buffer), 0);
+	xStreamBufferSend(adcStreamBufferHandle, &adcBuffer.status, sizeof(adcBuffer.status), 0);
+	xStreamBufferSend(adcStreamBufferHandle, &adcBuffer.data, sizeof(adcBuffer.data), 0);
+	xStreamBufferSend(adcStreamBufferHandle, &crcOk, sizeof(crcOk), 0);
 
 	// When the buffer is sufficiently large, time to send data.
-	// BLE allows to extend data packet from 27 to 251 bytes
-	// Schedule a task when buffer is closer to the upper limit
-	// TODO figure out the best number or a way to know when to schedule
-	if (xStreamBufferBytesAvailable(adcStreamBufferHandle) > BLE_PUBL_DATA_TRIGGER) {
+	if (xStreamBufferBytesAvailable(adcStreamBufferHandle) >= ADC_STREAM_TRIGGER) {
 		xTaskNotifyGive(bleAdcFeedPublisherTaskHandle);
 	}
 }
@@ -169,13 +156,15 @@ static void taskAdcReadAndBuffer(void *) {
 
 // Read the adc buffer and update the BLE characteristic
 static void blePublishAdcBuffer() {
-	// TODO figure if should check deviceConnected?
-	uint8_t batch[BLE_PUBL_DATA_ATT_PAYLOAD];
-	size_t  bytesRead = xStreamBufferReceive(adcStreamBufferHandle, batch, sizeof(batch), 0);
-	if (bytesRead > 0) {
 
-		blePublisherCharacteristic->setValue(batch, bytesRead);
-		blePublisherCharacteristic->notify();
+	// TODO figure if should check deviceConnected?
+	if (xStreamBufferBytesAvailable(adcStreamBufferHandle) >= ADC_STREAM_TRIGGER) {
+		uint8_t batch[ADC_STREAM_TRIGGER];
+		size_t  bytesRead = xStreamBufferReceive(adcStreamBufferHandle, batch, sizeof(batch), 0);
+		if (bytesRead == ADC_STREAM_TRIGGER) {
+			blePublisherCharacteristic->setValue(batch, bytesRead);
+			blePublisherCharacteristic->notify();
+		}
 	}
 }
 
@@ -276,7 +265,7 @@ extern "C" void app_main(void) {
 	Serial.printf("0x%" PRIx64 "\n", ESP.getEfuseMac());
 
 	// This buffer is to share the ADC values from the adc read task and BLE notify task
-	adcStreamBufferHandle = xStreamBufferCreate(1024 * 2, 1);
+	adcStreamBufferHandle = xStreamBufferCreate(ADC_STREAM_TRIGGER * 8, 1);
 	assert(adcStreamBufferHandle != NULL);
 
 	// TODO figure out why BLE setup has to go first.
