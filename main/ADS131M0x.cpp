@@ -1,6 +1,7 @@
 #include "ADS131M0x.h"
-#include "Arduino.h"
+// #include "Arduino.h"
 #include "SPI.h"
+#include "esp32-hal-gpio.h"
 
 #ifdef IS_M02
 #define DO_PRAGMA(x) _Pragma(#x)
@@ -216,7 +217,7 @@ void ADS131M0x::begin(SPIClass *port, uint8_t clk_pin, uint8_t miso_pin, uint8_t
  * @param channel
  * @return int8_t
  */
-int8_t ADS131M0x::isDataReadySoft(byte channel) {
+int8_t ADS131M0x::isDataReadySoft(uint8_t channel) {
 	if (channel == 0) {
 		return (readRegister(REG_STATUS) & REGMASK_STATUS_DRDY0);
 	} else if (channel == 1) {
@@ -497,7 +498,7 @@ static inline void optionalDelay() {
 /// @brief Read ADC port (all Ports)
 /// @param
 /// @return
-AdcOutput ADS131M0x::readADC(void) {
+ADS131M0x::AdcOutput ADS131M0x::readADC(void) {
 	const uint8_t read_length           = ADC_READ_DATA_SIZE;
 	const uint8_t txBuffer[read_length] = {0}; // Buffer for SPI transfer
 	uint8_t       rxBuffer[read_length] = {};  // Buffer for SPI receive data
@@ -531,7 +532,7 @@ AdcOutput ADS131M0x::readADC(void) {
 	return res;
 }
 
-auto ADS131M0x::rawReadADC() -> AdcRawOutput {
+ADS131M0x::AdcRawOutput ADS131M0x::rawReadADC() {
 	AdcRawOutput  res;
 	const uint8_t txBuffer[sizeof(res)] = {0}; // Buffer for SPI duplex transfer
 

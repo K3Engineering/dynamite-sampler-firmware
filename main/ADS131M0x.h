@@ -1,7 +1,7 @@
 #ifndef ADS131M0x_h
 #define ADS131M0x_h
 
-#include "Arduino.h"
+// #include "Arduino.h"
 #include "SPI.h"
 
 // define for 2-channel version ADS131M02
@@ -9,17 +9,6 @@
 
 // no delay after CS-active at adc_read
 // #define NO_CS_DELAY
-
-struct AdcOutput {
-	uint16_t status;
-	int32_t  ch0;
-	int32_t  ch1;
-#ifndef IS_M02
-	int32_t ch2;
-	int32_t ch3;
-#endif
-	bool crc_match;
-};
 
 #define DRDY_STATE_LOGIC_HIGH 0 // DEFAULS
 #define DRDY_STATE_HI_Z       1
@@ -261,6 +250,16 @@ class ADS131M0x {
 	static constexpr size_t ADC_READ_DATA_SIZE =
 	    (1 + NUM_CHANNELS_ENABLED + 1) * DATA_WORD_LENGTH; // status, channels, CRC
 
+	struct AdcOutput {
+		uint16_t status;
+		int32_t  ch0;
+		int32_t  ch1;
+#ifndef IS_M02
+		int32_t ch2;
+		int32_t ch3;
+#endif
+		bool crc_match;
+	};
 #pragma pack(push, 1)
 	struct AdcRawOutput {
 		uint16_t status;
@@ -274,7 +273,7 @@ class ADS131M0x {
 
 	void begin(SPIClass *port, uint8_t clk_pin, uint8_t miso_pin, uint8_t mosi_pin, uint8_t cs_pin,
 	           uint8_t drdy_pin);
-	int8_t isDataReadySoft(byte channel);
+	int8_t isDataReadySoft(uint8_t channel);
 	bool   isDataReady(void);
 	void   reset(uint8_t reset_pin);
 	bool   isResetStatus(void);
