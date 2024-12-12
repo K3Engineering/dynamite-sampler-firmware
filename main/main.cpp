@@ -123,15 +123,15 @@ void IRAM_ATTR isrAdcDrdy() {
 // When accumulated enough, notify the ble task
 static void adcReadAndBuffer() {
 
-	ADS131M0x::AdcRawOutput adcBuffer = adc.rawReadADC();
+	ADS131M0x::AdcRawOutput adcReading = adc.rawReadADC();
 
 	if (!deviceConnected)
 		return;
 
-	bool crcOk = adc.isCrcOk(&adcBuffer);
+	bool crcOk = adc.isCrcOk(&adcReading);
 
-	xStreamBufferSend(adcStreamBufferHandle, &adcBuffer.status, sizeof(adcBuffer.status), 0);
-	xStreamBufferSend(adcStreamBufferHandle, &adcBuffer.data, sizeof(adcBuffer.data), 0);
+	xStreamBufferSend(adcStreamBufferHandle, &adcReading.status, sizeof(adcReading.status), 0);
+	xStreamBufferSend(adcStreamBufferHandle, &adcReading.data, sizeof(adcReading.data), 0);
 	xStreamBufferSend(adcStreamBufferHandle, &crcOk, sizeof(crcOk), 0);
 
 	// When the buffer is sufficiently large, time to send data.
