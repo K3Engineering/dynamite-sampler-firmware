@@ -137,7 +137,7 @@ static void adcReadAndBuffer() {
 
 	BlePublAdcData toSend{.status = adcReading.status, .data = {}, .crc = adc.isCrcOk(&adcReading)};
 	static_assert(sizeof(toSend.data) == sizeof(adcReading.data));
-	memcpy(toSend.data, adcReading.data, sizeof(BlePublAdcData::data));
+	memcpy(toSend.data, adcReading.data, sizeof(toSend.data));
 	xStreamBufferSend(adcStreamBufferHandle, &toSend, sizeof(toSend), 0);
 	// When the buffer is sufficiently large, time to send data.
 	if (xStreamBufferBytesAvailable(adcStreamBufferHandle) >= ADC_STREAM_TRIGGER) {
