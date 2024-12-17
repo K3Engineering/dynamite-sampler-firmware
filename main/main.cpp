@@ -47,9 +47,9 @@ struct BleAdcFeedData {
 };
 #pragma pack(pop)
 
-constexpr size_t ADC_STREAM_TRIGGER =
+constexpr size_t ADC_FEED_CHUNK_SZ =
     (BLE_PUBL_DATA_ATT_PAYLOAD / sizeof(BleAdcFeedData)) * sizeof(BleAdcFeedData);
-static_assert(ADC_STREAM_TRIGGER <= BLE_PUBL_DATA_ATT_PAYLOAD);
+static_assert(ADC_FEED_CHUNK_SZ <= BLE_PUBL_DATA_ATT_PAYLOAD);
 
 // There are 2 pin on the v2.0.1 board that can be used for debugging.
 constexpr uint8_t PIN_DEBUG_TOP = 47;
@@ -140,7 +140,7 @@ static void adcReadAndBuffer() {
 	memcpy(toSend.data, adcReading.data, sizeof(toSend.data));
 	xStreamBufferSend(adcStreamBufferHandle, &toSend, sizeof(toSend), 0);
 	// When the buffer is sufficiently large, time to send data.
-	if (xStreamBufferBytesAvailable(adcStreamBufferHandle) >= ADC_STREAM_TRIGGER) {
+	if (xStreamBufferBytesAvailable(adcStreamBufferHandle) >= ADC_FEED_CHUNK_SZ) {
 		xTaskNotifyGive(bleAdcFeedPublisherTaskHandle);
 	}
 }
@@ -163,10 +163,10 @@ static void taskAdcReadAndBuffer(void *) {
 static void blePublishAdcBuffer() {
 
 	// TODO figure if should check deviceConnected?
-	if (xStreamBufferBytesAvailable(adcStreamBufferHandle) >= ADC_STREAM_TRIGGER) {
-		uint8_t batch[ADC_STREAM_TRIGGER];
+	if (xStreamBufferBytesAvailable(adcStreamBufferHandle) >= ADC_FEED_CHUNK_SZ) {
+		uint8_t batch[ADC_FEED_CHUNK_SZ];
 		size_t  bytesRead = xStreamBufferReceive(adcStreamBufferHandle, batch, sizeof(batch), 0);
-		if (bytesRead == ADC_STREAM_TRIGGER) {
+		if (bytesRead == ADC_FEED_CHUNK_SZ) {
 			blePublisherCharacteristic->setValue(batch, bytesRead);
 			blePublisherCharacteristic->notify();
 		}
@@ -270,7 +270,7 @@ extern "C" void app_main(void) {
 	Serial.printf("0x%" PRIx64 "\n", ESP.getEfuseMac());
 
 	// This buffer is to share the ADC values from the adc read task and BLE notify task
-	adcStreamBufferHandle = xStreamBufferCreate(ADC_STREAM_TRIGGER * 8, 1);
+	adcStreamBufferHandle = xStreamBufferCreate(ADC_FEED_CHUNK_SZ * 8, 1);
 	assert(adcStreamBufferHandle != NULL);
 
 	// TODO figure out why BLE setup has to go first.
