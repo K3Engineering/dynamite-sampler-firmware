@@ -40,7 +40,7 @@ constexpr uint16_t BLE_PUBL_DATA_DLE         = 251;
 constexpr uint16_t BLE_PUBL_DATA_ATT_PAYLOAD = BLE_PUBL_DATA_DLE - 4 - 3;
 
 #pragma pack(push, 1)
-struct BlePublAdcData {
+struct BleAdcFeedData {
 	uint16_t status;
 	uint8_t  data[sizeof(ADS131M0x::AdcRawOutput::data)];
 	uint8_t  crc;
@@ -48,7 +48,7 @@ struct BlePublAdcData {
 #pragma pack(pop)
 
 constexpr size_t ADC_STREAM_TRIGGER =
-    (BLE_PUBL_DATA_ATT_PAYLOAD / sizeof(BlePublAdcData)) * sizeof(BlePublAdcData);
+    (BLE_PUBL_DATA_ATT_PAYLOAD / sizeof(BleAdcFeedData)) * sizeof(BleAdcFeedData);
 static_assert(ADC_STREAM_TRIGGER <= BLE_PUBL_DATA_ATT_PAYLOAD);
 
 // There are 2 pin on the v2.0.1 board that can be used for debugging.
@@ -135,7 +135,7 @@ static void adcReadAndBuffer() {
 	if (!deviceConnected)
 		return;
 
-	BlePublAdcData toSend{.status = adcReading.status, .data = {}, .crc = adc.isCrcOk(&adcReading)};
+	BleAdcFeedData toSend{.status = adcReading.status, .data = {}, .crc = adc.isCrcOk(&adcReading)};
 	static_assert(sizeof(toSend.data) == sizeof(adcReading.data));
 	memcpy(toSend.data, adcReading.data, sizeof(toSend.data));
 	xStreamBufferSend(adcStreamBufferHandle, &toSend, sizeof(toSend), 0);
@@ -294,7 +294,7 @@ extern "C" void app_main(void) {
 	                        &bleAdcFeedPublisherTaskHandle, CORE_BLE);
 
 	// // esp_pm_config_esp32_t pm_config = {
-	esp_pm_config_t pmConfig = {
+	const esp_pm_config_t pmConfig = {
 	    .max_freq_mhz       = 80,
 	    .min_freq_mhz       = 10,
 	    .light_sleep_enable = false,
