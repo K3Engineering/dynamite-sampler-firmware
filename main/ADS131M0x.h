@@ -2,7 +2,11 @@
 #define ADS131M0x_h
 
 // #include "Arduino.h"
-#include "SPI.h"
+// #include "SPI.h"
+#include <stddef.h>
+#include <stdint.h>
+
+class SPIClass;
 
 // define for 2-channel version ADS131M02
 // #define IS_M02
@@ -313,6 +317,6 @@ class ADS131M0x {
 	static constexpr uint16_t CRC_INIT_VAL = 0xFFFF;
 	static constexpr uint16_t CRC_POLYNOM  = 0x1021;
 
-	static uint16_t crc16ccitt(const void *ptr, int16_t count);
+	static uint16_t crc16ccitt(const void *ptr, size_t count);
 };
 #endif

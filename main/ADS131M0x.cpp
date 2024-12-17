@@ -546,18 +546,21 @@ ADS131M0x::AdcRawOutput ADS131M0x::rawReadADC() {
 	return res;
 }
 
-uint16_t ADS131M0x::crc16ccitt(const void *data, int16_t count) {
+uint16_t ADS131M0x::crc16ccitt(const void *data, size_t count) {
 	const uint8_t *ptr = static_cast<const uint8_t *>(data);
 
 	uint16_t crc = CRC_INIT_VAL;
-	while (--count >= 0) {
-		crc    = crc ^ (uint16_t)*ptr++ << 8;
-		char i = 8;
+	while (count > 0) {
+		--count;
+		crc ^= static_cast<uint16_t>(*ptr) << 8;
+		++ptr;
+		uint8_t i = 8;
 		do {
 			if (crc & 0x8000) {
-				crc = crc << 1 ^ CRC_POLYNOM;
+				crc <<= 1;
+				crc ^= CRC_POLYNOM;
 			} else {
-				crc = crc << 1;
+				crc <<= 1;
 			}
 		} while (--i);
 	}
@@ -568,7 +571,7 @@ bool ADS131M0x::isCrcOk(const AdcRawOutput *data) {
 	const uint8_t *ptr = reinterpret_cast<const uint8_t *>(&data->crc);
 
 	uint16_t crc           = (ptr[0] << 8) | ptr[1];
-	uint16_t calculatedCrc = ADS131M0x::crc16ccitt(data, sizeof(*data));
+	uint16_t calculatedCrc = ADS131M0x::crc16ccitt(data, sizeof(*data) - DATA_WORD_LENGTH);
 
 	return crc == calculatedCrc;
 }
