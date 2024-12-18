@@ -12,16 +12,18 @@
 constexpr char SERVICE_UUID[]                 = "e331016b-6618-4f8f-8997-1a2c7c9e5fa3";
 constexpr char ADC_FEED_CHARACTERISTIC_UUID[] = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
 
-static NimBLEServer         *bleServer                     = NULL;
-static NimBLECharacteristic *blePublisherCharacteristic    = NULL;
-StreamBufferHandle_t         adcStreamBufferHandle         = NULL;
-TaskHandle_t                 bleAdcFeedPublisherTaskHandle = NULL;
+static NimBLEServer         *bleServer                  = NULL;
+static NimBLECharacteristic *blePublisherCharacteristic = NULL;
 
-bool deviceConnected = false;
+BleAccess bleAccess{
+    .adcStreamBufferHandle         = NULL,
+    .bleAdcFeedPublisherTaskHandle = NULL,
+    .deviceConnected               = false,
+};
 
 class MyServerCallbacks : public NimBLEServerCallbacks {
 	void onConnect(NimBLEServer *server, NimBLEConnInfo &connInfo) override {
-		deviceConnected = true;
+		bleAccess.deviceConnected = true;
 
 		// TODO: Figure out:
 		// is this needed?
@@ -33,7 +35,7 @@ class MyServerCallbacks : public NimBLEServerCallbacks {
 	};
 
 	void onDisconnect(NimBLEServer *server, NimBLEConnInfo &connInfo, int reason) override {
-		deviceConnected = false;
+		bleAccess.deviceConnected = false;
 		// TODO stop reading the ADC and stop the interupt when disconnected
 		NimBLEDevice::startAdvertising();
 		Serial.print("On disco callback on core ");
@@ -45,9 +47,10 @@ class MyServerCallbacks : public NimBLEServerCallbacks {
 static void blePublishAdcBuffer() {
 
 	// TODO figure if should check deviceConnected?
-	if (xStreamBufferBytesAvailable(adcStreamBufferHandle) >= ADC_FEED_CHUNK_SZ) {
+	if (xStreamBufferBytesAvailable(bleAccess.adcStreamBufferHandle) >= ADC_FEED_CHUNK_SZ) {
 		uint8_t batch[ADC_FEED_CHUNK_SZ];
-		size_t  bytesRead = xStreamBufferReceive(adcStreamBufferHandle, batch, sizeof(batch), 0);
+		size_t  bytesRead =
+		    xStreamBufferReceive(bleAccess.adcStreamBufferHandle, batch, sizeof(batch), 0);
 		if (bytesRead == ADC_FEED_CHUNK_SZ) {
 			blePublisherCharacteristic->setValue(batch, bytesRead);
 			blePublisherCharacteristic->notify();
@@ -106,18 +109,17 @@ static void taskSetupBle(void *setupDone) {
 
 void setupBle(int core) {
 	// This buffer is to share the ADC values from the adc read task and BLE notify task
-	adcStreamBufferHandle = xStreamBufferCreate(ADC_FEED_CHUNK_SZ * 8, 1);
-	assert(adcStreamBufferHandle != NULL);
+	bleAccess.adcStreamBufferHandle = xStreamBufferCreate(ADC_FEED_CHUNK_SZ * 8, 1);
+	assert(bleAccess.adcStreamBufferHandle != NULL);
 
 	volatile bool done = false;
 	xTaskCreatePinnedToCore(taskSetupBle, "task_BLE_setup", 1024 * 5, (void *)&done, 1, NULL, core);
 	while (!done)
 		;
-	delay(500);
 
 	// TODO figure out priority for the BLE task
 	xTaskCreatePinnedToCore(taksBlePublishAdcBuffer, "task_BLE_publish", 1024 * 5, NULL, 3,
-	                        &bleAdcFeedPublisherTaskHandle, core);
+	                        &bleAccess.bleAdcFeedPublisherTaskHandle, core);
 
 	Serial.println("Waiting a client connection to notify...");
 }

@@ -1,13 +1,11 @@
-#include <freertos/FreeRTOS.h>
-
 #include "ADS131M0x.h"
-#include "SPI.h"
+
+#include <SPI.h>
+#include <freertos/FreeRTOS.h>
+#include <io_pin_remap.h>
 
 #include "adc_ble_interface.h"
 #include "adc_proc.h"
-
-#include <esp32-hal-spi.h>
-#include <io_pin_remap.h>
 
 #include "debug_pin.h"
 #include <HardwareSerial.h>
@@ -35,16 +33,16 @@ static void adcReadAndBuffer() {
 
 	ADS131M0x::AdcRawOutput adcReading = adc.rawReadADC();
 
-	if (!deviceConnected)
+	if (!bleAccess.deviceConnected)
 		return;
 
 	BleAdcFeedData toSend{.status = adcReading.status, .data = {}, .crc = adc.isCrcOk(&adcReading)};
 	static_assert(sizeof(toSend.data) == sizeof(adcReading.data));
 	memcpy(toSend.data, adcReading.data, sizeof(toSend.data));
-	xStreamBufferSend(adcStreamBufferHandle, &toSend, sizeof(toSend), 0);
+	xStreamBufferSend(bleAccess.adcStreamBufferHandle, &toSend, sizeof(toSend), 0);
 	// When the buffer is sufficiently large, time to send data.
-	if (xStreamBufferBytesAvailable(adcStreamBufferHandle) >= ADC_FEED_CHUNK_SZ) {
-		xTaskNotifyGive(bleAdcFeedPublisherTaskHandle);
+	if (xStreamBufferBytesAvailable(bleAccess.adcStreamBufferHandle) >= ADC_FEED_CHUNK_SZ) {
+		xTaskNotifyGive(bleAccess.bleAdcFeedPublisherTaskHandle);
 	}
 }
 
@@ -120,7 +118,7 @@ static void taskSetupAdc(void *setupDone) {
 	// The digitalPinToInterrupt() function takes a pin as an argument, and
 	// returns the same pin if it can be used as an interrupt.
 	//  Setup ISR to handle the falling edge of drdy
-	attachInterrupt(digitalPinToInterrupt(PIN_DRDY), isrAdcDrdy, FALLING);
+	attachInterrupt(digitalPinToGPIONumber(PIN_DRDY), isrAdcDrdy, FALLING);
 
 	// TODO figure out if you need to setup wake from sleep for gpio
 
@@ -133,7 +131,6 @@ void setupAdc(int core) {
 	xTaskCreatePinnedToCore(taskSetupAdc, "task_ADC_setup", 1024 * 5, (void *)&done, 1, NULL, core);
 	while (!done)
 		;
-	delay(500);
 
 	// TODO figure out the memory stack required
 	const UBaseType_t priority = 30;

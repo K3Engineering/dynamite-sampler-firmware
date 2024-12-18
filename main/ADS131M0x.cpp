@@ -1,6 +1,7 @@
 #include "ADS131M0x.h"
-#include "SPI.h"
-#include "esp32-hal-gpio.h"
+
+#include <SPI.h>
+#include <esp32-hal-gpio.h>
 
 #ifdef IS_M02
 #define DO_PRAGMA(x) _Pragma(#x)

@@ -30,17 +30,12 @@ extern "C" void app_main(void) {
 	Serial.println(xPortGetCoreID());
 	// Serial.print("Config PM SLP IRAM OPT (put lightsleep into ram):");
 	// Serial.println(CONFIG_PM_SLP_IRAM_OPT);
-	// TODO assert that this runs on core 1, so that all of the adc isr setup is
-	// on core 1
 
 	Serial.println("MAC address:");
 	// Serial.printf("0x%" PRIx64 "\n", ESP.getEfuseMac());
 	Serial.println("temprary out of order\n");
 
-	// TODO figure out why BLE setup has to go first.
 	setupBle(CORE_BLE);
-	delay(500);
-
 	setupAdc(CORE_APP);
 
 	const esp_pm_config_t pmConfig = {

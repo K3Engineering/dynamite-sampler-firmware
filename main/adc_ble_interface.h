@@ -23,9 +23,13 @@ constexpr size_t ADC_FEED_CHUNK_SZ =
     (BLE_PUBL_DATA_ATT_PAYLOAD / sizeof(BleAdcFeedData)) * sizeof(BleAdcFeedData);
 static_assert(ADC_FEED_CHUNK_SZ <= BLE_PUBL_DATA_ATT_PAYLOAD);
 
-extern bool deviceConnected;
+struct BleAccess {
+	StreamBufferHandle_t adcStreamBufferHandle;
+	TaskHandle_t         bleAdcFeedPublisherTaskHandle;
 
-extern StreamBufferHandle_t adcStreamBufferHandle;
-extern TaskHandle_t         bleAdcFeedPublisherTaskHandle;
+	bool deviceConnected;
+};
+
+extern BleAccess bleAccess;
 
 #endif // _ADC_BLE_INTERFACE_H
