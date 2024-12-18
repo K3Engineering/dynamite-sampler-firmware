@@ -2,12 +2,33 @@
 # CMakeLists in this exact order for cmake to work correctly
 cmake_minimum_required(VERSION 3.5)
 
+# By default esp idf builds all managed components, even though they aren't used.
+# Build only necessary components by specifying only main.
+# Components added via 'REQUIRES' are added to this list.
+set(COMPONENTS main)
+
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
 # Prevents arduino from releasing BLE memory
 add_compile_definitions(ARDUINO_ARCH_ESP32=1)
 
+find_package(Git)
+set(GIT_REVISION "unknown")
+if (GIT_FOUND)
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} describe --always --dirty
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        OUTPUT_VARIABLE GIT_REVISION
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    message(STATUS "Git Revision ${GIT_REVISION}")
+else()
+    message(STATUS "Git not found")
+endif()
+
 project(dynamite-sampler-firmware)
+
+set(CMAKE_CXX_STANDARD 20)
 
 # TODO this doesn't work
 # Set the env variable for github workflows

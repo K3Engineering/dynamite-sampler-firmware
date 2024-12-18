@@ -12,6 +12,10 @@
 #include "ADS131M0x.h"
 #include "SPI.h"
 
+#ifndef GIT_REVISION
+#define GIT_REVISION "?"
+#endif
+
 // TODO since we don't need blue droid backwards compatability, all of the
 // #defines could be expanded to their nimble equivalent
 static NimBLEServer         *bleServer                  = NULL;
@@ -259,6 +263,8 @@ extern "C" void app_main(void) {
 	Serial.begin(115200);
 	Serial.println("Starting Arduino version:");
 	Serial.println(ESP_ARDUINO_VERSION_STR);
+	Serial.print("Git revision: ");
+	Serial.println(GIT_REVISION);
 	Serial.print("Running on Core: ");
 	Serial.println(xPortGetCoreID());
 	// Serial.print("Config PM SLP IRAM OPT (put lightsleep into ram):");
