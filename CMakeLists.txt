@@ -14,6 +14,8 @@ add_compile_definitions(ARDUINO_ARCH_ESP32=1)
 
 project(dynamite-sampler-firmware)
 
+set(CMAKE_CXX_STANDARD 20)
+
 # TODO this doesn't work
 # Set the env variable for github workflows
 # if(DEFINED ENV{GITHUB_ENV})
