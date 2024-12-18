@@ -1,25 +1,18 @@
 #ifndef ADS131M0x_h
 #define ADS131M0x_h
 
-#include "Arduino.h"
-#include "SPI.h"
+// #include "Arduino.h"
+// #include "SPI.h"
+#include <stddef.h>
+#include <stdint.h>
+
+class SPIClass;
 
 // define for 2-channel version ADS131M02
 // #define IS_M02
 
 // no delay after CS-active at adc_read
 // #define NO_CS_DELAY
-
-struct adcOutput {
-	uint16_t status;
-	int32_t  ch0;
-	int32_t  ch1;
-#ifndef IS_M02
-	int32_t ch2;
-	int32_t ch3;
-#endif
-	bool crc_match;
-};
 
 #define DRDY_STATE_LOGIC_HIGH 0 // DEFAULS
 #define DRDY_STATE_HI_Z       1
@@ -250,21 +243,41 @@ struct adcOutput {
 #define SPI_MASTER_DUMMY16 0xFFFF
 #define SPI_MASTER_DUMMY32 0xFFFFFFFF
 
-// by JG: not testet !!
-#define MACROVALCALC(val, offset, factor, divisor) (((val - offset) * factor / divisor))
-
 /**
  * @brief Arduino class for the TI ADS131M02 and ADS131M04 ADC-converter with SPI Interface
  *
  */
 class ADS131M0x {
   public:
-	static int32_t val32Ch0;
-	ADS131M0x();
+	static constexpr size_t NUM_CHANNELS_ENABLED = 4;
+	static constexpr size_t DATA_WORD_LENGTH     = 3; // in bytes
+	static constexpr size_t ADC_READ_DATA_SIZE =
+	    (1 + NUM_CHANNELS_ENABLED + 1) * DATA_WORD_LENGTH; // status, channels, CRC
+
+	struct AdcOutput {
+		uint16_t status;
+		int32_t  ch0;
+		int32_t  ch1;
+#ifndef IS_M02
+		int32_t ch2;
+		int32_t ch3;
+#endif
+		bool crc_match;
+	};
+#pragma pack(push, 1)
+	struct AdcRawOutput {
+		uint16_t status;
+		uint8_t  status_unused;
+		uint8_t  data[DATA_WORD_LENGTH * NUM_CHANNELS_ENABLED];
+		uint16_t crc;
+		uint8_t  crc_unused;
+	};
+#pragma pack(pop)
+	static_assert(sizeof(AdcRawOutput) == ADC_READ_DATA_SIZE);
 
 	void begin(SPIClass *port, uint8_t clk_pin, uint8_t miso_pin, uint8_t mosi_pin, uint8_t cs_pin,
 	           uint8_t drdy_pin);
-	int8_t isDataReadySoft(byte channel);
+	int8_t isDataReadySoft(uint8_t channel);
 	bool   isDataReady(void);
 	void   reset(uint8_t reset_pin);
 	bool   isResetStatus(void);
@@ -281,8 +294,10 @@ class ADS131M0x {
 	bool   setChannelGainCalibration(uint8_t channel, uint32_t gain);
 	bool   setOsr(uint16_t osr);
 
-	uint16_t  isResetOK(void);
-	adcOutput readADC(void);
+	uint16_t isResetOK(void);
+
+	AdcOutput    readADC(void);
+	AdcRawOutput rawReadADC(void);
 
 	void setClockSpeed(uint32_t cspeed);
 
@@ -290,18 +305,18 @@ class ADS131M0x {
 	void     writeRegisterMasked(uint8_t address, uint16_t value, uint16_t mask);
 	uint16_t readRegister(uint8_t address);
 
+	static bool isCrcOk(const AdcRawOutput *data);
+
   private:
 	uint8_t csPin;
 	uint8_t drdyPin;
-	uint8_t num_channels_enabled = 4;
-	uint8_t data_word_length     = 3; // in bytes
 
 	SPIClass *spiPort;
 	uint32_t  spiClockSpeed = 1000000; // default 1MHz SPI-clock
 
-	uint16_t CRC_INIT_VAL = 0xFFFF;
-	uint16_t CRC_POLYNOM  = 0x1021;
+	static constexpr uint16_t CRC_INIT_VAL = 0xFFFF;
+	static constexpr uint16_t CRC_POLYNOM  = 0x1021;
 
-	uint16_t crc16_ccitt(char *ptr, int16_t count);
+	static uint16_t crc16ccitt(const void *ptr, size_t count);
 };
 #endif
