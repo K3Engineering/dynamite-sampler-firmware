@@ -1,5 +1,4 @@
 #include "ADS131M0x.h"
-// #include "Arduino.h"
 #include "SPI.h"
 #include "esp32-hal-gpio.h"
 
@@ -552,7 +551,8 @@ uint16_t ADS131M0x::crc16ccitt(const void *data, size_t count) {
 	uint16_t crc = CRC_INIT_VAL;
 	while (count > 0) {
 		--count;
-		crc ^= static_cast<uint16_t>(*ptr) << 8;
+		static_assert(sizeof(*ptr << 8) >= sizeof(crc));
+		crc ^= *ptr << 8;
 		++ptr;
 		uint8_t i = 8;
 		do {
