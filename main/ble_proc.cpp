@@ -69,11 +69,7 @@ static void taksBlePublishAdcBuffer(void *) {
 	vTaskDelete(NULL);
 }
 
-void setupBle(int core) {
-	// This buffer is to share the ADC values from the adc read task and BLE notify task
-	adcStreamBufferHandle = xStreamBufferCreate(ADC_FEED_CHUNK_SZ * 8, 1);
-	assert(adcStreamBufferHandle != NULL);
-
+static void taskSetupBle(void *setupDone) {
 	Serial.println("Setting up BLE");
 	// Create the BLE Device
 	// Name the device with the mac address to make it unique for testing purposes.
@@ -106,6 +102,18 @@ void setupBle(int core) {
 	// This will allow for more than the 31 bytes, like longer names.
 	pAdvertising->setScanResponse(true);
 	NimBLEDevice::startAdvertising();
+}
+
+void setupBle(int core) {
+	// This buffer is to share the ADC values from the adc read task and BLE notify task
+	adcStreamBufferHandle = xStreamBufferCreate(ADC_FEED_CHUNK_SZ * 8, 1);
+	assert(adcStreamBufferHandle != NULL);
+
+	volatile bool done = false;
+	xTaskCreatePinnedToCore(taskSetupBle, "task_BLE_setup", 1024 * 5, (void *)&done, 1, NULL, core);
+	while (!done)
+		;
+	delay(500);
 
 	// TODO figure out priority for the BLE task
 	xTaskCreatePinnedToCore(taksBlePublishAdcBuffer, "task_BLE_publish", 1024 * 5, NULL, 3,
