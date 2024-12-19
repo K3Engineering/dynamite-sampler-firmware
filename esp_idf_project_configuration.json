@@ -1,0 +1,26 @@
+{
+  "debug": {
+    "build": {
+      "compileArgs": [],
+      "ninjaArgs": [],
+      "buildDirectoryPath": "",
+      "sdkconfigDefaults": [],
+      "sdkconfigFilePath": ""
+    },
+    "env": {},
+    "flashBaudRate": "",
+    "idfTarget": "",
+    "monitorBaudRate": "",
+    "openOCD": {
+      "debugLevel": 4,
+      "configs": [],
+      "args": []
+    },
+    "tasks": {
+      "preBuild": "",
+      "preFlash": "",
+      "postBuild": "",
+      "postFlash": ""
+    }
+  }
+}
