@@ -32,8 +32,9 @@ extern "C" void app_main(void) {
 	// Serial.println(CONFIG_PM_SLP_IRAM_OPT);
 
 	Serial.println("MAC address:");
-	// Serial.printf("0x%" PRIx64 "\n", ESP.getEfuseMac());
-	Serial.println("temprary out of order\n");
+	uint64_t _chipmacid = 0LL;
+	esp_efuse_mac_get_default((uint8_t *)(&_chipmacid));
+	Serial.printf("0x%" PRIx64 "\n", _chipmacid);
 
 	setupBle(CORE_BLE);
 	setupAdc(CORE_APP);
