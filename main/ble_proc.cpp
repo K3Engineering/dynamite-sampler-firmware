@@ -105,6 +105,9 @@ static void taskSetupBle(void *setupDone) {
 	// This will allow for more than the 31 bytes, like longer names.
 	pAdvertising->setScanResponse(true);
 	NimBLEDevice::startAdvertising();
+
+	*(volatile bool *)setupDone = true;
+	vTaskDelete(NULL);
 }
 
 void setupBle(int core) {
