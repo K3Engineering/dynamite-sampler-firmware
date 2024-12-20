@@ -4,7 +4,35 @@
       "compileArgs": [],
       "ninjaArgs": [],
       "buildDirectoryPath": "",
-      "sdkconfigDefaults": [],
+      "sdkconfigDefaults": [
+        "sdkconfig.common"
+      ],
+      "sdkconfigFilePath": ""
+    },
+    "env": {},
+    "flashBaudRate": "",
+    "idfTarget": "",
+    "monitorBaudRate": "",
+    "openOCD": {
+      "debugLevel": 4,
+      "configs": [],
+      "args": []
+    },
+    "tasks": {
+      "preBuild": "",
+      "preFlash": "",
+      "postBuild": "",
+      "postFlash": ""
+    }
+  },
+  "release": {
+    "build": {
+      "compileArgs": [],
+      "ninjaArgs": [],
+      "buildDirectoryPath": "",
+      "sdkconfigDefaults": [
+        "sdkconfig.common"
+      ],
       "sdkconfigFilePath": ""
     },
     "env": {},
