@@ -1,17 +1,18 @@
 {
   "debug": {
     "build": {
-      "compileArgs": [],
+      "compileArgs": ["-DIDF_TARGET=esp32s3"],
       "ninjaArgs": [],
-      "buildDirectoryPath": "",
+      "buildDirectoryPath": "${workspaceFolder}/build.debug",
       "sdkconfigDefaults": [
         "sdkconfig.common"
       ],
-      "sdkconfigFilePath": ""
+      "sdkconfigFilePath": "${workspaceFolder}/build.debug/sdkconfig"
     },
-    "env": {},
+    "env": {
+      "IDF_TARGET": "idf_target_not_set_here_why_bother"
+    },
     "flashBaudRate": "",
-    "idfTarget": "",
     "monitorBaudRate": "",
     "openOCD": {
       "debugLevel": 4,
@@ -19,7 +20,7 @@
       "args": []
     },
     "tasks": {
-      "preBuild": "",
+      "preBuild": "python check_env.py",
       "preFlash": "",
       "postBuild": "",
       "postFlash": ""
@@ -29,15 +30,13 @@
     "build": {
       "compileArgs": [],
       "ninjaArgs": [],
-      "buildDirectoryPath": "",
+      "buildDirectoryPath": "${workspaceFolder}/build.release",
       "sdkconfigDefaults": [
         "sdkconfig.common"
       ],
-      "sdkconfigFilePath": ""
+      "sdkconfigFilePath": "${workspaceFolder}/build.release/sdkconfig"
     },
-    "env": {},
     "flashBaudRate": "",
-    "idfTarget": "",
     "monitorBaudRate": "",
     "openOCD": {
       "debugLevel": 4,
@@ -45,7 +44,7 @@
       "args": []
     },
     "tasks": {
-      "preBuild": "",
+      "preBuild": "python check_env.py",
       "preFlash": "",
       "postBuild": "",
       "postFlash": ""
