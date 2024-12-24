@@ -3,14 +3,11 @@
     "build": {
       "compileArgs": ["-DIDF_TARGET=esp32s3"],
       "ninjaArgs": [],
-      "buildDirectoryPath": "${workspaceFolder}/build.debug",
+      "buildDirectoryPath": "${workspaceFolder}\\build\\debug",
       "sdkconfigDefaults": [
         "sdkconfig.common"
       ],
-      "sdkconfigFilePath": "${workspaceFolder}/build.debug/sdkconfig"
-    },
-    "env": {
-      "IDF_TARGET": "idf_target_not_set_here_why_bother"
+      "sdkconfigFilePath": "${workspaceFolder}\\build\\sdkconfig.debug"
     },
     "flashBaudRate": "",
     "monitorBaudRate": "",
@@ -30,11 +27,11 @@
     "build": {
       "compileArgs": [],
       "ninjaArgs": [],
-      "buildDirectoryPath": "${workspaceFolder}/build.release",
+      "buildDirectoryPath": "${workspaceFolder}\\build\\release",
       "sdkconfigDefaults": [
         "sdkconfig.common"
       ],
-      "sdkconfigFilePath": "${workspaceFolder}/build.release/sdkconfig"
+      "sdkconfigFilePath": "${workspaceFolder}\\build\\sdkconfig.release"
     },
     "flashBaudRate": "",
     "monitorBaudRate": "",
