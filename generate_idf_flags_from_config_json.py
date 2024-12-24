@@ -67,5 +67,6 @@ if __name__ == "__main__":
         json_str = f.read()
 
     flags = generate_flags(json_str, args.configuration)
-
+    eprint("Generated these flags:")
+    eprint(flags)
     print(" ".join(flags))
