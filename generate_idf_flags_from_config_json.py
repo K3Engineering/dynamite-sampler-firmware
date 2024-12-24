@@ -3,10 +3,10 @@ This is so that you can manually build from CLI with the same options as your vs
 """
 
 import argparse
-import os
 import sys
 import json
 from pathlib import Path
+from typing import List  # only because the idf is on an old version of python
 
 
 # All logs / warnings should be on stderr
@@ -14,7 +14,7 @@ def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
 
-def generate_flags(json_str: str, configuration: str) -> list[str]:
+def generate_flags(json_str: str, configuration: str) -> List[str]:
     """Parse the json and generate the flags"""
     # The json might contain ${workspace} variables, and they need to be replaced
     # Json doesn't like single \, which is what happens on windows. So use the posix
