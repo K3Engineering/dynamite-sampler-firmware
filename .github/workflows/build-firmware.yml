@@ -1,6 +1,6 @@
 name: Build firmware
 
-on: [pull_request]
+on: [pull_request, workflow_dispatch]
 
 jobs:
   build:
@@ -18,9 +18,13 @@ jobs:
         path: '.'
         command: idf.py $(python ./generate_idf_flags_from_config_json.py release) build
 
+    # this is the same way the CMake generates the tag.
+    - name: Get git description
+      run: echo "TAG=$(echo $(git describe --always --dirty))" >> $GITHUB_ENV
+
     - name: Upload bin
       uses: actions/upload-artifact@v4
       with:
-        name: dynamite-sampler-firmware-release-${{ github.sha }}.bin
+        name: dynamite-sampler-firmware-release-${{ env.TAG }}.bin
         # This is hardcoded right now, but I'm not sure how to best not hardcode it
         path: build/release/dynamite-sampler-firmware.bin
