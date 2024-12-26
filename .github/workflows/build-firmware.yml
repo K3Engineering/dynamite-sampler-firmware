@@ -5,6 +5,8 @@ on: [pull_request, workflow_dispatch]
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      CONFIGURATION: release 
 
     steps:
     - name: Checkout repo
@@ -16,11 +18,15 @@ jobs:
         esp_idf_version: v5.1.4
         target: esp32s3
         path: '.'
-        command: idf.py $(python ./generate_idf_flags_from_config_json.py release) build
+        command: idf.py $(python ./generate_idf_flags_from_config_json.py $CONFIGURATION) build
+
+
+    - name: Get git description
+      run: echo "TAG=$(echo git describe --always --dirty))" >> $GITHUB_ENV
 
     - name: Upload bin
       uses: actions/upload-artifact@v4
       with:
-        name: dynamite-sampler-firmware-release-${{ github.sha }}.bin
+        name: dynamite-sampler-firmware-$CONFIGURATION-${{ env.TAG }}.bin
         # This is hardcoded right now, but I'm not sure how to best not hardcode it
-        path: build/release/dynamite-sampler-firmware.bin
+        path: build/$CONFIGURATION/dynamite-sampler-firmware.bin
