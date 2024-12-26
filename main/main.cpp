@@ -15,8 +15,9 @@
 // Core0 is for BLE
 // Core1 is for everything else. Setup & loop run on core 1.
 // ISR is handled on the core that sets it.
-constexpr uint32_t CORE_BLE = 0;
-constexpr uint32_t CORE_APP = 1;
+constexpr uint32_t CORE_BLE = CONFIG_BT_NIMBLE_PINNED_TO_CORE;
+constexpr uint32_t CORE_APP = CONFIG_ARDUINO_RUNNING_CORE;
+static_assert(CORE_BLE != CORE_APP);
 
 extern "C" void app_main(void) {
 	initArduino();
