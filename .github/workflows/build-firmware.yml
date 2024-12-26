@@ -20,7 +20,10 @@ jobs:
 
     # this is the same way the CMake generates the tag.
     - name: Get git description
-      run: echo "TAG=$(echo git describe --always --dirty)" >> $GITHUB_ENV
+      run: echo "TAG=$(echo $(git describe --always --dirty))" >> $GITHUB_ENV
+
+    - name: get env vars
+      run: echo ${{ env.LARRY }} ${{ env.GIT_REVISION }} ${{ env.PROJECT_NAME }}
 
     - name: Upload bin
       uses: actions/upload-artifact@v4

@@ -32,6 +32,8 @@ set(CMAKE_CXX_STANDARD 20)
 
 # TODO this doesn't work
 # Set the env variable for github workflows
-# if(DEFINED ENV{GITHUB_ENV})
-#   file(APPEND "$ENV{GITHUB_ENV}" "PROJECT_NAME=dynamite-sampler-firmware\n")
-# endif()
+if(DEFINED ENV{GITHUB_ENV})
+  file(APPEND "$ENV{GITHUB_ENV}" "PROJECT_NAME=dynamite-sampler-firmware\n")
+  file(APPEND "$ENV{GITHUB_ENV}" "GIT_REVISION=${GIT_REVISION}\n")
+  file(APPEND "$ENV{GITHUB_ENV}" "LARRY=larry\n")
+endif()
