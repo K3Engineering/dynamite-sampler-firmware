@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """Generate idf.py build flags from esp_idf_project_configuration.json.
 This is so that you can manually build from CLI with the same options as your vscode.
 """
