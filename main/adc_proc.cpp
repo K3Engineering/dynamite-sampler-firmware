@@ -4,11 +4,21 @@
 #include <freertos/FreeRTOS.h>
 #include <io_pin_remap.h>
 
+#include "esp_partition.h"
+
 #include "adc_ble_interface.h"
 #include "adc_proc.h"
 
 #include "debug_pin.h"
 #include <HardwareSerial.h>
+
+#pragma pack(push, 1)
+struct NvsData {
+	uint32_t calibr0;
+	uint32_t calibr1;
+	uint32_t calibr2;
+};
+#pragma pack(pop)
 
 static ADS131M0x    adc;
 static SPIClass     spiADC(HSPI);
@@ -17,7 +27,7 @@ static TaskHandle_t adcReadTaskHandle = NULL;
 // When we flag a piece of code with the IRAM_ATTR attribute, the compiled code
 // is placed in the ESP32’s Internal RAM (IRAM). Otherwise the code is kept in
 // Flash. And Flash on ESP32 is much slower than internal RAM.
-void IRAM_ATTR isrAdcDrdy() {
+static void IRAM_ATTR isrAdcDrdy() {
 
 	// unblock the task that will read the ADC & handle putting in the buffer
 	if (adcReadTaskHandle != NULL) {
@@ -73,6 +83,19 @@ static void taskSetupAdc(void *setupDone) {
 	pinMode(PIN_DEBUG_TOP, OUTPUT);
 	pinMode(PIN_DEBUG_BOT, OUTPUT);
 
+	NvsData data;
+	bool    checkOk = false;
+	if (auto ptr = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_NVS,
+	                                        "nvs")) {
+
+		if (ESP_OK == esp_partition_read_raw(ptr, 0, &data, sizeof(data))) {
+			// TODO: check data validity and setup adc calibration
+			checkOk = (data.calibr0 == data.calibr1) && (data.calibr0 == data.calibr2);
+		}
+	}
+	*(volatile bool *)setupDone = true;
+	vTaskDelete(NULL);
+	return;
 	adc.setClockSpeed(20000000); // SPI clock speed, has to run before adc.begin()
 	adc.begin(&spiADC, PIN_NUM_CLK, PIN_NUM_MISO, PIN_NUM_MOSI, PIN_CS_ADC, PIN_DRDY);
 
