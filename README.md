@@ -54,3 +54,7 @@ launching openocd `openocd -f board/esp32s3-builtin.cfg `
 `-d4` for highests debug level
 
 `usblogview` and `USBDriverTool` were quite helpful
+
+### NVS Flash initialization
+The following command works for me. TODO: parse partition-table-flash_args (or even better it's source) to get nvs offset (as of now 0x9000).
+`python esptool.py -p COM3 -b 460800 --chip esp32s3 write_flash --flash_mode dio --flash_freq 80m --flash_size detect 0x9000 nvs-data.bin`
