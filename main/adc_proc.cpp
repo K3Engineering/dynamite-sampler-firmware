@@ -133,7 +133,7 @@ void setupAdc(int core) {
 		;
 
 	// TODO figure out the memory stack required
-	const UBaseType_t priority = 30;
+	const UBaseType_t priority = 24; // Highest priority possible
 	xTaskCreatePinnedToCore(taskAdcReadAndBuffer, "task_ADC_read", 1024 * 5, NULL, priority,
 	                        &adcReadTaskHandle, core);
 }
