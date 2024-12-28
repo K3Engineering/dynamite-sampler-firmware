@@ -56,5 +56,13 @@ launching openocd `openocd -f board/esp32s3-builtin.cfg `
 `usblogview` and `USBDriverTool` were quite helpful
 
 ### NVS Flash initialization
-The following command works for me. TODO: parse partition-table-flash_args (or even better it's source) to get nvs offset (as of now 0x9000).
+The following command copies data to default nvs partition.
 `python esptool.py -p COM3 -b 460800 --chip esp32s3 write_flash --flash_mode dio --flash_freq 80m --flash_size detect 0x9000 nvs-data.bin`
+TODO: get the partition offset (here 0x9000) by parsing come configuration data.
+
+Partition table on the flash is located at `CONFIG_PARTITION_TABLE_OFFSET`, default: 0x8000.
+Partitions start after partition table.
+
+SDK: `The predefined partition table CSV descriptions can be found in the components/partition_table directory. These are mostly intended for example and development use, it's expect that for production use you will copy one of these CSV files and create a custom partition CSV for your application.`
+
+Default nvs partition may be used by other components as a storage. We do need private partition. See: `CONFIG_PARTITION_TABLE_TYPE`, `CONFIG_PARTITION_TABLE_CUSTOM_FILENAME`
