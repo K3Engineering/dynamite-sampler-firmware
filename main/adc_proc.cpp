@@ -83,19 +83,14 @@ static void taskSetupAdc(void *setupDone) {
 	pinMode(PIN_DEBUG_TOP, OUTPUT);
 	pinMode(PIN_DEBUG_BOT, OUTPUT);
 
-	NvsData data;
-	bool    checkOk = false;
-	if (auto ptr = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_NVS,
-	                                        "nvs")) {
-
+	if (const esp_partition_t *ptr = esp_partition_find_first(
+	        ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_NVS, "nvs")) {
+		NvsData data;
 		if (ESP_OK == esp_partition_read_raw(ptr, 0, &data, sizeof(data))) {
 			// TODO: check data validity and setup adc calibration
-			checkOk = (data.calibr0 == data.calibr1) && (data.calibr0 == data.calibr2);
 		}
 	}
-	*(volatile bool *)setupDone = true;
-	vTaskDelete(NULL);
-	return;
+
 	adc.setClockSpeed(20000000); // SPI clock speed, has to run before adc.begin()
 	adc.begin(&spiADC, PIN_NUM_CLK, PIN_NUM_MISO, PIN_NUM_MOSI, PIN_CS_ADC, PIN_DRDY);
 
