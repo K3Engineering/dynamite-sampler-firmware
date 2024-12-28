@@ -12,14 +12,6 @@
 #include "debug_pin.h"
 #include <HardwareSerial.h>
 
-#pragma pack(push, 1)
-struct NvsData {
-	uint32_t calibr0;
-	uint32_t calibr1;
-	uint32_t calibr2;
-};
-#pragma pack(pop)
-
 static ADS131M0x    adc;
 static SPIClass     spiADC(HSPI);
 static TaskHandle_t adcReadTaskHandle = NULL;
@@ -70,6 +62,14 @@ static void taskAdcReadAndBuffer(void *) {
 	vTaskDelete(NULL);
 }
 
+#pragma pack(push, 1)
+struct NvsData {
+	uint32_t calibr0;
+	uint32_t calibr1;
+	uint32_t calibr2;
+};
+#pragma pack(pop)
+
 static void taskSetupAdc(void *setupDone) {
 	Serial.print("setting up adc on core: ");
 	Serial.println(xPortGetCoreID());
@@ -83,9 +83,12 @@ static void taskSetupAdc(void *setupDone) {
 	pinMode(PIN_DEBUG_TOP, OUTPUT);
 	pinMode(PIN_DEBUG_BOT, OUTPUT);
 
-	if (const esp_partition_t *ptr = esp_partition_find_first(
-	        ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_NVS, "nvs")) {
-		NvsData data;
+	constexpr esp_partition_type_t    CUSTOM_PARTITION_ADC  = esp_partition_type_t(0x40);
+	constexpr esp_partition_subtype_t CUSTOM_SUBTYPE_CALIBR = esp_partition_subtype_t(5);
+
+	NvsData data;
+	if (const esp_partition_t *ptr =
+	        esp_partition_find_first(CUSTOM_PARTITION_ADC, CUSTOM_SUBTYPE_CALIBR, "adc_ca")) {
 		if (ESP_OK == esp_partition_read_raw(ptr, 0, &data, sizeof(data))) {
 			// TODO: check data validity and setup adc calibration
 		}
