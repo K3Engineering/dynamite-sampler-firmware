@@ -90,7 +90,8 @@ static void taskSetupAdc(void *setupDone) {
 	if (const esp_partition_t *ptr =
 	        esp_partition_find_first(CUSTOM_PARTITION_ADC, CUSTOM_SUBTYPE_CALIBR, "adc_ca")) {
 		if (ESP_OK == esp_partition_read_raw(ptr, 0, &data, sizeof(data))) {
-			// TODO: check data validity and setup adc calibration
+			Serial.print("ADC calibration data ");
+			Serial.println(data.calibr0);
 		}
 	}
 
@@ -102,10 +103,9 @@ static void taskSetupAdc(void *setupDone) {
 
 	adc.reset(PIN_ADC_RESET);
 
-	adc.setInputChannelSelection(0, INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS);
-	adc.setInputChannelSelection(1, INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS);
-	adc.setInputChannelSelection(2, INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS);
-	adc.setInputChannelSelection(3, INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS);
+	for (uint8_t chan = 0; chan < 4; ++chan) {
+		adc.setInputChannelSelection(chan, INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS);
+	}
 
 	adc.setChannelPGA(0, PGA_GAIN_1);
 	adc.setChannelPGA(1, PGA_GAIN_32);
@@ -115,30 +115,16 @@ static void taskSetupAdc(void *setupDone) {
 
 	adc.setOsr(OSR_4096);
 
-	uint16_t contents = adc.readRegister(0);
-	Serial.print("register 0 contents ");
-	Serial.println(contents);
-
-	contents = adc.readRegister(1);
-	Serial.print("register 1 contents ");
-	Serial.println(contents);
-
-	contents = adc.readRegister(2);
-	Serial.print("register 2 contents ");
-	Serial.println(contents);
-
-	contents = adc.readRegister(3);
-	Serial.print("register 3 contents ");
-	Serial.println(contents);
-
-	contents = adc.readRegister(4);
-	Serial.print("register 4 contents ");
-	Serial.println(contents);
+	for (uint8_t addr = 0; addr < 4; ++addr) {
+		uint16_t contents = adc.readRegister(addr);
+		Serial.print(addr);
+		Serial.print(" register contents ");
+		Serial.println(contents);
+	}
 
 	// TODO figure out if this function call is needed
 	// The digitalPinToInterrupt() function takes a pin as an argument, and
 	// returns the same pin if it can be used as an interrupt.
-	//  Setup ISR to handle the falling edge of drdy
 	attachInterrupt(digitalPinToGPIONumber(PIN_DRDY), isrAdcDrdy, FALLING);
 
 	// TODO figure out if you need to setup wake from sleep for gpio
