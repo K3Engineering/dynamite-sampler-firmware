@@ -2,7 +2,7 @@
 
 #include <SPI.h>
 #include <freertos/FreeRTOS.h>
-#include <io_pin_remap.h>
+#//include <io_pin_remap.h>
 
 #include "adc_ble_interface.h"
 #include "adc_proc.h"
@@ -10,7 +10,10 @@
 #include "debug_pin.h"
 #include <HardwareSerial.h>
 
-static ADS131M0x    adc;
+// typedef ADS131M0x AdcClass;
+typedef MockAdc AdcClass;
+
+static AdcClass     adc;
 static SPIClass     spiADC(HSPI);
 static TaskHandle_t adcReadTaskHandle = NULL;
 
@@ -31,7 +34,7 @@ static void IRAM_ATTR isrAdcDrdy() {
 // When accumulated enough, notify the ble task
 static void adcReadAndBuffer() {
 
-	ADS131M0x::AdcRawOutput adcReading = adc.rawReadADC();
+	AdcClass::AdcRawOutput adcReading = adc.rawReadADC();
 
 	if (!bleAccess.deviceConnected)
 		return;
@@ -93,17 +96,13 @@ static void taskSetupAdc(void *setupDone) {
 
 	adc.setOsr(OSR_4096);
 
-	for (uint8_t addr = 0; addr < 4; ++addr) {
-		uint16_t contents = adc.readRegister(addr);
-		Serial.print(addr);
+	for (int i = 0; i < 4; ++i) {
+		Serial.print(i);
 		Serial.print(" register contents ");
-		Serial.println(contents);
+		Serial.println(adc.readRegister(i));
 	}
 
-	// TODO figure out if this function call is needed
-	// The digitalPinToInterrupt() function takes a pin as an argument, and
-	// returns the same pin if it can be used as an interrupt.
-	attachInterrupt(digitalPinToGPIONumber(PIN_DRDY), isrAdcDrdy, FALLING);
+	adc.attachISR(isrAdcDrdy);
 
 	// TODO figure out if you need to setup wake from sleep for gpio
 
@@ -115,7 +114,7 @@ void setupAdc(int core) {
 	volatile bool done = false;
 	xTaskCreatePinnedToCore(taskSetupAdc, "task_ADC_setup", 1024 * 5, (void *)&done, 1, NULL, core);
 	while (!done)
-		;
+		vTaskDelay(10);
 
 	// TODO figure out the memory stack required
 	const UBaseType_t priority = 24; // Highest priority possible

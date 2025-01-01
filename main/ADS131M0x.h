@@ -246,12 +246,12 @@ class SPIClass;
  *
  */
 class ADS131M0x {
-  public:
 	static constexpr size_t NUM_CHANNELS_ENABLED = 4;
 	static constexpr size_t DATA_WORD_LENGTH     = 3; // in bytes
 	static constexpr size_t ADC_READ_DATA_SIZE =
 	    (1 + NUM_CHANNELS_ENABLED + 1) * DATA_WORD_LENGTH; // status, channels, CRC
 
+  public:
 	struct AdcOutput {
 		uint16_t status;
 		int32_t  ch0;
@@ -294,6 +294,9 @@ class ADS131M0x {
 
 	uint16_t isResetOK(void);
 
+	typedef void (*AdcISR)(void);
+	bool attachISR(AdcISR isr);
+
 	AdcOutput    readADC(void);
 	AdcRawOutput rawReadADC(void);
 
@@ -310,11 +313,31 @@ class ADS131M0x {
 	uint8_t drdyPin;
 
 	SPIClass *spiPort;
-	uint32_t  spiClockSpeed = 1000000; // default 1MHz SPI-clock
-
-	static constexpr uint16_t CRC_INIT_VAL = 0xFFFF;
-	static constexpr uint16_t CRC_POLYNOM  = 0x1021;
-
-	static uint16_t crc16ccitt(const void *ptr, size_t count);
+	uint32_t  spiClockSpeed;
 };
+
+class MockAdc {
+  public:
+	void begin(SPIClass *port, uint8_t clk_pin, uint8_t miso_pin, uint8_t mosi_pin, uint8_t cs_pin,
+	           uint8_t drdy_pin) {}
+	void reset(uint8_t reset_pin) {}
+	bool setChannelPGA(uint8_t channel, uint16_t pga) { return true; }
+	bool setPowerMode(uint8_t powerMode) { return true; }
+	bool setInputChannelSelection(uint8_t channel, uint8_t input) { return true; }
+	bool setOsr(uint16_t osr) { return true; };
+
+	uint16_t readRegister(uint8_t address) { return 0; }
+
+	typedef ADS131M0x::AdcISR       AdcISR;
+	typedef ADS131M0x::AdcRawOutput AdcRawOutput;
+
+	bool attachISR(AdcISR isr);
+
+	AdcRawOutput rawReadADC();
+
+	void setClockSpeed(uint32_t cspeed) {}
+
+	static bool isCrcOk(const AdcRawOutput *data) { return true; };
+};
+
 #endif

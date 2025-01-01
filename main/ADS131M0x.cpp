@@ -9,6 +9,28 @@
 // INFO Version for ADS131M02
 #endif
 
+static constexpr uint16_t crc16ccitt(const uint8_t *ptr, size_t count) {
+	static constexpr uint16_t CRC_INIT_VAL = 0xFFFF;
+	static constexpr uint16_t CRC_POLYNOM  = 0x1021;
+
+	uint16_t crc = CRC_INIT_VAL;
+	while (count > 0) {
+		--count;
+		static_assert(sizeof(*ptr << 8) >= sizeof(crc));
+		crc ^= *ptr << 8;
+		++ptr;
+		for (int i = 0; i < 8; ++i) {
+			if (crc & 0x8000) {
+				crc <<= 1;
+				crc ^= CRC_POLYNOM;
+			} else {
+				crc <<= 1;
+			}
+		}
+	}
+	return crc;
+}
+
 /**
  * @brief Set SPI speed (call bevor "begin" to change default 2MHz)
  *
@@ -470,12 +492,7 @@ bool ADS131M0x::setChannelGainCalibration(uint8_t channel, uint32_t gain) {
 
 /// @brief hardware-pin test if data is ready
 /// @return
-bool ADS131M0x::isDataReady() {
-	if (digitalRead(drdyPin) == HIGH) {
-		return false;
-	}
-	return true;
-}
+bool ADS131M0x::isDataReady() { return LOW == digitalRead(drdyPin); }
 
 static inline int32_t readChannelHelper(const uint8_t *buffer, int index, size_t buffer_length) {
 	assert(index >= 0);
@@ -546,33 +563,60 @@ ADS131M0x::AdcRawOutput ADS131M0x::rawReadADC() {
 	return res;
 }
 
-uint16_t ADS131M0x::crc16ccitt(const void *data, size_t count) {
-	const uint8_t *ptr = static_cast<const uint8_t *>(data);
-
-	uint16_t crc = CRC_INIT_VAL;
-	while (count > 0) {
-		--count;
-		static_assert(sizeof(*ptr << 8) >= sizeof(crc));
-		crc ^= *ptr << 8;
-		++ptr;
-		uint8_t i = 8;
-		do {
-			if (crc & 0x8000) {
-				crc <<= 1;
-				crc ^= CRC_POLYNOM;
-			} else {
-				crc <<= 1;
-			}
-		} while (--i);
-	}
-	return crc;
-}
-
 bool ADS131M0x::isCrcOk(const AdcRawOutput *data) {
 	const uint8_t *ptr = reinterpret_cast<const uint8_t *>(&data->crc);
 
 	uint16_t crc           = (ptr[0] << 8) | ptr[1];
-	uint16_t calculatedCrc = ADS131M0x::crc16ccitt(data, sizeof(*data) - DATA_WORD_LENGTH);
+	uint16_t calculatedCrc = crc16ccitt(ptr, sizeof(*data) - DATA_WORD_LENGTH);
 
 	return crc == calculatedCrc;
+}
+
+bool ADS131M0x::attachISR(AdcISR isr) {
+	// TODO: figure out if digitalPinToGPIONumber(drdyPin) is needed
+	attachInterrupt(drdyPin, isr, FALLING);
+	return true;
+}
+
+#include "driver/timer.h"
+
+static bool timerCallback(void *arg) {
+	((ADS131M0x::AdcISR)arg)();
+	return true;
+}
+
+bool MockAdc::attachISR(AdcISR isr) {
+
+	static constexpr timer_config_t config = {
+	    .alarm_en    = TIMER_ALARM_EN,
+	    .counter_en  = TIMER_PAUSE,
+	    .intr_type   = TIMER_INTR_LEVEL,
+	    .counter_dir = TIMER_COUNT_UP,
+	    .auto_reload = TIMER_AUTORELOAD_EN,
+	    .clk_src     = TIMER_SRC_CLK_DEFAULT,
+	    .divider     = 0x80,
+	};
+
+	constexpr timer_group_t gr  = TIMER_GROUP_0;
+	constexpr timer_idx_t   idx = TIMER_0;
+
+	if (ESP_OK != timer_init(gr, idx, &config))
+		return false;
+	timer_set_counter_value(gr, idx, 0);
+	timer_set_alarm_value(gr, idx, 0x4000);
+	timer_isr_callback_add(gr, idx, timerCallback, (void *)isr, 0);
+	timer_enable_intr(gr, idx);
+	timer_start(gr, idx);
+	return true;
+}
+
+auto MockAdc::rawReadADC() -> AdcRawOutput {
+	AdcRawOutput a{
+	    .status = 0x1234,
+	};
+	static uint8_t val;
+	for (int i = 3; i < sizeof(a.data); i += 3) {
+		a.data[i] = ++val;
+	}
+	return a;
 }
