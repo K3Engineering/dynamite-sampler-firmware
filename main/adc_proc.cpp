@@ -83,12 +83,12 @@ static void taskSetupAdc(void *setupDone) {
 	pinMode(PIN_DEBUG_TOP, OUTPUT);
 	pinMode(PIN_DEBUG_BOT, OUTPUT);
 
-	constexpr esp_partition_type_t    CUSTOM_PARTITION_ADC  = esp_partition_type_t(0x40);
-	constexpr esp_partition_subtype_t CUSTOM_SUBTYPE_CALIBR = esp_partition_subtype_t(6);
+	constexpr esp_partition_type_t    CUSTOM_PARTITION_CALIBRATION = esp_partition_type_t(0x40);
+	constexpr esp_partition_subtype_t CUSTOM_SUBTYPE_CALIBRATION   = esp_partition_subtype_t(6);
 
 	NvsDataLoadcellCalibration data;
 	if (const esp_partition_t *ptr = esp_partition_find_first(
-	        CUSTOM_PARTITION_ADC, CUSTOM_SUBTYPE_CALIBR, "loadcell_calib")) {
+	        CUSTOM_PARTITION_CALIBRATION, CUSTOM_SUBTYPE_CALIBRATION, "loadcell_calib")) {
 		if (ESP_OK == esp_partition_read_raw(ptr, 0, &data, sizeof(data))) {
 			Serial.print("ADC calibration data ");
 			Serial.println(data.calibration0);
