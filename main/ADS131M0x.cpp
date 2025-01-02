@@ -36,7 +36,6 @@ static constexpr uint16_t crc16ccitt(const uint8_t *ptr, size_t count) {
  *
  * @param cspeed value in Hz
  */
-void ADS131M0x::setClockSpeed(uint32_t cspeed) { spiClockSpeed = cspeed; }
 
 /**
  * @brief Write to ADC131M01 or ADC131M04 register
@@ -167,10 +166,6 @@ uint16_t ADS131M0x::readRegister(uint8_t address) {
  * @brief Write a value to the register, applying the mask to touch only the necessary bits.
  * It does not carry out the shift of bits (shift), it is necessary to pass the shifted value to the
  * correct position
- *
- * @param address
- * @param value
- * @param mask
  */
 void ADS131M0x::writeRegisterMasked(uint8_t address, uint16_t value, uint16_t mask) {
 	// Read the current content of the register
@@ -186,14 +181,23 @@ void ADS131M0x::writeRegisterMasked(uint8_t address, uint16_t value, uint16_t ma
 }
 
 /// @brief Hardware reset (reset low activ)
-/// @param reset_pin
-void ADS131M0x::reset(uint8_t reset_pin) {
-	pinMode(reset_pin, OUTPUT);
-	digitalWrite(reset_pin, HIGH);
+void ADS131M0x::reset() {
+	pinMode(resetPin, OUTPUT);
+	digitalWrite(resetPin, HIGH);
 	delay(100);
-	digitalWrite(reset_pin, LOW);
+	digitalWrite(resetPin, LOW);
 	delay(100);
-	digitalWrite(reset_pin, HIGH);
+	digitalWrite(resetPin, HIGH);
+	delay(1);
+	return;
+
+	const gpio_num_t num = (gpio_num_t)resetPin;
+	gpio_set_direction(num, GPIO_MODE_OUTPUT);
+	gpio_set_level(num, 1);
+	delay(100);
+	gpio_set_level(num, 0);
+	delay(100);
+	gpio_set_level(num, 1);
 	delay(1);
 }
 
@@ -206,31 +210,25 @@ uint16_t ADS131M0x::isResetOK(void) { return (readRegister(CMD_RESET)); }
 
 /**
  * @brief basic initialisation,
- * call '.SetClockSpeed' before to set custom SPI-Clock (default=1MHz),
  * call '.reset' to make extra hardware-reset (optional)
- *
- * @param port      Pointer to SPIClass object
- * @param clk_pin
- * @param miso_pin
- * @param mosi_pin
- * @param cs_pin
- * @param drdy_pin
  */
-void ADS131M0x::begin(SPIClass *port, uint8_t clk_pin, uint8_t miso_pin, uint8_t mosi_pin,
-                      uint8_t cs_pin, uint8_t drdy_pin) {
-	// Set pins up
-	csPin   = cs_pin;
-	drdyPin = drdy_pin;
+void ADS131M0x::init(uint8_t cs_pin, uint8_t drdy_pin, uint8_t reset_pin) {
+	csPin    = cs_pin;
+	drdyPin  = drdy_pin;
+	resetPin = reset_pin;
+}
+
+void ADS131M0x::setupAccess(SPIClass *port, uint32_t clk_speed, uint8_t clk_pin, uint8_t miso_pin,
+                            uint8_t mosi_pin) {
 	spiPort = port;
 
-	spiPort->begin(clk_pin, miso_pin, mosi_pin, cs_pin); // SCLK, MISO, MOSI, SS
-	SPISettings settings(spiClockSpeed, SPI_MSBFIRST, SPI_MODE1);
+	spiPort->begin(clk_pin, miso_pin, mosi_pin, csPin); // SCLK, MISO, MOSI, SS
+	SPISettings settings(clk_speed, SPI_MSBFIRST, SPI_MODE1);
 	spiPort->beginTransaction(settings);
 	delay(1);
 
 	pinMode(csPin, OUTPUT);
 	digitalWrite(csPin, HIGH); // CS HIGH --> not selected
-	pinMode(drdyPin, INPUT);   // DRDY Input
 }
 
 /**
@@ -572,20 +570,28 @@ bool ADS131M0x::isCrcOk(const AdcRawOutput *data) {
 	return crc == calculatedCrc;
 }
 
-bool ADS131M0x::attachISR(AdcISR isr) {
+void ADS131M0x::attachISR(AdcISR isr) {
 	// TODO: figure out if digitalPinToGPIONumber(drdyPin) is needed
-	attachInterrupt(drdyPin, isr, FALLING);
-	return true;
+	pinMode(drdyPin, INPUT);
+	attachInterruptArg(drdyPin, isr, (void *)1, FALLING);
+	return;
+
+	gpio_set_direction((gpio_num_t)drdyPin, GPIO_MODE_INPUT);
+	esp_err_t err = gpio_install_isr_service(0);
+	if ((err != ESP_OK) && (err != ESP_ERR_INVALID_STATE))
+		return;
+	gpio_set_intr_type((gpio_num_t)drdyPin, GPIO_INTR_NEGEDGE);
+	gpio_isr_handler_add((gpio_num_t)drdyPin, isr, nullptr);
 }
 
 #include "driver/timer.h"
 
 static bool timerCallback(void *arg) {
-	((ADS131M0x::AdcISR)arg)();
+	((ADS131M0x::AdcISR)arg)(nullptr);
 	return true;
 }
 
-bool MockAdc::attachISR(AdcISR isr) {
+void MockAdc::attachISR(AdcISR isr) {
 
 	static constexpr timer_config_t config = {
 	    .alarm_en    = TIMER_ALARM_EN,
@@ -601,13 +607,12 @@ bool MockAdc::attachISR(AdcISR isr) {
 	constexpr timer_idx_t   idx = TIMER_0;
 
 	if (ESP_OK != timer_init(gr, idx, &config))
-		return false;
+		return;
 	timer_set_counter_value(gr, idx, 0);
 	timer_set_alarm_value(gr, idx, 0x4000);
 	timer_isr_callback_add(gr, idx, timerCallback, (void *)isr, 0);
 	timer_enable_intr(gr, idx);
 	timer_start(gr, idx);
-	return true;
 }
 
 auto MockAdc::rawReadADC() -> AdcRawOutput {
