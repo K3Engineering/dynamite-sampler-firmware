@@ -56,12 +56,14 @@ launching openocd `openocd -f board/esp32s3-builtin.cfg `
 `usblogview` and `USBDriverTool` were quite helpful
 
 ### NVS Flash initialization
-SDK: `The predefined partition table CSV descriptions can be found in the components/partition_table directory. These are mostly intended for example and development use, it's expect that for production use you will copy one of these CSV files and create a custom partition CSV for your application.`
+Custom partition table file: sampler_partitions.csv
+Partition to store calibration data:
+- custom type `0x40`,
+- subtype is arbitrary (since using a custom type), but just in case we are using subtype `0x06`,
+- name `"loadcell_calib"`.
+For partition types see: https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-guides/partition-tables.html
 
-Custom partition table: sampler_partitions.csv
-Partition to store calibration data: custom type 0x40, custom subtype 5, name "adc_ca". (for partition types see: https://docs.espressif.com/projects/esp-idf/en/v5.3.2/esp32/api-guides/partition-tables.html)
-
-Partition table on the flash is located at `CONFIG_PARTITION_TABLE_OFFSET`, default: 0x8000.
+Note: Partition table on the flash is located at `CONFIG_PARTITION_TABLE_OFFSET`, default: 0x8000.
 Partitions start at CONFIG_PARTITION_TABLE_OFFSET + 0x1000.
 
 The following command copies calibr-data.bin to a partition at 0x310000.

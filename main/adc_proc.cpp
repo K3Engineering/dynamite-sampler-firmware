@@ -63,10 +63,10 @@ static void taskAdcReadAndBuffer(void *) {
 }
 
 #pragma pack(push, 1)
-struct NvsData {
-	uint32_t calibr0;
-	uint32_t calibr1;
-	uint32_t calibr2;
+struct NvsDataLoadcellCalibration {
+	uint32_t calibration0;
+	uint32_t calibration1;
+	uint32_t calibration2;
 };
 #pragma pack(pop)
 
@@ -84,14 +84,14 @@ static void taskSetupAdc(void *setupDone) {
 	pinMode(PIN_DEBUG_BOT, OUTPUT);
 
 	constexpr esp_partition_type_t    CUSTOM_PARTITION_ADC  = esp_partition_type_t(0x40);
-	constexpr esp_partition_subtype_t CUSTOM_SUBTYPE_CALIBR = esp_partition_subtype_t(5);
+	constexpr esp_partition_subtype_t CUSTOM_SUBTYPE_CALIBR = esp_partition_subtype_t(6);
 
-	NvsData data;
-	if (const esp_partition_t *ptr =
-	        esp_partition_find_first(CUSTOM_PARTITION_ADC, CUSTOM_SUBTYPE_CALIBR, "adc_ca")) {
+	NvsDataLoadcellCalibration data;
+	if (const esp_partition_t *ptr = esp_partition_find_first(
+	        CUSTOM_PARTITION_ADC, CUSTOM_SUBTYPE_CALIBR, "loadcell_calib")) {
 		if (ESP_OK == esp_partition_read_raw(ptr, 0, &data, sizeof(data))) {
 			Serial.print("ADC calibration data ");
-			Serial.println(data.calibr0);
+			Serial.println(data.calibration0);
 		}
 	}
 
