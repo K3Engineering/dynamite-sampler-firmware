@@ -56,7 +56,7 @@ launching openocd `openocd -f board/esp32s3-builtin.cfg `
 `usblogview` and `USBDriverTool` were quite helpful
 
 ### NVS Flash initialization
-Custom partition table file: sampler_partitions.csv
+Custom partition table file: `partitions.csv`.
 Partition to store calibration data:
 - custom type `0x40`,
 - subtype is arbitrary (since using a custom type), but just in case we are using subtype `0x06`,
