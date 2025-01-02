@@ -54,3 +54,18 @@ launching openocd `openocd -f board/esp32s3-builtin.cfg `
 `-d4` for highests debug level
 
 `usblogview` and `USBDriverTool` were quite helpful
+
+### NVS Flash initialization
+Custom partition table file: `partitions.csv`.
+Partition to store calibration data:
+- custom type `0x40`,
+- subtype is arbitrary (since using a custom type), but just in case we are using subtype `0x06`,
+- name `"loadcell_calib"`.
+For partition types see: https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-guides/partition-tables.html
+
+Note: Partition table on the flash is located at `CONFIG_PARTITION_TABLE_OFFSET`, default: 0x8000.
+Partitions start at CONFIG_PARTITION_TABLE_OFFSET + 0x1000.
+
+The following command copies calibr-data.bin to a partition at 0x310000.
+`python -m esptool --chip esp32s3 -b 460800 --before default_reset --after hard_reset write_flash --flash_mode dio --flash_freq 80m --flash_size detect 0x310000 calibr-data.bin`
+TODO: get the partition offset by parsing configuration data.

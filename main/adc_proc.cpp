@@ -17,7 +17,7 @@ static TaskHandle_t adcReadTaskHandle = NULL;
 // When we flag a piece of code with the IRAM_ATTR attribute, the compiled code
 // is placed in the ESP32’s Internal RAM (IRAM). Otherwise the code is kept in
 // Flash. And Flash on ESP32 is much slower than internal RAM.
-void IRAM_ATTR isrAdcDrdy() {
+static void IRAM_ATTR isrAdcDrdy() {
 
 	// unblock the task that will read the ADC & handle putting in the buffer
 	if (adcReadTaskHandle != NULL) {
@@ -81,10 +81,9 @@ static void taskSetupAdc(void *setupDone) {
 
 	adc.reset(PIN_ADC_RESET);
 
-	adc.setInputChannelSelection(0, INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS);
-	adc.setInputChannelSelection(1, INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS);
-	adc.setInputChannelSelection(2, INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS);
-	adc.setInputChannelSelection(3, INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS);
+	for (uint8_t chan = 0; chan < 4; ++chan) {
+		adc.setInputChannelSelection(chan, INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS);
+	}
 
 	adc.setChannelPGA(0, PGA_GAIN_1);
 	adc.setChannelPGA(1, PGA_GAIN_32);
@@ -94,30 +93,16 @@ static void taskSetupAdc(void *setupDone) {
 
 	adc.setOsr(OSR_4096);
 
-	uint16_t contents = adc.readRegister(0);
-	Serial.print("register 0 contents ");
-	Serial.println(contents);
-
-	contents = adc.readRegister(1);
-	Serial.print("register 1 contents ");
-	Serial.println(contents);
-
-	contents = adc.readRegister(2);
-	Serial.print("register 2 contents ");
-	Serial.println(contents);
-
-	contents = adc.readRegister(3);
-	Serial.print("register 3 contents ");
-	Serial.println(contents);
-
-	contents = adc.readRegister(4);
-	Serial.print("register 4 contents ");
-	Serial.println(contents);
+	for (uint8_t addr = 0; addr < 4; ++addr) {
+		uint16_t contents = adc.readRegister(addr);
+		Serial.print(addr);
+		Serial.print(" register contents ");
+		Serial.println(contents);
+	}
 
 	// TODO figure out if this function call is needed
 	// The digitalPinToInterrupt() function takes a pin as an argument, and
 	// returns the same pin if it can be used as an interrupt.
-	//  Setup ISR to handle the falling edge of drdy
 	attachInterrupt(digitalPinToGPIONumber(PIN_DRDY), isrAdcDrdy, FALLING);
 
 	// TODO figure out if you need to setup wake from sleep for gpio
