@@ -4,8 +4,6 @@
 #include <freertos/FreeRTOS.h>
 #include <io_pin_remap.h>
 
-#include "esp_partition.h"
-
 #include "adc_ble_interface.h"
 #include "adc_proc.h"
 
@@ -62,14 +60,6 @@ static void taskAdcReadAndBuffer(void *) {
 	vTaskDelete(NULL);
 }
 
-#pragma pack(push, 1)
-struct NvsDataLoadcellCalibration {
-	uint32_t calibration0;
-	uint32_t calibration1;
-	uint32_t calibration2;
-};
-#pragma pack(pop)
-
 static void taskSetupAdc(void *setupDone) {
 	Serial.print("setting up adc on core: ");
 	Serial.println(xPortGetCoreID());
@@ -82,18 +72,6 @@ static void taskSetupAdc(void *setupDone) {
 
 	pinMode(PIN_DEBUG_TOP, OUTPUT);
 	pinMode(PIN_DEBUG_BOT, OUTPUT);
-
-	constexpr esp_partition_type_t    CUSTOM_PARTITION_CALIBRATION = esp_partition_type_t(0x40);
-	constexpr esp_partition_subtype_t CUSTOM_SUBTYPE_CALIBRATION   = esp_partition_subtype_t(6);
-
-	NvsDataLoadcellCalibration data;
-	if (const esp_partition_t *ptr = esp_partition_find_first(
-	        CUSTOM_PARTITION_CALIBRATION, CUSTOM_SUBTYPE_CALIBRATION, "loadcell_calib")) {
-		if (ESP_OK == esp_partition_read_raw(ptr, 0, &data, sizeof(data))) {
-			Serial.print("ADC calibration data ");
-			Serial.println(data.calibration0);
-		}
-	}
 
 	adc.setClockSpeed(20000000); // SPI clock speed, has to run before adc.begin()
 	adc.begin(&spiADC, PIN_NUM_CLK, PIN_NUM_MISO, PIN_NUM_MOSI, PIN_CS_ADC, PIN_DRDY);

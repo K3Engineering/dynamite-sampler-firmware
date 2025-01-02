@@ -19,6 +19,31 @@ constexpr uint32_t CORE_BLE = CONFIG_BT_NIMBLE_PINNED_TO_CORE;
 constexpr uint32_t CORE_APP = CONFIG_ARDUINO_RUNNING_CORE;
 static_assert(CORE_BLE != CORE_APP);
 
+#include "esp_partition.h"
+
+static void setupCalibration() {
+// awaiting final spec
+#pragma pack(push, 1)
+	struct NvsDataLoadcellCalibration {
+		uint32_t calibration0;
+		uint32_t calibration1;
+		uint32_t calibration2;
+	};
+#pragma pack(pop)
+
+	constexpr esp_partition_type_t    CUSTOM_PARTITION_CALIBRATION = esp_partition_type_t(0x40);
+	constexpr esp_partition_subtype_t CUSTOM_SUBTYPE_CALIBRATION   = esp_partition_subtype_t(6);
+
+	NvsDataLoadcellCalibration data;
+	if (const esp_partition_t *ptr = esp_partition_find_first(
+	        CUSTOM_PARTITION_CALIBRATION, CUSTOM_SUBTYPE_CALIBRATION, "loadcell_calib")) {
+		if (ESP_OK == esp_partition_read_raw(ptr, 0, &data, sizeof(data))) {
+			Serial.print("ADC calibration data ");
+			Serial.println(data.calibration0);
+		}
+	}
+}
+
 extern "C" void app_main(void) {
 	initArduino();
 
@@ -39,8 +64,9 @@ extern "C" void app_main(void) {
 
 	setupBle(CORE_BLE);
 	setupAdc(CORE_APP);
+	setupCalibration();
 
-	const esp_pm_config_t pmConfig = {
+	constexpr esp_pm_config_t pmConfig = {
 	    .max_freq_mhz       = 80,
 	    .min_freq_mhz       = 10,
 	    .light_sleep_enable = false,
