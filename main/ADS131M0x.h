@@ -340,4 +340,7 @@ class MockAdc {
 	static bool isCrcOk(const AdcRawOutput *data) { return true; };
 };
 
+typedef ADS131M0x AdcClass;
+// typedef MockAdc AdcClass;
+
 #endif

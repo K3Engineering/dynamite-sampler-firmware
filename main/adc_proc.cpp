@@ -10,9 +10,6 @@
 #include "debug_pin.h"
 #include <HardwareSerial.h>
 
-typedef ADS131M0x AdcClass;
-// typedef MockAdc AdcClass;
-
 static AdcClass     adc;
 static SPIClass     spiADC(HSPI);
 static TaskHandle_t adcReadTaskHandle = NULL;
@@ -96,10 +93,10 @@ static void taskSetupAdc(void *setupDone) {
 
 	adc.setOsr(OSR_4096);
 
-	for (int i = 0; i < 4; ++i) {
-		Serial.print(i);
+	for (int addr = 0; addr < 4; ++addr) {
+		Serial.print(addr);
 		Serial.print(" register contents ");
-		Serial.println(adc.readRegister(i));
+		Serial.println(adc.readRegister(addr));
 	}
 
 	adc.attachISR(isrAdcDrdy);

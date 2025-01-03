@@ -32,12 +32,6 @@ static constexpr uint16_t crc16ccitt(const uint8_t *ptr, size_t count) {
 }
 
 /**
- * @brief Set SPI speed (call bevor "begin" to change default 2MHz)
- *
- * @param cspeed value in Hz
- */
-
-/**
  * @brief Write to ADC131M01 or ADC131M04 register
  *
  * @param address
@@ -210,7 +204,6 @@ uint16_t ADS131M0x::isResetOK(void) { return (readRegister(CMD_RESET)); }
 
 /**
  * @brief basic initialisation,
- * call '.reset' to make extra hardware-reset (optional)
  */
 void ADS131M0x::init(uint8_t cs_pin, uint8_t drdy_pin, uint8_t reset_pin) {
 	csPin    = cs_pin;
