@@ -185,14 +185,14 @@ void ADS131M0x::reset() {
 	delay(1);
 	return;
 
-	const gpio_num_t num = (gpio_num_t)resetPin;
-	gpio_set_direction(num, GPIO_MODE_OUTPUT);
-	gpio_set_level(num, 1);
-	delay(100);
-	gpio_set_level(num, 0);
-	delay(100);
-	gpio_set_level(num, 1);
-	delay(1);
+	// const gpio_num_t num = (gpio_num_t)resetPin;
+	// gpio_set_direction(num, GPIO_MODE_OUTPUT);
+	// gpio_set_level(num, 1);
+	// delay(100);
+	// gpio_set_level(num, 0);
+	// delay(100);
+	// gpio_set_level(num, 1);
+	// delay(1);
 }
 
 /**
@@ -211,12 +211,12 @@ void ADS131M0x::init(uint8_t cs_pin, uint8_t drdy_pin, uint8_t reset_pin) {
 	resetPin = reset_pin;
 }
 
-void ADS131M0x::setupAccess(SPIClass *port, uint32_t clk_speed, uint8_t clk_pin, uint8_t miso_pin,
-                            uint8_t mosi_pin) {
+void ADS131M0x::setupAccess(SPIClass *port, uint32_t spi_clock_speed, uint8_t clk_pin,
+                            uint8_t miso_pin, uint8_t mosi_pin) {
 	spiPort = port;
 
 	spiPort->begin(clk_pin, miso_pin, mosi_pin, csPin); // SCLK, MISO, MOSI, SS
-	SPISettings settings(clk_speed, SPI_MSBFIRST, SPI_MODE1);
+	SPISettings settings(spi_clock_speed, SPI_MSBFIRST, SPI_MODE1);
 	spiPort->beginTransaction(settings);
 	delay(1);
 
@@ -565,16 +565,17 @@ bool ADS131M0x::isCrcOk(const AdcRawOutput *data) {
 
 void ADS131M0x::attachISR(AdcISR isr) {
 	// TODO: figure out if digitalPinToGPIONumber(drdyPin) is needed
+	// see also <io_pin_remap.h>
 	pinMode(drdyPin, INPUT);
 	attachInterruptArg(drdyPin, isr, (void *)1, FALLING);
 	return;
 
-	gpio_set_direction((gpio_num_t)drdyPin, GPIO_MODE_INPUT);
-	esp_err_t err = gpio_install_isr_service(0);
-	if ((err != ESP_OK) && (err != ESP_ERR_INVALID_STATE))
-		return;
-	gpio_set_intr_type((gpio_num_t)drdyPin, GPIO_INTR_NEGEDGE);
-	gpio_isr_handler_add((gpio_num_t)drdyPin, isr, nullptr);
+	// gpio_set_direction((gpio_num_t)drdyPin, GPIO_MODE_INPUT);
+	// esp_err_t err = gpio_install_isr_service(0);
+	// if ((err != ESP_OK) && (err != ESP_ERR_INVALID_STATE))
+	// 	return;
+	// gpio_set_intr_type((gpio_num_t)drdyPin, GPIO_INTR_NEGEDGE);
+	// gpio_isr_handler_add((gpio_num_t)drdyPin, isr, nullptr);
 }
 
 #include "driver/timer.h"
@@ -612,7 +613,7 @@ auto MockAdc::rawReadADC() -> AdcRawOutput {
 	AdcRawOutput a{
 	    .status = 0x1234,
 	};
-	static uint8_t val;
+	static uint8_t val = 42;
 	for (int i = 3; i < sizeof(a.data); i += 3) {
 		a.data[i] = ++val;
 	}

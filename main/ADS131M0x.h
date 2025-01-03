@@ -274,7 +274,7 @@ class ADS131M0x {
 	static_assert(sizeof(AdcRawOutput) == ADC_READ_DATA_SIZE);
 
 	void   init(uint8_t cs_pin, uint8_t drdy_pin, uint8_t reset_pin);
-	void   setupAccess(SPIClass *port, uint32_t clk_speed, uint8_t clk_pin, uint8_t miso_pin,
+	void   setupAccess(SPIClass *port, uint32_t spi_clock_speed, uint8_t clk_pin, uint8_t miso_pin,
 	                   uint8_t mosi_pin);
 	int8_t isDataReadySoft(uint8_t channel);
 	bool   isDataReady(void);
@@ -318,7 +318,7 @@ class ADS131M0x {
 class MockAdc {
   public:
 	void init(uint8_t cs_pin, uint8_t drdy_pin, uint8_t reset_pin) {}
-	void setupAccess(SPIClass *port, uint32_t clk_speed, uint8_t clk_pin, uint8_t miso_pin,
+	void setupAccess(SPIClass *port, uint32_t spi_clock_speed, uint8_t clk_pin, uint8_t miso_pin,
 	                 uint8_t mosi_pin) {}
 	void reset() {}
 	bool setChannelPGA(uint8_t channel, uint16_t pga) { return true; }

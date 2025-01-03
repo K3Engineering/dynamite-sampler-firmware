@@ -2,7 +2,6 @@
 
 #include <SPI.h>
 #include <freertos/FreeRTOS.h>
-// #include <io_pin_remap.h>
 
 #include "adc_ble_interface.h"
 #include "adc_proc.h"
