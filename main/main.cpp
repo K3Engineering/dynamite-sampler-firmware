@@ -54,6 +54,14 @@ extern "C" void app_main(void) {
 	Serial.println(GIT_REVISION);
 	Serial.print("Running on Core: ");
 	Serial.println(xPortGetCoreID());
+
+#ifndef CONFIG_MOCK_ADC
+	Serial.println("Mock adc flag not set");
+#else
+	Serial.print("Mock ADC flag: ");
+	Serial.println(CONFIG_MOCK_ADC);
+#endif
+
 	// Serial.print("Config PM SLP IRAM OPT (put lightsleep into ram):");
 	// Serial.println(CONFIG_PM_SLP_IRAM_OPT);
 

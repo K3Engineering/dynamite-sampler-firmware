@@ -1,0 +1,9 @@
+menu "Dynamite sampler Firmware configuration"
+
+    config MOCK_ADC
+        bool "Use the mock ADC class"
+        default n
+        help
+            Use this on hardware that doesn't have the ADC.
+
+endmenu
