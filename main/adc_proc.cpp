@@ -2,7 +2,6 @@
 
 #include <SPI.h>
 #include <freertos/FreeRTOS.h>
-#include <io_pin_remap.h>
 
 #include "adc_ble_interface.h"
 #include "adc_proc.h"
@@ -10,14 +9,14 @@
 #include "debug_pin.h"
 #include <HardwareSerial.h>
 
-static ADS131M0x    adc;
+static AdcClass     adc;
 static SPIClass     spiADC(HSPI);
 static TaskHandle_t adcReadTaskHandle = NULL;
 
 // When we flag a piece of code with the IRAM_ATTR attribute, the compiled code
 // is placed in the ESP32’s Internal RAM (IRAM). Otherwise the code is kept in
 // Flash. And Flash on ESP32 is much slower than internal RAM.
-static void IRAM_ATTR isrAdcDrdy() {
+static void IRAM_ATTR isrAdcDrdy(void *) {
 
 	// unblock the task that will read the ADC & handle putting in the buffer
 	if (adcReadTaskHandle != NULL) {
@@ -31,7 +30,7 @@ static void IRAM_ATTR isrAdcDrdy() {
 // When accumulated enough, notify the ble task
 static void adcReadAndBuffer() {
 
-	ADS131M0x::AdcRawOutput adcReading = adc.rawReadADC();
+	AdcClass::AdcRawOutput adcReading = adc.rawReadADC();
 
 	if (!bleAccess.deviceConnected)
 		return;
@@ -73,13 +72,13 @@ static void taskSetupAdc(void *setupDone) {
 	pinMode(PIN_DEBUG_TOP, OUTPUT);
 	pinMode(PIN_DEBUG_BOT, OUTPUT);
 
-	adc.setClockSpeed(20000000); // SPI clock speed, has to run before adc.begin()
-	adc.begin(&spiADC, PIN_NUM_CLK, PIN_NUM_MISO, PIN_NUM_MOSI, PIN_CS_ADC, PIN_DRDY);
+	adc.init(PIN_CS_ADC, PIN_DRDY, PIN_ADC_RESET);
+	adc.setupAccess(&spiADC, 20000000, PIN_NUM_CLK, PIN_NUM_MISO, PIN_NUM_MOSI);
 
 	// adc.setMultiplexer(0x00); // AIN0 AIN1
 	// adc.setPGAbypass(0);
 
-	adc.reset(PIN_ADC_RESET);
+	adc.reset();
 
 	for (uint8_t chan = 0; chan < 4; ++chan) {
 		adc.setInputChannelSelection(chan, INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS);
@@ -93,17 +92,13 @@ static void taskSetupAdc(void *setupDone) {
 
 	adc.setOsr(OSR_4096);
 
-	for (uint8_t addr = 0; addr < 4; ++addr) {
-		uint16_t contents = adc.readRegister(addr);
+	for (int addr = 0; addr < 4; ++addr) {
 		Serial.print(addr);
 		Serial.print(" register contents ");
-		Serial.println(contents);
+		Serial.println(adc.readRegister(addr));
 	}
 
-	// TODO figure out if this function call is needed
-	// The digitalPinToInterrupt() function takes a pin as an argument, and
-	// returns the same pin if it can be used as an interrupt.
-	attachInterrupt(digitalPinToGPIONumber(PIN_DRDY), isrAdcDrdy, FALLING);
+	adc.attachISR(isrAdcDrdy);
 
 	// TODO figure out if you need to setup wake from sleep for gpio
 
@@ -115,7 +110,7 @@ void setupAdc(int core) {
 	volatile bool done = false;
 	xTaskCreatePinnedToCore(taskSetupAdc, "task_ADC_setup", 1024 * 5, (void *)&done, 1, NULL, core);
 	while (!done)
-		;
+		vTaskDelay(10);
 
 	// TODO figure out the memory stack required
 	const UBaseType_t priority = 24; // Highest priority possible

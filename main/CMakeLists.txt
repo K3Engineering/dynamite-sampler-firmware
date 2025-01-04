@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "main.cpp" "adc_proc.cpp" "ble_proc.cpp""ADS131M0x.cpp"
+    SRCS "main.cpp" "adc_proc.cpp" "ble_proc.cpp" "ADS131M0x.cpp"
     INCLUDE_DIRS ""
 )
 
