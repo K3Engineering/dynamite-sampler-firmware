@@ -578,7 +578,8 @@ void ADS131M0x::attachISR(AdcISR isr) {
 	// gpio_isr_handler_add((gpio_num_t)drdyPin, isr, nullptr);
 }
 
-#include "driver/timer.h"
+#if (CONFIG_MOCK_ADC == 1)
+#include <driver/timer.h>
 
 static bool timerCallback(void *arg) {
 	((ADS131M0x::AdcISR)arg)(nullptr);
@@ -619,3 +620,4 @@ auto MockAdc::rawReadADC() -> AdcRawOutput {
 	}
 	return a;
 }
+#endif // CONFIG_MOCK_ADC

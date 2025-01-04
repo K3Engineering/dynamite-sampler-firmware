@@ -4,6 +4,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "sdkconfig.h"
+
 class SPIClass;
 
 // define for 2-channel version ADS131M02
@@ -315,6 +317,7 @@ class ADS131M0x {
 	SPIClass *spiPort;
 };
 
+#if (CONFIG_MOCK_ADC == 1)
 class MockAdc {
   public:
 	void init(uint8_t cs_pin, uint8_t drdy_pin, uint8_t reset_pin) {}
@@ -340,7 +343,9 @@ class MockAdc {
 	static bool isCrcOk(const AdcRawOutput *data) { return true; };
 };
 
+typedef MockAdc AdcClass;
+#else
 typedef ADS131M0x AdcClass;
-// typedef MockAdc AdcClass;
+#endif
 
 #endif
