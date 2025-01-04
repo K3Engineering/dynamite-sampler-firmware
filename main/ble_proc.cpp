@@ -103,7 +103,7 @@ static void taskSetupBle(void *setupDone) {
 	// Standard BLE advertisement packet is only 31 bytes, so long names don't always fit.
 	// Scan response allows for devices to request more during the scan.
 	// This will allow for more than the 31 bytes, like longer names.
-	pAdvertising->setScanResponse(true);
+	pAdvertising->enableScanResponse(true);
 	NimBLEDevice::startAdvertising();
 
 	*(volatile bool *)setupDone = true;

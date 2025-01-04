@@ -1,10 +1,10 @@
 ## IDF Component Manager Manifest File
 dependencies:
-  espressif/arduino-esp32: "=3.1.0~1"
+  espressif/arduino-esp32: =3.1.0~1
   ## Required IDF version
   idf:
-    version: "5.3.2"
-  
+    version: 5.3.2
   esp-nimple-cpp:
     git: https://github.com/h2zero/esp-nimble-cpp
-    version: 3820f57076f88366827978dd637dadd2d27a7f0f
+    # slightly newer than 2.0.2
+    version: ad12a48e9ebde28711fd36af0db326a4b9ca141b
