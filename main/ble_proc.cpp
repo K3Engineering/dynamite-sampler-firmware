@@ -119,11 +119,12 @@ static void taskSetupBle(void *setupDone) {
 	static NimBLECharacteristic *chrDevModelNum = srvDeviceInfo->createCharacteristic(
 	    DEVICE_MODEL_NUMBER_CHR_UUID.value, NIMBLE_PROPERTY::READ);
 
-	NimBLEService               *srvOTA = bleServer->createService(&OTA_SVC_UUID);
-	static NimBLECharacteristic *chrOtaControl =
-	    srvOTA->createCharacteristic(&OTA_CONTROL_CHR_UUID, NIMBLE_PROPERTY::READ);
+	NimBLEService               *srvOTA        = bleServer->createService(&OTA_SVC_UUID);
+	static NimBLECharacteristic *chrOtaControl = srvOTA->createCharacteristic(
+	    &OTA_CONTROL_CHR_UUID,
+	    NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::NOTIFY);
 	static NimBLECharacteristic *chrOtaData =
-	    srvOTA->createCharacteristic(&OTA_DATA_CHR_UUID, NIMBLE_PROPERTY::READ);
+	    srvOTA->createCharacteristic(&OTA_DATA_CHR_UUID, NIMBLE_PROPERTY::WRITE);
 
 	chrDevName->setValue("3K");
 	chrDevModelNum->setValue("0.1d");
@@ -134,10 +135,11 @@ static void taskSetupBle(void *setupDone) {
 	srvOTA->start();
 
 	// Start advertising
-	// NimBLEAdvertising *pAdvertising = NimBLEDevice::getAdvertising();
-	// pAdvertising->addServiceUUID(srvAdcFeed->getUUID());
+	NimBLEAdvertising *pAdvertising = NimBLEDevice::getAdvertising();
+	pAdvertising->setName(bleName);
 	// pAdvertising->addServiceUUID(srvAdcFeed->getUUID());
 	// pAdvertising->addServiceUUID(srvDeviceInfo->getUUID());
+	// pAdvertising->addServiceUUID(srvOTA->getUUID());
 	//  Standard BLE advertisement packet is only 31 bytes, so long names don't always fit.
 	//  Scan response allows for devices to request more during the scan.
 	//  This will allow for more than the 31 bytes, like longer names.
