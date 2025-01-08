@@ -23,6 +23,9 @@ constexpr char ADC_FEED_CHR_UUID[] = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
 //     0xa8, 0x26, 0x1b, 0x36, 0x07, 0xea, 0xf5, 0xb7, 0x88, 0x46, 0xe1, 0x36, 0x3e, 0x48, 0xb5,
 //     0xbe);
 //======================== <\UUIDs>
+constexpr char LC_CALIB_0_CHARACTERISTIC_UUID[] = "10adce11-68a6-450b-9810-ca11b09fd283";
+constexpr char LC_CALIB_1_CHARACTERISTIC_UUID[] = "10adce11-52d8-4c61-be1b-ca11b13a28d8";
+constexpr char LC_CALIB_2_CHARACTERISTIC_UUID[] = "10adce11-9e61-4599-bf97-ca11b229b570";
 
 static NimBLEServer         *bleServer                  = NULL;
 static NimBLECharacteristic *blePublisherCharacteristic = NULL;
@@ -116,6 +119,13 @@ static void taskSetupBle(void *setupDone) {
 	    srvAdcFeed->createCharacteristic(ADC_FEED_CHR_UUID, NIMBLE_PROPERTY::NOTIFY);
 	static AdcPublCallbacks feedCb;
 	blePublisherCharacteristic->setCallbacks(&feedCb);
+
+	uint32_t calibration_value = 11;
+
+	NimBLECharacteristic *calibrationCharacteristic =
+	    srvAdcFeed->createCharacteristic(LC_CALIB_0_CHARACTERISTIC_UUID, NIMBLE_PROPERTY::READ);
+	calibrationCharacteristic->setValue(calibration_value);
+
 	srvAdcFeed->start();
 
 	setupBleOta(bleServer);
