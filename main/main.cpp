@@ -21,26 +21,29 @@ static_assert(CORE_BLE != CORE_APP);
 
 #include "esp_partition.h"
 
-static void setupCalibration() {
 // awaiting final spec
 #pragma pack(push, 1)
-	struct NvsDataLoadcellCalibration {
-		uint32_t calibration0;
-		uint32_t calibration1;
-		uint32_t calibration2;
-	};
+struct NvsDataLoadcellCalibration {
+	uint32_t calibration0;
+	uint32_t calibration1;
+	uint32_t calibration2;
+};
 #pragma pack(pop)
+
+static size_t readLoadcellCalibration(void *data) {
 
 	constexpr esp_partition_type_t    CUSTOM_PARTITION_CALIBRATION = esp_partition_type_t(0x40);
 	constexpr esp_partition_subtype_t CUSTOM_SUBTYPE_CALIBRATION   = esp_partition_subtype_t(6);
 
-	NvsDataLoadcellCalibration data;
+	// NvsDataLoadcellCalibration data;
 	if (const esp_partition_t *ptr = esp_partition_find_first(
 	        CUSTOM_PARTITION_CALIBRATION, CUSTOM_SUBTYPE_CALIBRATION, "loadcell_calib")) {
-		if (ESP_OK == esp_partition_read_raw(ptr, 0, &data, sizeof(data))) {
-			ESP_LOGI(TAG, "ADC calibration data %" PRIx32, data.calibration0);
+		if (ESP_OK == esp_partition_read_raw(ptr, 0, data, sizeof(NvsDataLoadcellCalibration))) {
+			ESP_LOGI(TAG, "Read NVS data for loadcell calibration");
+			return sizeof(NvsDataLoadcellCalibration);
 		}
 	}
+	return 0;
 }
 
 extern "C" void app_main(void) {
@@ -60,9 +63,17 @@ extern "C" void app_main(void) {
 	esp_efuse_mac_get_default((uint8_t *)(&_chipmacid));
 	ESP_LOGI(TAG, "MAC address: 0x%" PRIx64, _chipmacid);
 
-	setupBle(CORE_BLE);
+	uint8_t data[sizeof(NvsDataLoadcellCalibration)] = {0};
+
+	size_t calibration_length = readLoadcellCalibration(data);
+
+	// for (int i = 0; i < calibration_length; i++) {
+	// 	Serial.print(data[i]);
+	// }
+	// Serial.println("  calibration dump");
+
+	setupBle(CORE_BLE, data, calibration_length);
 	setupAdc(CORE_APP);
-	setupCalibration();
 
 	otaConditionalRollback();
 
