@@ -137,7 +137,7 @@ static void taskSetupBle(void *setupDone) {
 	// Start advertising
 	NimBLEAdvertising *pAdvertising = NimBLEDevice::getAdvertising();
 	pAdvertising->setName(bleName);
-	// pAdvertising->addServiceUUID(srvAdcFeed->getUUID());
+	pAdvertising->addServiceUUID(srvAdcFeed->getUUID());
 	// pAdvertising->addServiceUUID(srvDeviceInfo->getUUID());
 	// pAdvertising->addServiceUUID(srvOTA->getUUID());
 	//  Standard BLE advertisement packet is only 31 bytes, so long names don't always fit.
