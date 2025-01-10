@@ -65,7 +65,7 @@ extern "C" void app_main(void) {
 
 	uint8_t data[sizeof(NvsDataLoadcellCalibration)] = {0};
 
-	size_t calibration_length = readLoadcellCalibration(data);
+	const size_t calibration_length = readLoadcellCalibration(data);
 
 	// for (int i = 0; i < calibration_length; i++) {
 	// 	Serial.print(data[i]);

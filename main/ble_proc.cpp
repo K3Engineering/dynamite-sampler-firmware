@@ -149,7 +149,7 @@ static void taskSetupBle(void *setupDone) {
 	vTaskDelete(NULL);
 }
 
-void setupBle(int core, uint8_t *calibrationData, size_t calibrationLength) {
+void setupBle(int core, const uint8_t *calibrationData, const size_t calibrationLength) {
 	// This buffer is to share the ADC values from the adc read task and BLE notify task
 	bleAccess.adcStreamBufferHandle = xStreamBufferCreate(ADC_FEED_CHUNK_SZ * 8, 1);
 	assert(bleAccess.adcStreamBufferHandle != NULL);
