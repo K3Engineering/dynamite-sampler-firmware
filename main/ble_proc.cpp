@@ -2,9 +2,10 @@
 #include <freertos/stream_buffer.h>
 
 #include <NimBLEDevice.h>
-#include <NimBLELog.h>
 
 #include "adc_ble_interface.h"
+#include "ble_ota_interface.h"
+
 #include "ble_proc.h"
 
 #include "debug_pin.h"
@@ -81,8 +82,6 @@ static void taksBlePublishAdcBuffer(void *) {
 	}
 	vTaskDelete(NULL);
 }
-
-void setupBleOta();
 
 static void taskSetupBle(void *setupDone) {
 	Serial.println("Setting up BLE");

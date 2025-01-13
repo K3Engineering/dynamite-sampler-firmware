@@ -2,17 +2,16 @@
 #include <freertos/stream_buffer.h>
 
 #include <NimBLEDevice.h>
-#include <NimBLELog.h>
 
 #include "adc_ble_interface.h"
+#include "ble_ota_interface.h"
+
 #include "ble_proc.h"
 
 #include "esp_ota_ops.h"
 
 #include "debug_pin.h"
 #include <HardwareSerial.h>
-
-extern NimBLEServer *bleServer;
 
 #define REBOOT_DEEP_SLEEP_TIMEOUT 500
 
@@ -171,7 +170,7 @@ class OtaDataChrCallbacks : public NimBLECharacteristicCallbacks {
 	}
 };
 
-void checkOtaStatus(void) {
+void checkOtaStatus() {
 	const esp_partition_t *running = esp_ota_get_running_partition();
 	esp_ota_img_states_t   ota_state;
 	if (esp_ota_get_state_partition(running, &ota_state) == ESP_OK) {
