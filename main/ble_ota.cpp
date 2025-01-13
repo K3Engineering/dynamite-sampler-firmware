@@ -13,7 +13,7 @@
 #include "debug_pin.h"
 #include <HardwareSerial.h>
 
-#define REBOOT_DEEP_SLEEP_TIMEOUT 500
+#define REBOOT_DEEP_SLEEP_TIMEOUT 5000
 
 constexpr char DEVICE_MANUFACTURER_NAME[] = "3K";
 constexpr char DEVICE_MODEL_NUMBER[]      = "0.1d";
@@ -44,6 +44,10 @@ typedef enum {
 	SVR_CHR_OTA_CONTROL_DONE_NAK,
 } svr_chr_ota_control_val_t;
 
+typedef uint8_t  OtaRequestType;
+typedef uint8_t  OtaReplyType;
+typedef uint16_t OtaPacketSizeType;
+
 typedef struct {
 	uint16_t otaControlValHandle;
 	uint16_t otaDataValHandle;
@@ -51,15 +55,18 @@ typedef struct {
 	const esp_partition_t *updatePartition;
 	esp_ota_handle_t       updateHandle;
 	uint16_t               numPkgsReceived;
-	uint16_t               packetSize;
+	OtaPacketSizeType      packetSize;
 
-	uint8_t otaStatus;
-	bool    updating;
+	OtaReplyType otaStatus;
+	bool         updating;
 } OtaControlData;
 
 static OtaControlData otaControlData;
 
-static void processOtaBegin(NimBLECharacteristic *pCharacteristic) {
+static bool processOtaBegin() {
+	if (otaControlData.updating)
+		return false;
+
 	otaControlData.updatePartition = esp_ota_get_next_update_partition(NULL);
 	esp_err_t err = esp_ota_begin(otaControlData.updatePartition, OTA_WITH_SEQUENTIAL_WRITES,
 	                              &otaControlData.updateHandle);
@@ -76,42 +83,44 @@ static void processOtaBegin(NimBLECharacteristic *pCharacteristic) {
 	}
 	otaControlData.numPkgsReceived = 0;
 
-	// notify the client via BLE that the OTA has been acknowledged (or not)
-	pCharacteristic->setValue(otaControlData.otaStatus);
-	pCharacteristic->notify();
-	// ESP_LOGI(TAG, "OTA request (n)ack %u", otaControlData.otaStatus);
-	Serial.print("OTA request (n)ack ");
-	Serial.println(otaControlData.otaStatus);
+	return true;
 }
 
-static void processOtaDone(NimBLECharacteristic *pCharacteristic) {
+static bool processOtaDone() {
+	if (!otaControlData.updating)
+		return false;
+
 	Serial.println("processOtaDone");
 	otaControlData.updating = false;
-	Serial.println(__LINE__);
-	esp_err_t err = esp_ota_end(otaControlData.updateHandle);
-	Serial.println(__LINE__);
+	esp_err_t err           = esp_ota_end(otaControlData.updateHandle);
+	Serial.print("esp_ota_end ");
+	Serial.print(err);
 	if (err == ESP_OK) {
 		err = esp_ota_set_boot_partition(otaControlData.updatePartition);
 		// ESP_LOGE(TAG, "esp_ota_set_boot_partition=%d (%s)!", err,
 		//      esp_err_to_name(err))
-		Serial.println((err == ESP_OK) ? "set_boot_partition ok" : "set_boot_partition failed");
-	} else {
-		// ESP_LOGE(TAG, "esp_ota_end failed %d (%s)!", err, esp_err_to_name(err));
-		Serial.println("esp_ota_end failed");
+		Serial.print("esp_ota_set_boot_partition ");
+		Serial.print(err);
 	}
 
 	otaControlData.otaStatus =
 	    (err == ESP_OK) ? SVR_CHR_OTA_CONTROL_DONE_ACK : SVR_CHR_OTA_CONTROL_DONE_NAK;
-	// notify the client via BLE that DONE has been acknowledged
+
+	return true;
+}
+
+static void notifyAndRestart(NimBLECharacteristic *pCharacteristic) {
+	// notify the client that it's request has been acknowledged
 	pCharacteristic->setValue(otaControlData.otaStatus);
+	pCharacteristic->notify();
+	Serial.print("OTA (n)ack ");
+	Serial.println(otaControlData.otaStatus);
 
 	// restart the ESP to finish the OTA
-	if (err == ESP_OK) {
+	if (SVR_CHR_OTA_CONTROL_DONE_ACK == otaControlData.otaStatus) {
 		Serial.println("Preparing to restart!");
 		vTaskDelay(pdMS_TO_TICKS(REBOOT_DEEP_SLEEP_TIMEOUT));
 		esp_restart();
-	} else {
-		Serial.println("OTA FAILED");
 	}
 }
 
@@ -121,14 +130,19 @@ class OtaControlChrCallbacks : public NimBLECharacteristicCallbacks {
 		pCharacteristic->setValue(otaControlData.otaStatus);
 	}
 	void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
-		const uint16_t omLen = pCharacteristic->getLength();
-		if (sizeof(uint8_t) == omLen) {
-			NimBLEAttValue val  = pCharacteristic->getValue();
-			uint8_t        code = *val.begin();
+		const size_t omLen = pCharacteristic->getLength();
+		if (sizeof(OtaRequestType) == omLen) {
+			auto code = pCharacteristic->getValue<OtaRequestType>();
+			Serial.print("OTA ctrl recv ");
+			Serial.println(code);
+			bool res = false;
 			if (SVR_CHR_OTA_CONTROL_REQUEST == code) {
-				processOtaBegin(pCharacteristic);
+				res = processOtaBegin();
 			} else if (SVR_CHR_OTA_CONTROL_DONE == code) {
-				processOtaDone(pCharacteristic);
+				res = processOtaDone();
+			}
+			if (res) {
+				notifyAndRestart(pCharacteristic);
 			}
 		}
 	}
@@ -138,31 +152,31 @@ class OtaControlChrCallbacks : public NimBLECharacteristicCallbacks {
 	}
 };
 
-static constexpr uint16_t decodeOtaPacketSz(const uint8_t *netData) {
-	return netData[0] + (netData[1] << 8);
+static OtaPacketSizeType decodeOtaPacketSz(OtaPacketSizeType netData) {
+	const uint8_t *data = (const uint8_t *)&netData;
+	return data[0] + (data[1] << 8);
 }
 
 class OtaDataChrCallbacks : public NimBLECharacteristicCallbacks {
 	void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
-		Serial.print("onWrite Data omLen ");
-		const uint16_t omLen = pCharacteristic->getLength();
-		Serial.println(omLen);
+		const size_t omLen = pCharacteristic->getLength();
 		if (otaControlData.updating) {
-			NimBLEAttValue val = pCharacteristic->getValue();
+			class MyCharacteristic : public NimBLECharacteristic {
+			  public:
+				const uint8_t *dataBegin() const { return getAttVal().begin(); }
+			};
+			const void *val = ((MyCharacteristic *)pCharacteristic)->dataBegin();
 			// write the data chunk to the partition
-			esp_err_t err = esp_ota_write(otaControlData.updateHandle, val.begin(), val.size());
+			esp_err_t err = esp_ota_write(otaControlData.updateHandle, val, omLen);
 			if (err != ESP_OK) {
 				Serial.print("esp_ota_write failed err: ");
 				Serial.println(err);
 			}
 			otaControlData.numPkgsReceived++;
-			Serial.print("Received packet ");
-			Serial.println(otaControlData.numPkgsReceived);
-			Serial.println(val.size());
 		} else {
-			if (sizeof(otaControlData.packetSize) == omLen) {
-				NimBLEAttValue val        = pCharacteristic->getValue();
-				otaControlData.packetSize = decodeOtaPacketSz(val.begin());
+			if (sizeof(OtaPacketSizeType) == omLen) {
+				OtaPacketSizeType val     = pCharacteristic->getValue<OtaPacketSizeType>();
+				otaControlData.packetSize = decodeOtaPacketSz(val);
 				Serial.print("Packet size: ");
 				Serial.println(otaControlData.packetSize);
 			}
