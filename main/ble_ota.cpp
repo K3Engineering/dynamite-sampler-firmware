@@ -94,13 +94,13 @@ static bool processOtaDone(OtaControlData *control) {
 	control->updating = false;
 	esp_err_t err     = esp_ota_end(control->updateHandle);
 	Serial.print("esp_ota_end ");
-	Serial.print(err);
+	Serial.println(err);
 	if (err == ESP_OK) {
 		err = esp_ota_set_boot_partition(control->updatePartition);
 		// ESP_LOGE(TAG, "esp_ota_set_boot_partition=%d (%s)!", err,
 		//      esp_err_to_name(err))
 		Serial.print("esp_ota_set_boot_partition ");
-		Serial.print(err);
+		Serial.println(err);
 	}
 
 	control->otaStatus =
@@ -138,8 +138,8 @@ class OtaControlChrCallbacks : public NimBLECharacteristicCallbacks {
 			}
 			if (res) {
 				// notify the client that it's request has been acknowledged
-				pCharacteristic->setValue(otaControlData.otaStatus);
-				pCharacteristic->notify();
+				pCharacteristic->notify(&otaControlData.otaStatus, sizeof(otaControlData.otaStatus),
+				                        connInfo.getConnHandle());
 				Serial.print("OTA (n)ack ");
 				Serial.println(otaControlData.otaStatus);
 
@@ -215,12 +215,12 @@ void setupBleOta() { // Create the BLE Services
 	NimBLEService        *srvOTA        = bleServer->createService(&OTA_SVC_UUID);
 	NimBLECharacteristic *chrOtaControl = srvOTA->createCharacteristic(
 	    &OTA_CONTROL_CHR_UUID,
-	    NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::NOTIFY);
+	    NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::NOTIFY, 16);
 	static OtaControlChrCallbacks otaControlCb;
 	chrOtaControl->setCallbacks(&otaControlCb);
 
 	NimBLECharacteristic *chrOtaData =
-	    srvOTA->createCharacteristic(&OTA_DATA_CHR_UUID, NIMBLE_PROPERTY::WRITE);
+	    srvOTA->createCharacteristic(&OTA_DATA_CHR_UUID, NIMBLE_PROPERTY::WRITE, 512 + 128);
 	static OtaDataChrCallbacks otaDataCb;
 	chrOtaData->setCallbacks(&otaDataCb);
 
