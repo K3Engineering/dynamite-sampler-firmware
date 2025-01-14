@@ -23,7 +23,7 @@ constexpr char ADC_FEED_CHR_UUID[] = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
 //     0xbe);
 //======================== <\UUIDs>
 
-NimBLEServer                *bleServer                  = NULL;
+static NimBLEServer         *bleServer                  = NULL;
 static NimBLECharacteristic *blePublisherCharacteristic = NULL;
 static uint16_t              adcNotifyChrHandle;
 
@@ -99,17 +99,17 @@ static void taskSetupBle(void *setupDone) {
 
 	// Create the BLE Server
 	bleServer = NimBLEDevice::createServer();
-	static MyServerCallbacks callbacs;
-	bleServer->setCallbacks(&callbacs, false);
+	static MyServerCallbacks serverCb;
+	bleServer->setCallbacks(&serverCb, false);
 
 	NimBLEService *srvAdcFeed = bleServer->createService(ADC_FEED_SVC_UUID);
 	blePublisherCharacteristic =
 	    srvAdcFeed->createCharacteristic(ADC_FEED_CHR_UUID, NIMBLE_PROPERTY::NOTIFY);
-	static AdcPublCallbacks cb;
-	blePublisherCharacteristic->setCallbacks(&cb);
+	static AdcPublCallbacks feedCb;
+	blePublisherCharacteristic->setCallbacks(&feedCb);
 	srvAdcFeed->start();
 
-	setupBleOta();
+	setupBleOta(bleServer);
 
 	// Start advertising
 	NimBLEAdvertising *pAdvertising = NimBLEDevice::getAdvertising();
@@ -123,7 +123,7 @@ static void taskSetupBle(void *setupDone) {
 	//  This will allow for more than the 31 bytes, like longer names.
 	// If your device is battery powered you may consider setting scan response *to false as it
 	// will extend battery life at the expense of less data sent.
-	// pAdvertising->enableScanResponse(true);
+	pAdvertising->enableScanResponse(true);
 
 	NimBLEDevice::startAdvertising();
 

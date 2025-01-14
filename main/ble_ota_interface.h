@@ -3,8 +3,6 @@
 
 #include <NimBLEServer.h>
 
-extern NimBLEServer *bleServer;
-
-void setupBleOta(void);
+void setupBleOta(NimBLEServer *server);
 
 #endif // _BLE_OTA_INTERFACE_H

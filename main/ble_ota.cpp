@@ -13,7 +13,7 @@
 #include "debug_pin.h"
 #include <HardwareSerial.h>
 
-#define REBOOT_DEEP_SLEEP_TIMEOUT 5000
+constexpr TickType_t REBOOT_DEEP_SLEEP_TIMEOUT = 500;
 
 constexpr char DEVICE_MANUFACTURER_NAME[] = "3K";
 constexpr char DEVICE_MODEL_NUMBER[]      = "0.1d";
@@ -118,6 +118,7 @@ static void conditionalRestart(OtaControlData *control) {
 	}
 }
 
+// Implements OTA control flow, while OtaDataChrCallbacks implements binary download.
 class OtaControlChrCallbacks : public NimBLECharacteristicCallbacks {
 	void onRead(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
 		Serial.println("onRead");
@@ -159,15 +160,20 @@ static OtaPacketSizeType decodeOtaPacketSz(OtaPacketSizeType netData) {
 	return data[0] + (data[1] << 8);
 }
 
+// Hack to expose protected getAttVal()
+static inline const void *getChrDataPtr(const NimBLECharacteristic *pCharacteristic) {
+	class MyCharacteristic : public NimBLECharacteristic {
+	  public:
+		const uint8_t *dataBegin() const { return getAttVal().begin(); }
+	};
+	return static_cast<const MyCharacteristic *>(pCharacteristic)->dataBegin();
+}
+
 class OtaDataChrCallbacks : public NimBLECharacteristicCallbacks {
 	void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
 		const size_t omLen = pCharacteristic->getLength();
 		if (otaControlData.updating) {
-			class MyCharacteristic : public NimBLECharacteristic {
-			  public:
-				const uint8_t *dataBegin() const { return getAttVal().begin(); }
-			};
-			const void *val = static_cast<MyCharacteristic *>(pCharacteristic)->dataBegin();
+			const void *val = getChrDataPtr(pCharacteristic);
 			// write the data chunk to the partition
 			esp_err_t err = esp_ota_write(otaControlData.updateHandle, val, omLen);
 			if (err != ESP_OK) {
@@ -203,8 +209,8 @@ void otaConditionalRollback() {
 	}
 }
 
-void setupBleOta() { // Create the BLE Services
-	NimBLEService        *srvDeviceInfo = bleServer->createService(DEVICE_INFO_SVC_UUID.value);
+void setupBleOta(NimBLEServer *server) { // Create the BLE Services
+	NimBLEService        *srvDeviceInfo = server->createService(DEVICE_INFO_SVC_UUID.value);
 	NimBLECharacteristic *chrDevName    = srvDeviceInfo->createCharacteristic(
         DEVICE_MAKE_NAME_CHR_UUID.value, NIMBLE_PROPERTY::READ, sizeof(DEVICE_MANUFACTURER_NAME));
 	chrDevName->setValue(DEVICE_MANUFACTURER_NAME);
@@ -212,7 +218,7 @@ void setupBleOta() { // Create the BLE Services
 	    DEVICE_MODEL_NUMBER_CHR_UUID.value, NIMBLE_PROPERTY::READ, sizeof(DEVICE_MODEL_NUMBER));
 	chrDevModelNum->setValue(DEVICE_MODEL_NUMBER);
 
-	NimBLEService        *srvOTA        = bleServer->createService(&OTA_SVC_UUID);
+	NimBLEService        *srvOTA        = server->createService(&OTA_SVC_UUID);
 	NimBLECharacteristic *chrOtaControl = srvOTA->createCharacteristic(
 	    &OTA_CONTROL_CHR_UUID,
 	    NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::NOTIFY, 16);
