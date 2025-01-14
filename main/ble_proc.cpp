@@ -25,6 +25,7 @@ constexpr char ADC_FEED_CHR_UUID[] = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
 
 NimBLEServer                *bleServer                  = NULL;
 static NimBLECharacteristic *blePublisherCharacteristic = NULL;
+static uint16_t              adcNotifyChrHandle;
 
 BleAccess bleAccess{
     .adcStreamBufferHandle         = NULL,
@@ -34,8 +35,6 @@ BleAccess bleAccess{
 
 class MyServerCallbacks : public NimBLEServerCallbacks {
 	void onConnect(NimBLEServer *server, NimBLEConnInfo &connInfo) override {
-		bleAccess.deviceConnected = true;
-
 		// TODO: Figure out:
 		// is this needed?
 		// Does this actually affect the packet size for the way we notify
@@ -46,11 +45,18 @@ class MyServerCallbacks : public NimBLEServerCallbacks {
 	};
 
 	void onDisconnect(NimBLEServer *server, NimBLEConnInfo &connInfo, int reason) override {
-		bleAccess.deviceConnected = false;
-		// TODO stop reading the ADC and stop the interupt when disconnected
 		NimBLEDevice::startAdvertising();
 		Serial.print("On disco callback on core ");
 		Serial.println(xPortGetCoreID());
+	}
+};
+
+class AdcPublCallbacks : public NimBLECharacteristicCallbacks {
+	void onSubscribe(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo,
+	                 uint16_t subValue) override {
+		bleAccess.deviceConnected = subValue & 1;
+		adcNotifyChrHandle        = connInfo.getConnHandle();
+		//  TODO: stop reading the ADC and stop the interupt when disconnected
 	}
 };
 
@@ -63,8 +69,7 @@ static void blePublishAdcBuffer() {
 		size_t  bytesRead =
 		    xStreamBufferReceive(bleAccess.adcStreamBufferHandle, batch, sizeof(batch), 0);
 		if (bytesRead == ADC_FEED_CHUNK_SZ) {
-			blePublisherCharacteristic->setValue(batch, bytesRead);
-			blePublisherCharacteristic->notify();
+			blePublisherCharacteristic->notify(batch, bytesRead, adcNotifyChrHandle);
 		}
 	}
 }
@@ -100,6 +105,8 @@ static void taskSetupBle(void *setupDone) {
 	NimBLEService *srvAdcFeed = bleServer->createService(ADC_FEED_SVC_UUID);
 	blePublisherCharacteristic =
 	    srvAdcFeed->createCharacteristic(ADC_FEED_CHR_UUID, NIMBLE_PROPERTY::NOTIFY);
+	static AdcPublCallbacks cb;
+	blePublisherCharacteristic->setCallbacks(&cb);
 	srvAdcFeed->start();
 
 	setupBleOta();
@@ -114,8 +121,8 @@ static void taskSetupBle(void *setupDone) {
 	//  Standard BLE advertisement packet is only 31 bytes, so long names don't always fit.
 	//  Scan response allows for devices to request more during the scan.
 	//  This will allow for more than the 31 bytes, like longer names.
-	// If your device is battery powered you may consider setting scan response *to false as it will
-	// extend battery life at the expense of less data sent.
+	// If your device is battery powered you may consider setting scan response *to false as it
+	// will extend battery life at the expense of less data sent.
 	// pAdvertising->enableScanResponse(true);
 
 	NimBLEDevice::startAdvertising();
