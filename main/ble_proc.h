@@ -2,6 +2,6 @@
 #define _BLE_PROC_H
 
 void setupBle(int core);
-void checkOtaStatus(void);
+void otaConditionalRollback(void);
 
 #endif // _BLE_PROC_H

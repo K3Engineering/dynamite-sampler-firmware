@@ -63,61 +63,55 @@ typedef struct {
 
 static OtaControlData otaControlData;
 
-static bool processOtaBegin() {
-	if (otaControlData.updating)
+static bool processOtaBegin(OtaControlData *control) {
+	if (control->updating)
 		return false;
 
-	otaControlData.updatePartition = esp_ota_get_next_update_partition(NULL);
-	esp_err_t err = esp_ota_begin(otaControlData.updatePartition, OTA_WITH_SEQUENTIAL_WRITES,
-	                              &otaControlData.updateHandle);
+	control->updatePartition = esp_ota_get_next_update_partition(NULL);
+	esp_err_t err =
+	    esp_ota_begin(control->updatePartition, OTA_WITH_SEQUENTIAL_WRITES, &control->updateHandle);
 	if (err == ESP_OK) {
-		otaControlData.otaStatus = SVR_CHR_OTA_CONTROL_REQUEST_ACK;
-		otaControlData.updating  = true;
+		control->otaStatus = SVR_CHR_OTA_CONTROL_REQUEST_ACK;
+		control->updating  = true;
 	} else {
-		esp_ota_abort(otaControlData.updateHandle);
-		otaControlData.otaStatus    = SVR_CHR_OTA_CONTROL_REQUEST_NAK;
-		otaControlData.updateHandle = 0;
-		otaControlData.updating     = false;
+		esp_ota_abort(control->updateHandle);
+		control->otaStatus    = SVR_CHR_OTA_CONTROL_REQUEST_NAK;
+		control->updateHandle = 0;
+		control->updating     = false;
 		// ESP_LOGE(TAG, "esp_ota_begin error %d (%s)", err, esp_err_to_name(err));
 		Serial.println("esp_ota_begin error");
 	}
-	otaControlData.numPkgsReceived = 0;
+	control->numPkgsReceived = 0;
 
 	return true;
 }
 
-static bool processOtaDone() {
-	if (!otaControlData.updating)
+static bool processOtaDone(OtaControlData *control) {
+	if (!control->updating)
 		return false;
 
 	Serial.println("processOtaDone");
-	otaControlData.updating = false;
-	esp_err_t err           = esp_ota_end(otaControlData.updateHandle);
+	control->updating = false;
+	esp_err_t err     = esp_ota_end(control->updateHandle);
 	Serial.print("esp_ota_end ");
 	Serial.print(err);
 	if (err == ESP_OK) {
-		err = esp_ota_set_boot_partition(otaControlData.updatePartition);
+		err = esp_ota_set_boot_partition(control->updatePartition);
 		// ESP_LOGE(TAG, "esp_ota_set_boot_partition=%d (%s)!", err,
 		//      esp_err_to_name(err))
 		Serial.print("esp_ota_set_boot_partition ");
 		Serial.print(err);
 	}
 
-	otaControlData.otaStatus =
+	control->otaStatus =
 	    (err == ESP_OK) ? SVR_CHR_OTA_CONTROL_DONE_ACK : SVR_CHR_OTA_CONTROL_DONE_NAK;
 
 	return true;
 }
 
-static void notifyAndRestart(NimBLECharacteristic *pCharacteristic) {
-	// notify the client that it's request has been acknowledged
-	pCharacteristic->setValue(otaControlData.otaStatus);
-	pCharacteristic->notify();
-	Serial.print("OTA (n)ack ");
-	Serial.println(otaControlData.otaStatus);
-
+static void conditionalRestart(OtaControlData *control) {
 	// restart the ESP to finish the OTA
-	if (SVR_CHR_OTA_CONTROL_DONE_ACK == otaControlData.otaStatus) {
+	if (SVR_CHR_OTA_CONTROL_DONE_ACK == control->otaStatus) {
 		Serial.println("Preparing to restart!");
 		vTaskDelay(pdMS_TO_TICKS(REBOOT_DEEP_SLEEP_TIMEOUT));
 		esp_restart();
@@ -129,6 +123,7 @@ class OtaControlChrCallbacks : public NimBLECharacteristicCallbacks {
 		Serial.println("onRead");
 		pCharacteristic->setValue(otaControlData.otaStatus);
 	}
+
 	void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
 		const size_t omLen = pCharacteristic->getLength();
 		if (sizeof(OtaRequestType) == omLen) {
@@ -137,15 +132,22 @@ class OtaControlChrCallbacks : public NimBLECharacteristicCallbacks {
 			Serial.println(code);
 			bool res = false;
 			if (SVR_CHR_OTA_CONTROL_REQUEST == code) {
-				res = processOtaBegin();
+				res = processOtaBegin(&otaControlData);
 			} else if (SVR_CHR_OTA_CONTROL_DONE == code) {
-				res = processOtaDone();
+				res = processOtaDone(&otaControlData);
 			}
 			if (res) {
-				notifyAndRestart(pCharacteristic);
+				// notify the client that it's request has been acknowledged
+				pCharacteristic->setValue(otaControlData.otaStatus);
+				pCharacteristic->notify();
+				Serial.print("OTA (n)ack ");
+				Serial.println(otaControlData.otaStatus);
+
+				conditionalRestart(&otaControlData);
 			}
 		}
 	}
+
 	void onSubscribe(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo,
 	                 uint16_t subValue) override {
 		Serial.println("onSubscribe");
@@ -165,7 +167,7 @@ class OtaDataChrCallbacks : public NimBLECharacteristicCallbacks {
 			  public:
 				const uint8_t *dataBegin() const { return getAttVal().begin(); }
 			};
-			const void *val = ((MyCharacteristic *)pCharacteristic)->dataBegin();
+			const void *val = static_cast<MyCharacteristic *>(pCharacteristic)->dataBegin();
 			// write the data chunk to the partition
 			esp_err_t err = esp_ota_write(otaControlData.updateHandle, val, omLen);
 			if (err != ESP_OK) {
@@ -184,7 +186,7 @@ class OtaDataChrCallbacks : public NimBLECharacteristicCallbacks {
 	}
 };
 
-void checkOtaStatus() {
+void otaConditionalRollback() {
 	const esp_partition_t *running = esp_ota_get_running_partition();
 	esp_ota_img_states_t   ota_state;
 	if (esp_ota_get_state_partition(running, &ota_state) == ESP_OK) {
