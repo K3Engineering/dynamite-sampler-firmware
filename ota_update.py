@@ -7,6 +7,7 @@ import asyncio
 import datetime
 
 from bleak import BleakClient, BleakScanner
+from tqdm import tqdm
 
 # TODO factor this out so its not duplicated in the firmware as well
 OTA_DATA_UUID = "23408888-1F40-4CD8-9B89-CA8D45F8A5B0"
@@ -26,9 +27,13 @@ async def _search_for_esp32(device_name):
     esp32 = None
 
     devices = await BleakScanner.discover()
+    print("Available devices:")
     for device in devices:
+        print(device.name, end="")
         if device.name == device_name:
             esp32 = device
+            print(" - device name matches", end="")
+        print("")
 
     if esp32 is not None:
         print(f"{device_name} found!")
@@ -39,10 +44,9 @@ async def _search_for_esp32(device_name):
     return esp32
 
 
-async def send_ota(device_name, file_path):
+async def send_ota(device_name: str, firmware_bin: bytes):
     t0 = datetime.datetime.now()
     queue = asyncio.Queue()
-    firmware = []
 
     esp32 = await _search_for_esp32(device_name)
     async with BleakClient(esp32) as client:
@@ -78,11 +82,6 @@ async def send_ota(device_name, file_path):
             OTA_DATA_UUID, packet_size.to_bytes(2, "little"), response=True
         )
 
-        # split the firmware into packets
-        with open(file_path, "rb") as file:
-            while chunk := file.read(packet_size):
-                firmware.append(chunk)
-
         # write the request OP code to OTA Control
         print("Sending OTA request.")
         await client.write_gatt_char(OTA_CONTROL_UUID, SVR_CHR_OTA_CONTROL_REQUEST)
@@ -92,9 +91,12 @@ async def send_ota(device_name, file_path):
         if await queue.get() == "ack":
 
             # sequentially write all packets to OTA data
-            for i, pkg in enumerate(firmware):
-                print(f"Sending packet {i+1}/{len(firmware)}.")
-                await client.write_gatt_char(OTA_DATA_UUID, pkg, response=True)
+            with tqdm(total=len(firmware_bin), unit="bytes") as pbar:
+                for i in range(0, len(firmware_bin), packet_size):
+                    pkg = firmware_bin[i : i + packet_size]
+                    pbar.update(n=len(pkg))
+
+                    await client.write_gatt_char(OTA_DATA_UUID, pkg, response=True)
 
             # write done OP code to OTA Control
             print("Sending OTA done.")
@@ -116,9 +118,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawDescriptionHelpFormatter, description=__doc__
     )
-    parser.add_argument("-f", "--file", default="./build/dynamite-sampler-firmware.bin")
+    parser.add_argument(
+        "-f", "--file", default="./build/debug/dynamite-sampler-firmware.bin"
+    )
     parser.add_argument("device_name", metavar="device-name")
 
     args = parser.parse_args()
-    print(args.device_name)
-    asyncio.run(send_ota(args.device_name, args.file))
+
+    with open(args.file, "rb") as f:
+        firmware_bin = f.read()
+    asyncio.run(send_ota(args.device_name, firmware_bin))
