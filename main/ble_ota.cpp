@@ -1,17 +1,13 @@
-#include <freertos/FreeRTOS.h>
-#include <freertos/stream_buffer.h>
-
+#include "esp_ota_ops.h"
 #include <NimBLEDevice.h>
+#include <esp_log.h>
 
 #include "adc_ble_interface.h"
 #include "ble_ota_interface.h"
 
 #include "ble_proc.h"
 
-#include "esp_ota_ops.h"
-
-#include "debug_pin.h"
-#include <HardwareSerial.h>
+constexpr char TAG[] = "OTA";
 
 constexpr TickType_t REBOOT_DEEP_SLEEP_TIMEOUT = 500;
 
@@ -78,8 +74,7 @@ static bool processOtaBegin(OtaControlData *control) {
 		control->otaStatus    = SVR_CHR_OTA_CONTROL_REQUEST_NAK;
 		control->updateHandle = 0;
 		control->updating     = false;
-		// ESP_LOGE(TAG, "esp_ota_begin error %d (%s)", err, esp_err_to_name(err));
-		Serial.println("esp_ota_begin error");
+		ESP_LOGE(TAG, "esp_ota_begin error %d (%s)", err, esp_err_to_name(err));
 	}
 	control->numPkgsReceived = 0;
 
@@ -90,17 +85,13 @@ static bool processOtaDone(OtaControlData *control) {
 	if (!control->updating)
 		return false;
 
-	Serial.println("processOtaDone");
+	ESP_LOGI(TAG, "processOtaDone");
 	control->updating = false;
 	esp_err_t err     = esp_ota_end(control->updateHandle);
-	Serial.print("esp_ota_end ");
-	Serial.println(err);
+	ESP_LOGE(TAG, "esp_ota_end, err %d", err);
 	if (err == ESP_OK) {
 		err = esp_ota_set_boot_partition(control->updatePartition);
-		// ESP_LOGE(TAG, "esp_ota_set_boot_partition=%d (%s)!", err,
-		//      esp_err_to_name(err))
-		Serial.print("esp_ota_set_boot_partition ");
-		Serial.println(err);
+		ESP_LOGE(TAG, "esp_ota_set_boot_partition=%d (%s)!", err, esp_err_to_name(err));
 	}
 
 	control->otaStatus =
@@ -112,7 +103,7 @@ static bool processOtaDone(OtaControlData *control) {
 static void conditionalRestart(OtaControlData *control) {
 	// restart the ESP to finish the OTA
 	if (SVR_CHR_OTA_CONTROL_DONE_ACK == control->otaStatus) {
-		Serial.println("Preparing to restart!");
+		ESP_LOGI(TAG, "Preparing to restart!");
 		vTaskDelay(pdMS_TO_TICKS(REBOOT_DEEP_SLEEP_TIMEOUT));
 		esp_restart();
 	}
@@ -121,7 +112,7 @@ static void conditionalRestart(OtaControlData *control) {
 // Implements OTA control flow, while OtaDataChrCallbacks implements binary download.
 class OtaControlChrCallbacks : public NimBLECharacteristicCallbacks {
 	void onRead(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
-		Serial.println("onRead");
+		ESP_LOGD(TAG, "onRead");
 		pCharacteristic->setValue(otaControlData.otaStatus);
 	}
 
@@ -129,8 +120,7 @@ class OtaControlChrCallbacks : public NimBLECharacteristicCallbacks {
 		const size_t omLen = pCharacteristic->getLength();
 		if (sizeof(OtaRequestType) == omLen) {
 			auto code = pCharacteristic->getValue<OtaRequestType>();
-			Serial.print("OTA ctrl recv ");
-			Serial.println(code);
+			ESP_LOGI(TAG, "OTA ctrl recv %u", code);
 			bool res = false;
 			if (SVR_CHR_OTA_CONTROL_REQUEST == code) {
 				res = processOtaBegin(&otaControlData);
@@ -143,8 +133,7 @@ class OtaControlChrCallbacks : public NimBLECharacteristicCallbacks {
 				// notify the client that it's request has been acknowledged
 				pCharacteristic->notify(&otaControlData.otaStatus, sizeof(otaControlData.otaStatus),
 				                        connInfo.getConnHandle());
-				Serial.print("OTA (n)ack ");
-				Serial.println(otaControlData.otaStatus);
+				ESP_LOGI(TAG, "OTA (n)ack %u", otaControlData.otaStatus);
 
 				conditionalRestart(&otaControlData);
 			}
@@ -153,7 +142,7 @@ class OtaControlChrCallbacks : public NimBLECharacteristicCallbacks {
 
 	void onSubscribe(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo,
 	                 uint16_t subValue) override {
-		Serial.println("onSubscribe");
+		ESP_LOGD(TAG, "onSubscribe");
 	}
 };
 
@@ -181,16 +170,14 @@ class OtaDataChrCallbacks : public NimBLECharacteristicCallbacks {
 			// Downside is that it is quite a bit slower.
 			esp_err_t err = esp_ota_write(otaControlData.updateHandle, val, omLen);
 			if (err != ESP_OK) {
-				Serial.print("esp_ota_write failed err: ");
-				Serial.println(err);
+				ESP_LOGE(TAG, "esp_ota_write failed err: %d", err);
 			}
 			otaControlData.numPkgsReceived++;
 		} else {
 			if (sizeof(OtaPacketSizeType) == omLen) {
 				OtaPacketSizeType val     = pCharacteristic->getValue<OtaPacketSizeType>();
 				otaControlData.packetSize = decodeOtaPacketSz(val);
-				Serial.print("Packet size: ");
-				Serial.println(otaControlData.packetSize);
+				ESP_LOGI(TAG, "Packet size: %u", otaControlData.packetSize);
 			}
 		}
 	}
@@ -203,10 +190,10 @@ void otaConditionalRollback() {
 		if (ota_state == ESP_OTA_IMG_PENDING_VERIFY) {
 			bool diagnostic_is_ok = true; // TODO: run diagnostic function
 			if (diagnostic_is_ok) {
-				Serial.println("Diagnostics completed successfully! Continuing execution ...");
+				ESP_LOGI(TAG, "Diagnostics completed successfully! Continuing execution ...");
 				esp_ota_mark_app_valid_cancel_rollback();
 			} else {
-				Serial.println("Diagnostics failed! Start rollback to the previous version ...");
+				ESP_LOGE(TAG, "Diagnostics failed! Start rollback to the previous version ...");
 				esp_ota_mark_app_invalid_rollback_and_reboot();
 			}
 		}

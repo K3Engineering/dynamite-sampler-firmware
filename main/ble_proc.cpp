@@ -1,3 +1,4 @@
+#include <esp_log.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/stream_buffer.h>
 
@@ -8,8 +9,7 @@
 
 #include "ble_proc.h"
 
-#include "debug_pin.h"
-#include <HardwareSerial.h>
+constexpr char TAG[] = "BLE";
 
 //======================== <UUIDs>
 constexpr char ADC_FEED_SVC_UUID[] = "e331016b-6618-4f8f-8997-1a2c7c9e5fa3";
@@ -46,14 +46,12 @@ class MyServerCallbacks : public NimBLEServerCallbacks {
 		// increments of 1.25ms.
 		// Don't skip any connection intervals, and timout after 500ms
 		server->updateConnParams(connInfo.getConnHandle(), 6, 6 * 4, 0, 50);
-		Serial.print("On connect callback on core ");
-		Serial.println(xPortGetCoreID());
+		ESP_LOGD(TAG, "On connect callback on core %u", xPortGetCoreID());
 	};
 
 	void onDisconnect(NimBLEServer *server, NimBLEConnInfo &connInfo, int reason) override {
 		NimBLEDevice::startAdvertising();
-		Serial.print("On disco callback on core ");
-		Serial.println(xPortGetCoreID());
+		ESP_LOGD(TAG, "On disco callback on core %u", xPortGetCoreID());
 	}
 };
 
@@ -95,7 +93,7 @@ static void taksBlePublishAdcBuffer(void *) {
 }
 
 static void taskSetupBle(void *setupDone) {
-	Serial.println("Setting up BLE");
+	ESP_LOGI(TAG, "Setting up BLE");
 	// Create the BLE Device
 	// Name the device with the mac address to make it unique for testing purposes.
 	// TODO this probably isn't the elegant way to do this.
@@ -153,5 +151,5 @@ void setupBle(int core) {
 	xTaskCreatePinnedToCore(taksBlePublishAdcBuffer, "task_BLE_publish", 1024 * 5, NULL, 3,
 	                        &bleAccess.bleAdcFeedPublisherTaskHandle, core);
 
-	Serial.println("Waiting a client connection to notify...");
+	ESP_LOGI(TAG, "Waiting a client connection to notify...");
 }
