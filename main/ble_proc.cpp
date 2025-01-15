@@ -97,6 +97,8 @@ static void taskSetupBle(void *setupDone) {
 	snprintf(bleName, sizeof(bleName), "DS %" PRIx64, ESP.getEfuseMac());
 	NimBLEDevice::init(bleName);
 
+	NimBLEDevice::setMTU(BLE_ATT_MTU_MAX);
+
 	// Create the BLE Server
 	bleServer = NimBLEDevice::createServer();
 	static MyServerCallbacks serverCb;

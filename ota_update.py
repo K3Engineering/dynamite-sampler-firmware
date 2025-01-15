@@ -62,7 +62,10 @@ async def send_ota(device_name: str, firmware_bin: bytes):
             elif data == SVR_CHR_OTA_CONTROL_DONE_ACK:
                 print("ESP32: OTA done acknowledged.")
                 await queue.put("ack")
-                await client.stop_notify(OTA_CONTROL_UUID)
+                try:
+                    await client.stop_notify(OTA_CONTROL_UUID)
+                except:
+                    print("I think the connection died?")
             elif data == SVR_CHR_OTA_CONTROL_DONE_NAK:
                 print("ESP32: OTA done NOT acknowledged.")
                 await queue.put("nak")
@@ -74,7 +77,7 @@ async def send_ota(device_name: str, firmware_bin: bytes):
         await client.start_notify(OTA_CONTROL_UUID, _ota_notification_handler)
 
         # compute the packet size
-        packet_size = client.mtu_size - 3
+        packet_size = min(client.mtu_size - 3, 512)
 
         # write the packet size to OTA Data
         print(f"Sending packet size: {packet_size}.")
@@ -100,7 +103,10 @@ async def send_ota(device_name: str, firmware_bin: bytes):
 
             # write done OP code to OTA Control
             print("Sending OTA done.")
-            await client.write_gatt_char(OTA_CONTROL_UUID, SVR_CHR_OTA_CONTROL_DONE)
+            # response=False has to be set, otherwise it hangs here.
+            await client.write_gatt_char(
+                OTA_CONTROL_UUID, SVR_CHR_OTA_CONTROL_DONE, response=False
+            )
 
             # wait for the response
             await asyncio.sleep(1)
