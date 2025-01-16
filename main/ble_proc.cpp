@@ -40,6 +40,12 @@ class MyServerCallbacks : public NimBLEServerCallbacks {
 		// Does this actually affect the packet size for the way we notify
 		// Do we need to notify in a different way?
 		server->setDataLen(connInfo.getConnHandle(), BLE_PUBL_DATA_DLE);
+
+		// Best case, devices can handle 7.5ms interval connection (android phone)
+		// older iOS might be 15ms, Windows PC might be 30ms. Connection interval is set in
+		// increments of 1.25ms.
+		// Don't skip any connection intervals, and timout after 500ms
+		server->updateConnParams(connInfo.getConnHandle(), 6, 6 * 4, 0, 50);
 		Serial.print("On connect callback on core ");
 		Serial.println(xPortGetCoreID());
 	};

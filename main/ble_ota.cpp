@@ -135,6 +135,8 @@ class OtaControlChrCallbacks : public NimBLECharacteristicCallbacks {
 			if (SVR_CHR_OTA_CONTROL_REQUEST == code) {
 				res = processOtaBegin(&otaControlData);
 			} else if (SVR_CHR_OTA_CONTROL_DONE == code) {
+				Serial.print("OTA done control, num pkgs received: ");
+				Serial.println(otaControlData.numPkgsReceived);
 				res = processOtaDone(&otaControlData);
 			}
 			if (res) {
@@ -174,7 +176,9 @@ class OtaDataChrCallbacks : public NimBLECharacteristicCallbacks {
 		const size_t omLen = pCharacteristic->getLength();
 		if (otaControlData.updating) {
 			const void *val = getChrDataPtr(pCharacteristic);
-			// write the data chunk to the partition
+			// esp_ota_write can block up to ~70ms. Write commands might be dropped.
+			// Use write request (response=True) to make sure nothing is lost.
+			// Downside is that it is quite a bit slower.
 			esp_err_t err = esp_ota_write(otaControlData.updateHandle, val, omLen);
 			if (err != ESP_OK) {
 				Serial.print("esp_ota_write failed err: ");

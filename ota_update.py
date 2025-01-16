@@ -69,15 +69,19 @@ async def send_ota(device_name: str, firmware_bin: bytes):
             elif data == SVR_CHR_OTA_CONTROL_DONE_NAK:
                 print("ESP32: OTA done NOT acknowledged.")
                 await queue.put("nak")
-                await client.stop_notify(OTA_CONTROL_UUID)
+                try:
+                    await client.stop_notify(OTA_CONTROL_UUID)
+                except:
+                    print("I think the connection died?")
             else:
                 print(f"Notification received: sender: {sender}, data: {data}")
 
         # subscribe to OTA control
         await client.start_notify(OTA_CONTROL_UUID, _ota_notification_handler)
 
-        # compute the packet size
-        packet_size = min(client.mtu_size - 3, 512)
+        # compute the packet size. 244 bytes is the most a single packet can handle.
+        # Even if the MTU is larger, no need to split the data into multiple packets.
+        packet_size = min(client.mtu_size - 3, 244)
 
         # write the packet size to OTA Data
         print(f"Sending packet size: {packet_size}.")
@@ -99,6 +103,10 @@ async def send_ota(device_name: str, firmware_bin: bytes):
                     pkg = firmware_bin[i : i + packet_size]
                     pbar.update(n=len(pkg))
 
+                    # Response=True (write request) is currently required, since the
+                    # OTA handler can't always keep up with the incoming packets. And
+                    # for some reason the LL doesn't stop accepting even if the buffer
+                    # is full.
                     await client.write_gatt_char(OTA_DATA_UUID, pkg, response=True)
 
             # write done OP code to OTA Control
@@ -111,13 +119,14 @@ async def send_ota(device_name: str, firmware_bin: bytes):
             # wait for the response
             await asyncio.sleep(1)
             if await queue.get() == "ack":
-                dt = datetime.datetime.now() - t0
-                print(f"OTA successful! Total time: {dt}")
+                print(f"OTA successful!")
             else:
                 print("OTA failed.")
 
         else:
             print("ESP32 did not acknowledge the OTA request.")
+    dt = datetime.datetime.now() - t0
+    print(f"Total time: {dt}")
 
 
 if __name__ == "__main__":
