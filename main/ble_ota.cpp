@@ -125,8 +125,8 @@ class OtaControlChrCallbacks : public NimBLECharacteristicCallbacks {
 			if (SVR_CHR_OTA_CONTROL_REQUEST == code) {
 				res = processOtaBegin(&otaControlData);
 			} else if (SVR_CHR_OTA_CONTROL_DONE == code) {
-				Serial.print("OTA done control, num pkgs received: ");
-				Serial.println(otaControlData.numPkgsReceived);
+				ESP_LOGI(TAG, "OTA done control, num pkgs received: %d",
+				         otaControlData.numPkgsReceived);
 				res = processOtaDone(&otaControlData);
 			}
 			if (res) {
