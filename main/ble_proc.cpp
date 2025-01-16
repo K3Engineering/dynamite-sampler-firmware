@@ -2,18 +2,30 @@
 #include <freertos/stream_buffer.h>
 
 #include <NimBLEDevice.h>
-#include <NimBLELog.h>
 
 #include "adc_ble_interface.h"
+#include "ble_ota_interface.h"
+
 #include "ble_proc.h"
+
 #include "debug_pin.h"
 #include <HardwareSerial.h>
 
-constexpr char SERVICE_UUID[]                 = "e331016b-6618-4f8f-8997-1a2c7c9e5fa3";
-constexpr char ADC_FEED_CHARACTERISTIC_UUID[] = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+//======================== <UUIDs>
+constexpr char ADC_FEED_SVC_UUID[] = "e331016b-6618-4f8f-8997-1a2c7c9e5fa3";
+constexpr char ADC_FEED_CHR_UUID[] = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+
+// static constexpr ble_uuid128_t ADC_FEED_SVC_UUID = BLE_UUID128_INIT(
+//     0xa3, 0x5f, 0x9e, 0x7c, 0x2c, 0x1a, 0x97, 0x89, 0x8f, 0x4f, 0x18, 0x66, 0x6b, 0x01, 0x31,
+//     0xe3);
+// static constexpr ble_uuid128_t ADC_FEED_CHR_UUID = BLE_UUID128_INIT(
+//     0xa8, 0x26, 0x1b, 0x36, 0x07, 0xea, 0xf5, 0xb7, 0x88, 0x46, 0xe1, 0x36, 0x3e, 0x48, 0xb5,
+//     0xbe);
+//======================== <\UUIDs>
 
 static NimBLEServer         *bleServer                  = NULL;
 static NimBLECharacteristic *blePublisherCharacteristic = NULL;
+static uint16_t              adcNotifyChrHandle;
 
 BleAccess bleAccess{
     .adcStreamBufferHandle         = NULL,
@@ -23,23 +35,34 @@ BleAccess bleAccess{
 
 class MyServerCallbacks : public NimBLEServerCallbacks {
 	void onConnect(NimBLEServer *server, NimBLEConnInfo &connInfo) override {
-		bleAccess.deviceConnected = true;
-
 		// TODO: Figure out:
 		// is this needed?
 		// Does this actually affect the packet size for the way we notify
 		// Do we need to notify in a different way?
 		server->setDataLen(connInfo.getConnHandle(), BLE_PUBL_DATA_DLE);
+
+		// Best case, devices can handle 7.5ms interval connection (android phone)
+		// older iOS might be 15ms, Windows PC might be 30ms. Connection interval is set in
+		// increments of 1.25ms.
+		// Don't skip any connection intervals, and timout after 500ms
+		server->updateConnParams(connInfo.getConnHandle(), 6, 6 * 4, 0, 50);
 		Serial.print("On connect callback on core ");
 		Serial.println(xPortGetCoreID());
 	};
 
 	void onDisconnect(NimBLEServer *server, NimBLEConnInfo &connInfo, int reason) override {
-		bleAccess.deviceConnected = false;
-		// TODO stop reading the ADC and stop the interupt when disconnected
 		NimBLEDevice::startAdvertising();
 		Serial.print("On disco callback on core ");
 		Serial.println(xPortGetCoreID());
+	}
+};
+
+class AdcPublCallbacks : public NimBLECharacteristicCallbacks {
+	void onSubscribe(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo,
+	                 uint16_t subValue) override {
+		bleAccess.deviceConnected = subValue & 1;
+		adcNotifyChrHandle        = connInfo.getConnHandle();
+		//  TODO: stop reading the ADC and stop the interupt when disconnected
 	}
 };
 
@@ -52,8 +75,7 @@ static void blePublishAdcBuffer() {
 		size_t  bytesRead =
 		    xStreamBufferReceive(bleAccess.adcStreamBufferHandle, batch, sizeof(batch), 0);
 		if (bytesRead == ADC_FEED_CHUNK_SZ) {
-			blePublisherCharacteristic->setValue(batch, bytesRead);
-			blePublisherCharacteristic->notify();
+			blePublisherCharacteristic->notify(batch, bytesRead, adcNotifyChrHandle);
 		}
 	}
 }
@@ -78,32 +100,39 @@ static void taskSetupBle(void *setupDone) {
 	// Name the device with the mac address to make it unique for testing purposes.
 	// TODO this probably isn't the elegant way to do this.
 	char bleName[CONFIG_BT_NIMBLE_GAP_DEVICE_NAME_MAX_LEN];
-	sprintf(bleName, "DS %" PRIx64, ESP.getEfuseMac());
+	snprintf(bleName, sizeof(bleName), "DS %" PRIx64, ESP.getEfuseMac());
 	NimBLEDevice::init(bleName);
+
+	NimBLEDevice::setMTU(BLE_ATT_MTU_MAX);
 
 	// Create the BLE Server
 	bleServer = NimBLEDevice::createServer();
-	bleServer->setCallbacks(new MyServerCallbacks());
+	static MyServerCallbacks serverCb;
+	bleServer->setCallbacks(&serverCb, false);
 
-	// Create the BLE Service
-	NimBLEService *bleService = bleServer->createService(SERVICE_UUID);
-
-	// Create a BLE Characteristic
-	constexpr uint32_t prop = NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE |
-	                          NIMBLE_PROPERTY::NOTIFY | NIMBLE_PROPERTY::INDICATE;
+	NimBLEService *srvAdcFeed = bleServer->createService(ADC_FEED_SVC_UUID);
 	blePublisherCharacteristic =
-	    bleService->createCharacteristic(ADC_FEED_CHARACTERISTIC_UUID, prop);
+	    srvAdcFeed->createCharacteristic(ADC_FEED_CHR_UUID, NIMBLE_PROPERTY::NOTIFY);
+	static AdcPublCallbacks feedCb;
+	blePublisherCharacteristic->setCallbacks(&feedCb);
+	srvAdcFeed->start();
 
-	// Start the service
-	bleService->start();
+	setupBleOta(bleServer);
 
 	// Start advertising
 	NimBLEAdvertising *pAdvertising = NimBLEDevice::getAdvertising();
-	pAdvertising->addServiceUUID(SERVICE_UUID);
-	// Standard BLE advertisement packet is only 31 bytes, so long names don't always fit.
-	// Scan response allows for devices to request more during the scan.
-	// This will allow for more than the 31 bytes, like longer names.
+	pAdvertising->setName(bleName);
+	pAdvertising->addServiceUUID(srvAdcFeed->getUUID());
+	// pAdvertising->addServiceUUID(srvDeviceInfo->getUUID());
+	// pAdvertising->addServiceUUID(srvOTA->getUUID());
+
+	//  Standard BLE advertisement packet is only 31 bytes, so long names don't always fit.
+	//  Scan response allows for devices to request more during the scan.
+	//  This will allow for more than the 31 bytes, like longer names.
+	// If your device is battery powered you may consider setting scan response *to false as it
+	// will extend battery life at the expense of less data sent.
 	pAdvertising->enableScanResponse(true);
+
 	NimBLEDevice::startAdvertising();
 
 	*(volatile bool *)setupDone = true;
@@ -118,7 +147,7 @@ void setupBle(int core) {
 	volatile bool done = false;
 	xTaskCreatePinnedToCore(taskSetupBle, "task_BLE_setup", 1024 * 5, (void *)&done, 1, NULL, core);
 	while (!done)
-		;
+		vTaskDelay(10);
 
 	// TODO figure out priority for the BLE task
 	xTaskCreatePinnedToCore(taksBlePublishAdcBuffer, "task_BLE_publish", 1024 * 5, NULL, 3,

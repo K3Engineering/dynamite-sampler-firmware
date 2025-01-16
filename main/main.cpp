@@ -74,6 +74,8 @@ extern "C" void app_main(void) {
 	setupAdc(CORE_APP);
 	setupCalibration();
 
+	otaConditionalRollback();
+
 	constexpr esp_pm_config_t pmConfig = {
 	    .max_freq_mhz       = 80,
 	    .min_freq_mhz       = 10,
