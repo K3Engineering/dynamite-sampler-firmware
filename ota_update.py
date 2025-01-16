@@ -98,10 +98,12 @@ async def send_ota(device_name: str, firmware_bin: bytes):
         if await queue.get() == "ack":
 
             # sequentially write all packets to OTA data
+            num_packages = 0
             with tqdm(total=len(firmware_bin), unit="bytes") as pbar:
                 for i in range(0, len(firmware_bin), packet_size):
                     pkg = firmware_bin[i : i + packet_size]
                     pbar.update(n=len(pkg))
+                    num_packages += 1
 
                     # Response=True (write request) is currently required, since the
                     # OTA handler can't always keep up with the incoming packets. And
@@ -111,6 +113,7 @@ async def send_ota(device_name: str, firmware_bin: bytes):
 
             # write done OP code to OTA Control
             print("Sending OTA done.")
+            print(f"Number of packages sent: {num_packages}")
             # response=False has to be set, otherwise it hangs here.
             await client.write_gatt_char(
                 OTA_CONTROL_UUID, SVR_CHR_OTA_CONTROL_DONE, response=False
