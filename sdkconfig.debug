@@ -1,5 +1,6 @@
 # printing the nimble logs takes a noticible amount of time, so only print the warning
 CONFIG_BT_NIMBLE_LOG_LEVEL_WARNING=y
+CONFIG_LOG_DEFAULT_LEVEL_DEBUG=y
 
 # Options to consider:
 # CONFIG_BT_NIMBLE_DEBUG

@@ -1,16 +1,18 @@
 #include <esp_arduino_version.h>
+#include <esp_log.h>
 #include <esp_mac.h>
 #include <esp_pm.h>
+
+#include <esp32-hal.h>
 
 #include "adc_proc.h"
 #include "ble_proc.h"
 
-#include "debug_pin.h"
-#include <HardwareSerial.h>
-
 #ifndef GIT_REVISION
 #define GIT_REVISION "?"
 #endif
+
+constexpr char TAG[] = "DYNA";
 
 // Core0 is for BLE
 // Core1 is for everything else. Setup & loop run on core 1.
@@ -38,8 +40,7 @@ static void setupCalibration() {
 	if (const esp_partition_t *ptr = esp_partition_find_first(
 	        CUSTOM_PARTITION_CALIBRATION, CUSTOM_SUBTYPE_CALIBRATION, "loadcell_calib")) {
 		if (ESP_OK == esp_partition_read_raw(ptr, 0, &data, sizeof(data))) {
-			Serial.print("ADC calibration data ");
-			Serial.println(data.calibration0);
+			ESP_LOGI(TAG, "ADC calibration data %" PRIx32, data.calibration0);
 		}
 	}
 }
@@ -47,28 +48,22 @@ static void setupCalibration() {
 extern "C" void app_main(void) {
 	initArduino();
 
-	Serial.begin(115200);
-	Serial.println("Starting Arduino version:");
-	Serial.println(ESP_ARDUINO_VERSION_STR);
-	Serial.print("Git revision: ");
-	Serial.println(GIT_REVISION);
-	Serial.print("Running on Core: ");
-	Serial.println(xPortGetCoreID());
+	ESP_LOGI(TAG, "Starting Arduino version: %s", ESP_ARDUINO_VERSION_STR);
+	ESP_LOGI(TAG, "Git revision: %s", GIT_REVISION);
+	ESP_LOGI(TAG, "Running on Core: %u", xPortGetCoreID());
 
 #ifndef CONFIG_MOCK_ADC
-	Serial.println("Mock adc flag not set");
+	ESP_LOGI(TAG, "Mock adc flag not set");
 #else
-	Serial.print("Mock ADC flag: ");
-	Serial.println(CONFIG_MOCK_ADC);
+	ESP_LOGI(TAG, "Mock ADC flag: %u", CONFIG_MOCK_ADC);
 #endif
 
-	// Serial.print("Config PM SLP IRAM OPT (put lightsleep into ram):");
-	// Serial.println(CONFIG_PM_SLP_IRAM_OPT);
+	// ESP_LOGI(TAG, "Config PM SLP IRAM OPT (put lightsleep into ram): %u",
+	// CONFIG_PM_SLP_IRAM_OPT);
 
-	Serial.println("MAC address:");
 	uint64_t _chipmacid = 0LL;
 	esp_efuse_mac_get_default((uint8_t *)(&_chipmacid));
-	Serial.printf("0x%" PRIx64 "\n", _chipmacid);
+	ESP_LOGI(TAG, "MAC address: 0x%" PRIx64, _chipmacid);
 
 	setupBle(CORE_BLE);
 	setupAdc(CORE_APP);
@@ -81,9 +76,9 @@ extern "C" void app_main(void) {
 	    .min_freq_mhz       = 10,
 	    .light_sleep_enable = false,
 	};
-	esp_err_t err = esp_pm_configure(&pmConfig);
-	Serial.print("pm err ");
-	Serial.println(err);
+	if (esp_err_t err = esp_pm_configure(&pmConfig)) {
+		ESP_LOGE(TAG, "pm err %d", err);
+	}
 	// ESP_ERROR_CHECK(esp_pm_configure(&pm_config));
-	Serial.println("Started!");
+	ESP_LOGI(TAG, "Started!");
 }

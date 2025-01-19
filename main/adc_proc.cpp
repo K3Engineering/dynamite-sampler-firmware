@@ -1,13 +1,18 @@
 #include "ADS131M0x.h"
 
 #include <SPI.h>
+#include <esp_log.h>
 #include <freertos/FreeRTOS.h>
+
+#include <string.h>
 
 #include "adc_ble_interface.h"
 #include "adc_proc.h"
 
 #include "debug_pin.h"
 #include <HardwareSerial.h>
+
+constexpr char TAG[] = "ADC";
 
 static AdcClass     adc;
 static SPIClass     spiADC(HSPI);
@@ -60,8 +65,7 @@ static void taskAdcReadAndBuffer(void *) {
 }
 
 static void taskSetupAdc(void *setupDone) {
-	Serial.print("setting up adc on core: ");
-	Serial.println(xPortGetCoreID());
+	ESP_LOGI(TAG, "setting up adc on core: %u", xPortGetCoreID());
 	constexpr uint8_t PIN_NUM_CLK   = 11;
 	constexpr uint8_t PIN_NUM_MISO  = 10;
 	constexpr uint8_t PIN_NUM_MOSI  = 9;
@@ -69,6 +73,7 @@ static void taskSetupAdc(void *setupDone) {
 	constexpr uint8_t PIN_ADC_RESET = 14;
 	constexpr uint8_t PIN_CS_ADC    = 13;
 
+	//  TODO: gpio_set_direction(PIN_DEBUG_TOP, GPIO_MODE_OUTPUT);
 	pinMode(PIN_DEBUG_TOP, OUTPUT);
 	pinMode(PIN_DEBUG_BOT, OUTPUT);
 
@@ -92,10 +97,8 @@ static void taskSetupAdc(void *setupDone) {
 
 	adc.setOsr(OSR_4096);
 
-	for (int addr = 0; addr < 4; ++addr) {
-		Serial.print(addr);
-		Serial.print(" register contents ");
-		Serial.println(adc.readRegister(addr));
+	for (uint8_t addr = 0; addr < 4; ++addr) {
+		ESP_LOGI(TAG, "%u register contents %u", addr, adc.readRegister(addr));
 	}
 
 	adc.attachISR(isrAdcDrdy);
