@@ -1,8 +1,10 @@
 #include "ADS131M0x.h"
 
-#include <SPI.h>
-#include <esp_log.h>
 #include <freertos/FreeRTOS.h>
+
+#include <SPI.h>
+#include <driver/gpio.h>
+#include <esp_log.h>
 
 #include <string.h>
 
@@ -73,9 +75,8 @@ static void taskSetupAdc(void *setupDone) {
 	constexpr uint8_t PIN_ADC_RESET = 14;
 	constexpr uint8_t PIN_CS_ADC    = 13;
 
-	//  TODO: gpio_set_direction(PIN_DEBUG_TOP, GPIO_MODE_OUTPUT);
-	pinMode(PIN_DEBUG_TOP, OUTPUT);
-	pinMode(PIN_DEBUG_BOT, OUTPUT);
+	gpio_set_direction((gpio_num_t)PIN_DEBUG_TOP, GPIO_MODE_OUTPUT);
+	gpio_set_direction((gpio_num_t)PIN_DEBUG_BOT, GPIO_MODE_OUTPUT);
 
 	adc.init(PIN_CS_ADC, PIN_DRDY, PIN_ADC_RESET);
 	adc.setupAccess(&spiADC, 20000000, PIN_NUM_CLK, PIN_NUM_MISO, PIN_NUM_MOSI);

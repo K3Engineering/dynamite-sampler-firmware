@@ -1,7 +1,27 @@
 #include "ADS131M0x.h"
 
 #include <SPI.h>
-#include <esp32-hal-gpio.h>
+#include <driver/gpio.h>
+#include <esp_timer.h>
+
+#include "debug_pin.h"
+
+static inline void delay(uint32_t ms) { vTaskDelay(ms / portTICK_PERIOD_MS); }
+
+static void delayMicroseconds(uint32_t us) {
+	uint64_t m = (uint64_t)esp_timer_get_time();
+	if (us) {
+		uint64_t e = (m + us);
+		if (m > e) { // overflow
+			while ((uint64_t)esp_timer_get_time() > e) {
+				;
+			}
+		}
+		while ((uint64_t)esp_timer_get_time() < e) {
+			;
+		}
+	}
+}
 
 #ifdef IS_M02
 #define DO_PRAGMA(x) _Pragma(#x)
@@ -44,7 +64,7 @@ uint8_t ADS131M0x::writeRegister(uint8_t address, uint16_t value) {
 	uint8_t  bytesRcv;
 	uint16_t cmd = 0;
 
-	digitalWrite(csPin, LOW);
+	gpio_set_level((gpio_num_t)csPin, 0);
 	delayMicroseconds(1);
 
 	cmd = (CMD_WRITE_REG) | (address << 7) | 0;
@@ -89,7 +109,7 @@ uint8_t ADS131M0x::writeRegister(uint8_t address, uint16_t value) {
 	spiPort->transfer(0x00);
 #endif
 	delayMicroseconds(1);
-	digitalWrite(csPin, HIGH);
+	gpio_set_level((gpio_num_t)csPin, 1);
 
 	addressRcv = (res & REGMASK_CMD_READ_REG_ADDRESS) >> 7;
 	bytesRcv   = (res & REGMASK_CMD_READ_REG_BYTES);
@@ -112,7 +132,7 @@ uint16_t ADS131M0x::readRegister(uint8_t address) {
 
 	cmd = CMD_READ_REG | (address << 7 | 0);
 
-	digitalWrite(csPin, LOW);
+	gpio_set_level((gpio_num_t)csPin, 0);
 	delayMicroseconds(1);
 
 	spiPort->transfer16(cmd);
@@ -152,7 +172,7 @@ uint16_t ADS131M0x::readRegister(uint8_t address) {
 	spiPort->transfer(0x00);
 #endif
 	delayMicroseconds(1);
-	digitalWrite(csPin, HIGH);
+	gpio_set_level((gpio_num_t)csPin, 1);
 	return data;
 }
 
@@ -176,23 +196,15 @@ void ADS131M0x::writeRegisterMasked(uint8_t address, uint16_t value, uint16_t ma
 
 /// @brief Hardware reset (reset low activ)
 void ADS131M0x::reset() {
-	pinMode(resetPin, OUTPUT);
-	digitalWrite(resetPin, HIGH);
+	const gpio_num_t num = (gpio_num_t)resetPin;
+	gpio_set_direction(num, GPIO_MODE_OUTPUT);
+	gpio_set_level(num, 1);
 	delay(100);
-	digitalWrite(resetPin, LOW);
+	gpio_set_level(num, 0);
 	delay(100);
-	digitalWrite(resetPin, HIGH);
+	gpio_set_level(num, 1);
 	delay(1);
 	return;
-
-	// const gpio_num_t num = (gpio_num_t)resetPin;
-	// gpio_set_direction(num, GPIO_MODE_OUTPUT);
-	// gpio_set_level(num, 1);
-	// delay(100);
-	// gpio_set_level(num, 0);
-	// delay(100);
-	// gpio_set_level(num, 1);
-	// delay(1);
 }
 
 /**
@@ -220,8 +232,8 @@ void ADS131M0x::setupAccess(SPIClass *port, uint32_t spi_clock_speed, uint8_t cl
 	spiPort->beginTransaction(settings);
 	delay(1);
 
-	pinMode(csPin, OUTPUT);
-	digitalWrite(csPin, HIGH); // CS HIGH --> not selected
+	gpio_set_direction((gpio_num_t)csPin, GPIO_MODE_OUTPUT);
+	gpio_set_level((gpio_num_t)csPin, 1); // CS HIGH --> not selected
 }
 
 /**
@@ -483,7 +495,8 @@ bool ADS131M0x::setChannelGainCalibration(uint8_t channel, uint32_t gain) {
 
 /// @brief hardware-pin test if data is ready
 /// @return
-bool ADS131M0x::isDataReady() { return LOW == digitalRead(drdyPin); }
+
+bool ADS131M0x::isDataReady() { return 0 == gpio_get_level((gpio_num_t)drdyPin); }
 
 static inline int32_t readChannelHelper(const uint8_t *buffer, int index, size_t buffer_length) {
 	assert(index >= 0);
@@ -513,7 +526,7 @@ ADS131M0x::AdcOutput ADS131M0x::readADC(void) {
 
 	AdcOutput res;
 
-	digitalWrite(csPin, LOW);
+	gpio_set_level((gpio_num_t)csPin, 0);
 	optionalDelay();
 
 	spiPort->transferBytes(txBuffer, rxBuffer, sizeof(rxBuffer));
@@ -536,7 +549,7 @@ ADS131M0x::AdcOutput ADS131M0x::readADC(void) {
 	res.crc_match = (crc == calculated_crc);
 
 	optionalDelay();
-	digitalWrite(csPin, HIGH);
+	gpio_set_level((gpio_num_t)csPin, 1);
 	return res;
 }
 
@@ -544,13 +557,13 @@ ADS131M0x::AdcRawOutput ADS131M0x::rawReadADC() {
 	AdcRawOutput  res;
 	const uint8_t txBuffer[sizeof(res)] = {0}; // Buffer for SPI duplex transfer
 
-	digitalWrite(csPin, LOW);
+	gpio_set_level((gpio_num_t)csPin, 0);
 	optionalDelay();
 
 	spiPort->transferBytes(txBuffer, reinterpret_cast<uint8_t *>(&res), sizeof(res));
 
 	optionalDelay();
-	digitalWrite(csPin, HIGH);
+	gpio_set_level((gpio_num_t)csPin, 1);
 	return res;
 }
 
@@ -564,25 +577,21 @@ bool ADS131M0x::isCrcOk(const AdcRawOutput *data) {
 }
 
 void ADS131M0x::attachISR(AdcISR isr) {
-	// TODO: figure out if digitalPinToGPIONumber(drdyPin) is needed
-	// see also <io_pin_remap.h>
-	pinMode(drdyPin, INPUT);
-	attachInterruptArg(drdyPin, isr, (void *)1, FALLING);
-	return;
-
-	// gpio_set_direction((gpio_num_t)drdyPin, GPIO_MODE_INPUT);
-	// esp_err_t err = gpio_install_isr_service(0);
-	// if ((err != ESP_OK) && (err != ESP_ERR_INVALID_STATE))
-	// 	return;
-	// gpio_set_intr_type((gpio_num_t)drdyPin, GPIO_INTR_NEGEDGE);
-	// gpio_isr_handler_add((gpio_num_t)drdyPin, isr, nullptr);
+	gpio_set_direction((gpio_num_t)drdyPin, GPIO_MODE_INPUT);
+	esp_err_t err = gpio_install_isr_service(0);
+	if ((err != ESP_OK) && (err != ESP_ERR_INVALID_STATE))
+		return;
+	gpio_set_intr_type((gpio_num_t)drdyPin, GPIO_INTR_NEGEDGE);
+	gpio_isr_handler_add((gpio_num_t)drdyPin, isr, nullptr);
 }
 
 #if (CONFIG_MOCK_ADC == 1)
 #include <driver/timer.h>
 
 static bool timerCallback(void *arg) {
+	gpio_set_level((gpio_num_t)PIN_DEBUG_TOP, 1);
 	((ADS131M0x::AdcISR)arg)(nullptr);
+	gpio_set_level((gpio_num_t)PIN_DEBUG_TOP, 0);
 	return true;
 }
 
