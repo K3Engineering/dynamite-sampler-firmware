@@ -2,7 +2,6 @@
 
 #include <freertos/FreeRTOS.h>
 
-#include <SPI.h>
 #include <driver/gpio.h>
 #include <esp_log.h>
 
@@ -12,12 +11,10 @@
 #include "adc_proc.h"
 
 #include "debug_pin.h"
-#include <HardwareSerial.h>
 
 constexpr char TAG[] = "ADC";
 
 static AdcClass     adc;
-static SPIClass     spiADC(HSPI);
 static TaskHandle_t adcReadTaskHandle = NULL;
 
 // When we flag a piece of code with the IRAM_ATTR attribute, the compiled code
@@ -37,14 +34,13 @@ static void IRAM_ATTR isrAdcDrdy(void *) {
 // When accumulated enough, notify the ble task
 static void adcReadAndBuffer() {
 
-	AdcClass::AdcRawOutput adcReading = adc.rawReadADC();
+	const AdcClass::AdcRawOutput *adcReading = adc.rawReadADC();
 
 	if (!bleAccess.deviceConnected)
 		return;
 
-	BleAdcFeedData toSend{.status = adcReading.status, .data = {}, .crc = adc.isCrcOk(&adcReading)};
-	static_assert(sizeof(toSend.data) == sizeof(adcReading.data));
-	memcpy(toSend.data, adcReading.data, sizeof(toSend.data));
+	BleAdcFeedData toSend(adcReading->status, adcReading->data, adc.isCrcOk(adcReading));
+	static_assert(sizeof(toSend.data) == sizeof(adcReading->data));
 	xStreamBufferSend(bleAccess.adcStreamBufferHandle, &toSend, sizeof(toSend), 0);
 	// When the buffer is sufficiently large, time to send data.
 	if (xStreamBufferBytesAvailable(bleAccess.adcStreamBufferHandle) >= ADC_FEED_CHUNK_SZ) {
@@ -67,19 +63,19 @@ static void taskAdcReadAndBuffer(void *) {
 }
 
 static void taskSetupAdc(void *setupDone) {
-	ESP_LOGI(TAG, "setting up adc on core: %u", xPortGetCoreID());
-	constexpr uint8_t PIN_NUM_CLK   = 11;
-	constexpr uint8_t PIN_NUM_MISO  = 10;
-	constexpr uint8_t PIN_NUM_MOSI  = 9;
-	constexpr uint8_t PIN_DRDY      = 12;
-	constexpr uint8_t PIN_ADC_RESET = 14;
-	constexpr uint8_t PIN_CS_ADC    = 13;
+	ESP_LOGI(TAG, "setting up adc on core: %u", esp_cpu_get_core_id());
+	constexpr gpio_num_t PIN_NUM_CLK   = GPIO_NUM_11;
+	constexpr gpio_num_t PIN_NUM_MISO  = GPIO_NUM_10;
+	constexpr gpio_num_t PIN_NUM_MOSI  = GPIO_NUM_9;
+	constexpr gpio_num_t PIN_DRDY      = GPIO_NUM_12;
+	constexpr gpio_num_t PIN_ADC_RESET = GPIO_NUM_14;
+	constexpr gpio_num_t PIN_CS_ADC    = GPIO_NUM_13;
 
-	gpio_set_direction((gpio_num_t)PIN_DEBUG_TOP, GPIO_MODE_OUTPUT);
-	gpio_set_direction((gpio_num_t)PIN_DEBUG_BOT, GPIO_MODE_OUTPUT);
+	gpio_set_direction(PIN_DEBUG_TOP, GPIO_MODE_OUTPUT);
+	gpio_set_direction(PIN_DEBUG_BOT, GPIO_MODE_OUTPUT);
 
 	adc.init(PIN_CS_ADC, PIN_DRDY, PIN_ADC_RESET);
-	adc.setupAccess(&spiADC, 20000000, PIN_NUM_CLK, PIN_NUM_MISO, PIN_NUM_MOSI);
+	adc.setupAccess(SPI3_HOST, SPI_MASTER_FREQ_20M, PIN_NUM_CLK, PIN_NUM_MISO, PIN_NUM_MOSI);
 
 	// adc.setMultiplexer(0x00); // AIN0 AIN1
 	// adc.setPGAbypass(0);

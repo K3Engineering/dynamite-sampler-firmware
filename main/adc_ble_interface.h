@@ -5,6 +5,8 @@
 #include <freertos/stream_buffer.h>
 #include <freertos/task.h>
 
+#include <string.h>
+
 // Nimble creates a GATT connection, which has some overhead.
 constexpr uint16_t BLE_PUBL_DATA_DLE         = 251;
 constexpr uint16_t BLE_PUBL_DATA_ATT_PAYLOAD = BLE_PUBL_DATA_DLE - 4 - 3;
@@ -16,6 +18,11 @@ struct BleAdcFeedData {
 	uint16_t status;
 	uint8_t  data[DATA_SIZE];
 	uint8_t  crc;
+
+	BleAdcFeedData(uint16_t status_, const void *other_data_, uint8_t crc_)
+	    : status{status_}, crc{crc_} {
+		memcpy(data, other_data_, sizeof(data));
+	}
 };
 #pragma pack(pop)
 

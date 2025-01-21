@@ -1,10 +1,13 @@
 #include "ADS131M0x.h"
 
-#include <SPI.h>
 #include <driver/gpio.h>
+#include <driver/spi_master.h>
+#include <esp_log.h>
 #include <esp_timer.h>
 
 #include "debug_pin.h"
+
+constexpr char TAG[] = "ADS131";
 
 static inline void delay(uint32_t ms) { vTaskDelay(ms / portTICK_PERIOD_MS); }
 
@@ -22,12 +25,6 @@ static void delayMicroseconds(uint32_t us) {
 		}
 	}
 }
-
-#ifdef IS_M02
-#define DO_PRAGMA(x) _Pragma(#x)
-#define INFO(x)      DO_PRAGMA(message("\nREMARK: " #x))
-// INFO Version for ADS131M02
-#endif
 
 static constexpr uint16_t crc16ccitt(const uint8_t *ptr, size_t count) {
 	static constexpr uint16_t CRC_INIT_VAL = 0xFFFF;
@@ -51,129 +48,55 @@ static constexpr uint16_t crc16ccitt(const uint8_t *ptr, size_t count) {
 	return crc;
 }
 
-/**
- * @brief Write to ADC131M01 or ADC131M04 register
- *
- * @param address
- * @param value
- * @return uint8_t
- */
+DMA_ATTR ADS131M0x::AdcRawOutput ADS131M0x::spi2adc;
+DMA_ATTR ADS131M0x::AdcRawOutput ADS131M0x::adc2spi;
+
+spi_transaction_t ADS131M0x::trans_desc = {
+    .flags     = SPI_TRANS_DMA_BUFFER_ALIGN_MANUAL,
+    .cmd       = 0,
+    .addr      = 0,
+    .length    = sizeof(spi2adc) * 8,
+    .rxlength  = 0, // equals length
+    .user      = nullptr,
+    .tx_buffer = &spi2adc,
+    .rx_buffer = &adc2spi,
+};
+
 uint8_t ADS131M0x::writeRegister(uint8_t address, uint16_t value) {
-	uint16_t res;
-	uint8_t  addressRcv;
-	uint8_t  bytesRcv;
-	uint16_t cmd = 0;
 
-	gpio_set_level((gpio_num_t)csPin, 0);
+	gpio_set_level(csPin, 0);
 	delayMicroseconds(1);
 
-	cmd = (CMD_WRITE_REG) | (address << 7) | 0;
+	spi2adc.status            = CMD_WRITE_REG | (address << 7);
+	*(uint16_t *)spi2adc.data = value;
 
-	// res = spiPort->transfer16(cmd);
-	spiPort->transfer16(cmd);
-	spiPort->transfer(0x00);
+	spi_device_polling_transmit(spiHandle, &trans_desc);
 
-	spiPort->transfer16(value);
-	spiPort->transfer(0x00);
+	spi2adc.status            = 0;
+	*(uint16_t *)spi2adc.data = 0;
+	spi_device_polling_transmit(spiHandle, &trans_desc);
 
-	spiPort->transfer16(0x0000);
-	spiPort->transfer(0x00);
-
-	spiPort->transfer16(0x0000);
-	spiPort->transfer(0x00);
-
-#ifndef IS_M02
-	spiPort->transfer16(0x0000);
-	spiPort->transfer(0x00);
-
-	spiPort->transfer16(0x0000);
-	spiPort->transfer(0x00);
-#endif
-
-	res = spiPort->transfer16(0x0000);
-	spiPort->transfer(0x00);
-
-	spiPort->transfer16(0x0000);
-	spiPort->transfer(0x00);
-
-	spiPort->transfer16(0x0000);
-	spiPort->transfer(0x00);
-
-	spiPort->transfer16(0x0000);
-	spiPort->transfer(0x00);
-#ifndef IS_M02
-	spiPort->transfer16(0x0000);
-	spiPort->transfer(0x00);
-
-	spiPort->transfer16(0x0000);
-	spiPort->transfer(0x00);
-#endif
 	delayMicroseconds(1);
-	gpio_set_level((gpio_num_t)csPin, 1);
+	gpio_set_level(csPin, 1);
 
-	addressRcv = (res & REGMASK_CMD_READ_REG_ADDRESS) >> 7;
-	bytesRcv   = (res & REGMASK_CMD_READ_REG_BYTES);
-
-	if (addressRcv == address) {
-		return bytesRcv + 1;
-	}
-	return 0;
+	return adc2spi.status;
 }
 
-/**
- * @brief
- *
- * @param address
- * @return uint16_t
- */
 uint16_t ADS131M0x::readRegister(uint8_t address) {
-	uint16_t cmd;
-	uint16_t data;
 
-	cmd = CMD_READ_REG | (address << 7 | 0);
-
-	gpio_set_level((gpio_num_t)csPin, 0);
+	gpio_set_level(csPin, 0);
 	delayMicroseconds(1);
 
-	spiPort->transfer16(cmd);
-	spiPort->transfer(0x00);
+	spi2adc.status = CMD_READ_REG | (address << 7);
+	spi_device_polling_transmit(spiHandle, &trans_desc);
 
-	spiPort->transfer16(0x0000);
-	spiPort->transfer(0x00);
+	spi2adc.status = 0;
+	spi_device_polling_transmit(spiHandle, &trans_desc);
 
-	spiPort->transfer16(0x0000);
-	spiPort->transfer(0x00);
-
-	spiPort->transfer16(0x0000);
-	spiPort->transfer(0x00);
-#ifndef IS_M02
-	spiPort->transfer16(0x0000);
-	spiPort->transfer(0x00);
-
-	spiPort->transfer16(0x0000);
-	spiPort->transfer(0x00);
-#endif
-	data = spiPort->transfer16(0x0000);
-	spiPort->transfer(0x00);
-
-	spiPort->transfer16(0x0000);
-	spiPort->transfer(0x00);
-
-	spiPort->transfer16(0x0000);
-	spiPort->transfer(0x00);
-
-	spiPort->transfer16(0x0000);
-	spiPort->transfer(0x00);
-#ifndef IS_M02
-	spiPort->transfer16(0x0000);
-	spiPort->transfer(0x00);
-
-	spiPort->transfer16(0x0000);
-	spiPort->transfer(0x00);
-#endif
 	delayMicroseconds(1);
-	gpio_set_level((gpio_num_t)csPin, 1);
-	return data;
+	gpio_set_level(csPin, 1);
+
+	return adc2spi.status;
 }
 
 /**
@@ -196,318 +119,107 @@ void ADS131M0x::writeRegisterMasked(uint8_t address, uint16_t value, uint16_t ma
 
 /// @brief Hardware reset (reset low activ)
 void ADS131M0x::reset() {
-	const gpio_num_t num = (gpio_num_t)resetPin;
-	gpio_set_direction(num, GPIO_MODE_OUTPUT);
-	gpio_set_level(num, 1);
+	gpio_set_level(resetPin, 1);
 	delay(100);
-	gpio_set_level(num, 0);
+	gpio_set_level(resetPin, 0);
 	delay(100);
-	gpio_set_level(num, 1);
+	gpio_set_level(resetPin, 1);
 	delay(1);
 	return;
 }
 
-/**
- * @brief read status cmd-register
- *
- * @return uint16_t
- */
-uint16_t ADS131M0x::isResetOK(void) { return (readRegister(CMD_RESET)); }
-
-/**
- * @brief basic initialisation,
- */
-void ADS131M0x::init(uint8_t cs_pin, uint8_t drdy_pin, uint8_t reset_pin) {
+void ADS131M0x::init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pin) {
 	csPin    = cs_pin;
 	drdyPin  = drdy_pin;
 	resetPin = reset_pin;
+
+	gpio_set_level(resetPin, 1);
+	gpio_set_level(csPin, 1);
+
+	gpio_set_direction(resetPin, GPIO_MODE_OUTPUT);
+	gpio_set_direction(csPin, GPIO_MODE_OUTPUT);
+	gpio_set_direction(drdyPin, GPIO_MODE_INPUT);
+
+	// Just in case set_level did not work before set_direction
+	gpio_set_level(resetPin, 1);
+	gpio_set_level(csPin, 1);
 }
 
-void ADS131M0x::setupAccess(SPIClass *port, uint32_t spi_clock_speed, uint8_t clk_pin,
-                            uint8_t miso_pin, uint8_t mosi_pin) {
-	spiPort = port;
-
-	spiPort->begin(clk_pin, miso_pin, mosi_pin, csPin); // SCLK, MISO, MOSI, SS
-	SPISettings settings(spi_clock_speed, SPI_MSBFIRST, SPI_MODE1);
-	spiPort->beginTransaction(settings);
-	delay(1);
-
-	gpio_set_direction((gpio_num_t)csPin, GPIO_MODE_OUTPUT);
-	gpio_set_level((gpio_num_t)csPin, 1); // CS HIGH --> not selected
-}
-
-/**
- * @brief software test of ADC data is ready
- *
- * @param channel
- * @return int8_t
- */
-int8_t ADS131M0x::isDataReadySoft(uint8_t channel) {
-	if (channel == 0) {
-		return (readRegister(REG_STATUS) & REGMASK_STATUS_DRDY0);
-	} else if (channel == 1) {
-		return (readRegister(REG_STATUS) & REGMASK_STATUS_DRDY1);
+void ADS131M0x::setupAccess(spi_host_device_t spiDevice, uint32_t spi_clock_speed,
+                            gpio_num_t clk_pin, gpio_num_t miso_pin, gpio_num_t mosi_pin) {
+	spi_bus_config_t buscfg = {
+	    .mosi_io_num     = mosi_pin,
+	    .miso_io_num     = miso_pin,
+	    .sclk_io_num     = clk_pin,
+	    .quadwp_io_num   = -1,
+	    .quadhd_io_num   = -1,
+	    .max_transfer_sz = sizeof(AdcRawOutput),
+	};
+	esp_err_t ret = spi_bus_initialize(spiDevice, &buscfg, SPI_DMA_CH_AUTO);
+	if (ESP_OK != ret) {
+		ESP_LOGE(TAG, "spi_bus_initialize %d", ret);
+		return;
 	}
-#ifndef IS_M02
-	else if (channel == 2) {
-		return (readRegister(REG_STATUS) & REGMASK_STATUS_DRDY2);
-	} else if (channel == 3) {
-		return (readRegister(REG_STATUS) & REGMASK_STATUS_DRDY3);
+
+	spi_device_interface_config_t devcfg = {
+	    .mode           = 1, // SPI mode 1
+	    .clock_speed_hz = (int)spi_clock_speed,
+	    .spics_io_num   = -1,
+	};
+	spi_device_handle_t handle;
+	ret = spi_bus_add_device(spiDevice, &devcfg, &handle);
+	if (ESP_OK != ret) {
+		ESP_LOGE(TAG, "spi_bus_add_device %d", ret);
+		return;
 	}
-#endif
-	return -1;
+
+	ret = spi_device_acquire_bus(handle, portMAX_DELAY);
+	if (ESP_OK != ret) {
+		ESP_LOGE(TAG, "spi_device_acquire_bus %d", ret);
+		return;
+	}
+	spiHandle = handle;
 }
 
-/**
- * @brief read reset status (see datasheet)
- *
- * @return true
- * @return false
- */
-bool ADS131M0x::isResetStatus(void) { return (readRegister(REG_STATUS) & REGMASK_STATUS_RESET); }
-
-/**
- * @brief read locked status (see datasheet)
- *
- * @return true
- * @return false
- */
-bool ADS131M0x::isLockSPI(void) { return (readRegister(REG_STATUS) & REGMASK_STATUS_LOCK); }
-
-/**
- * @brief set DRDY format (see datasheet)
- *
- * @param drdyFormat
- * @return true
- * @return false
- */
-bool ADS131M0x::setDrdyFormat(uint8_t drdyFormat) {
-	if (drdyFormat > 1) {
-		return false;
-	} else {
-		writeRegisterMasked(REG_MODE, drdyFormat, REGMASK_MODE_DRDY_FMT);
-		return true;
-	}
-}
-
-/**
- * @brief set DRDY state (see datasheet)
- *
- * @param drdyState
- * @return true
- * @return false
- */
-bool ADS131M0x::setDrdyStateWhenUnavailable(uint8_t drdyState) {
-	if (drdyState > 1) {
-		return false;
-	} else {
-		writeRegisterMasked(REG_MODE, drdyState < 1, REGMASK_MODE_DRDY_HiZ);
-		return true;
-	}
-}
-
-/**
- * @brief set power mode (see datasheet)
- *
- * @param powerMode
- * @return true
- * @return false
- */
 bool ADS131M0x::setPowerMode(uint8_t powerMode) {
 	if (powerMode > 3) {
 		return false;
-	} else {
-		writeRegisterMasked(REG_CLOCK, powerMode, REGMASK_CLOCK_PWR);
-		return true;
 	}
+	writeRegisterMasked(REG_CLOCK, powerMode, REGMASK_CLOCK_PWR);
+	return true;
 }
 
 /**
  * @brief set OSR digital filter (see datasheet)
- *
- * @param osr
- * @return true
- * @return false
  */
 bool ADS131M0x::setOsr(uint16_t osr) {
 	if (osr > 7) {
 		return false;
-	} else {
-		writeRegisterMasked(REG_CLOCK, osr << 2, REGMASK_CLOCK_OSR);
-		return true;
 	}
+	writeRegisterMasked(REG_CLOCK, osr << 2, REGMASK_CLOCK_OSR);
+	return true;
 }
 
-/**
- * @brief input channel enable
- *
- * @param channel
- * @param enable
- * @return true
- * @return false
- */
-bool ADS131M0x::setChannelEnable(uint8_t channel, uint16_t enable) {
-	if (channel > 3) {
-		return false;
-	}
-	if (channel == 0) {
-		writeRegisterMasked(REG_CLOCK, enable << 8, REGMASK_CLOCK_CH0_EN);
-		return true;
-	} else if (channel == 1) {
-		writeRegisterMasked(REG_CLOCK, enable << 9, REGMASK_CLOCK_CH1_EN);
-		return true;
-	}
-#ifndef IS_M02
-	else if (channel == 2) {
-		writeRegisterMasked(REG_CLOCK, enable << 10, REGMASK_CLOCK_CH2_EN);
-		return true;
-	} else if (channel == 3) {
-		writeRegisterMasked(REG_CLOCK, enable << 11, REGMASK_CLOCK_CH3_EN);
-		return true;
-	}
-#endif
-	return false;
-}
-
-/**
- * @brief set gain per channel (see datasheet)
- *
- * @param channel
- * @param pga
- * @return true
- * @return false
- */
 bool ADS131M0x::setChannelPGA(uint8_t channel, uint16_t pga) {
-	if (channel == 0) {
-		writeRegisterMasked(REG_GAIN, pga, REGMASK_GAIN_PGAGAIN0);
-		return true;
-	} else if (channel == 1) {
-		writeRegisterMasked(REG_GAIN, pga << 4, REGMASK_GAIN_PGAGAIN1);
-		return true;
-	}
-#ifndef IS_M02
-	else if (channel == 2) {
-		writeRegisterMasked(REG_GAIN, pga << 8, REGMASK_GAIN_PGAGAIN2);
-		return true;
-	} else if (channel == 3) {
-		writeRegisterMasked(REG_GAIN, pga << 12, REGMASK_GAIN_PGAGAIN3);
-		return true;
-	}
-#endif
-	return false;
-}
+	static_assert(REGMASK_GAIN_PGAGAIN1 == (REGMASK_GAIN_PGAGAIN0 << 4));
+	static_assert(REGMASK_GAIN_PGAGAIN2 == (REGMASK_GAIN_PGAGAIN0 << 8));
+	static_assert(REGMASK_GAIN_PGAGAIN3 == (REGMASK_GAIN_PGAGAIN0 << 12));
 
-/// @brief Set global Chop (see datasheet)
-/// @param global_chop
-void ADS131M0x::setGlobalChop(uint16_t global_chop) {
-	writeRegisterMasked(REG_CFG, global_chop << 8, REGMASK_CFG_GC_EN);
-}
-
-/// @brief Set global Chop Delay
-/// @param delay todo:  ms or us ??
-void ADS131M0x::setGlobalChopDelay(uint16_t delay) {
-	writeRegisterMasked(REG_CFG, delay << 9, REGMASK_CFG_GC_DLY);
+	if (channel > NUM_CHANNELS_ENABLED)
+		return false;
+	writeRegisterMasked(REG_GAIN, pga << (channel * 4), REGMASK_GAIN_PGAGAIN0 << (channel * 4));
+	return true;
 }
 
 bool ADS131M0x::setInputChannelSelection(uint8_t channel, uint8_t input) {
-	if (channel == 0) {
-		writeRegisterMasked(REG_CH0_CFG, input, REGMASK_CHX_CFG_MUX);
-		return true;
-	} else if (channel == 1) {
-		writeRegisterMasked(REG_CH1_CFG, input, REGMASK_CHX_CFG_MUX);
-		return true;
-	}
-#ifndef IS_M02
-	else if (channel == 2) {
-		writeRegisterMasked(REG_CH2_CFG, input, REGMASK_CHX_CFG_MUX);
-		return true;
-	} else if (channel == 3) {
-		writeRegisterMasked(REG_CH3_CFG, input, REGMASK_CHX_CFG_MUX);
-		return true;
-	}
-#endif
-	return false;
-}
+	static_assert(REG_CH1_CFG == REG_CH0_CFG + 5);
+	static_assert(REG_CH2_CFG == REG_CH0_CFG + 5 * 2);
+	static_assert(REG_CH3_CFG == REG_CH0_CFG + 5 * 3);
 
-/// @brief set offset calibration per channel
-/// @param channel
-/// @param offset
-/// @return
-bool ADS131M0x::setChannelOffsetCalibration(uint8_t channel, int32_t offset) {
-
-	uint16_t MSB = offset >> 8;
-	uint8_t  LSB = offset;
-
-	if (channel == 0) {
-		writeRegisterMasked(REG_CH0_OCAL_MSB, MSB, 0xFFFF);
-		writeRegisterMasked(REG_CH0_OCAL_LSB, LSB << 8, REGMASK_CHX_OCAL0_LSB);
-		return true;
-	} else if (channel == 1) {
-		writeRegisterMasked(REG_CH1_OCAL_MSB, MSB, 0xFFFF);
-		writeRegisterMasked(REG_CH1_OCAL_LSB, LSB << 8, REGMASK_CHX_OCAL0_LSB);
-		return true;
-	}
-#ifndef IS_M02
-	else if (channel == 2) {
-		writeRegisterMasked(REG_CH2_OCAL_MSB, MSB, 0xFFFF);
-		writeRegisterMasked(REG_CH2_OCAL_LSB, LSB << 8, REGMASK_CHX_OCAL0_LSB);
-		return true;
-	} else if (channel == 3) {
-		writeRegisterMasked(REG_CH3_OCAL_MSB, MSB, 0xFFFF);
-		writeRegisterMasked(REG_CH3_OCAL_LSB, LSB << 8, REGMASK_CHX_OCAL0_LSB);
-		return true;
-	}
-#endif
-	return false;
-}
-
-/// @brief set gain calibration per channel
-/// @param channel
-/// @param gain
-/// @return
-bool ADS131M0x::setChannelGainCalibration(uint8_t channel, uint32_t gain) {
-
-	uint16_t MSB = gain >> 8;
-	uint8_t  LSB = gain;
-
-	if (channel == 0) {
-		writeRegisterMasked(REG_CH0_GCAL_MSB, MSB, 0xFFFF);
-		writeRegisterMasked(REG_CH0_GCAL_LSB, LSB << 8, REGMASK_CHX_GCAL0_LSB);
-		return true;
-	} else if (channel == 1) {
-		writeRegisterMasked(REG_CH1_GCAL_MSB, MSB, 0xFFFF);
-		writeRegisterMasked(REG_CH1_GCAL_LSB, LSB << 8, REGMASK_CHX_GCAL0_LSB);
-		return true;
-	}
-#ifndef IS_M02
-	else if (channel == 2) {
-		writeRegisterMasked(REG_CH2_GCAL_MSB, MSB, 0xFFFF);
-		writeRegisterMasked(REG_CH2_GCAL_LSB, LSB << 8, REGMASK_CHX_GCAL0_LSB);
-		return true;
-	} else if (channel == 3) {
-		writeRegisterMasked(REG_CH3_GCAL_MSB, MSB, 0xFFFF);
-		writeRegisterMasked(REG_CH3_GCAL_LSB, LSB << 8, REGMASK_CHX_GCAL0_LSB);
-		return true;
-	}
-#endif
-	return false;
-}
-
-/// @brief hardware-pin test if data is ready
-/// @return
-
-bool ADS131M0x::isDataReady() { return 0 == gpio_get_level((gpio_num_t)drdyPin); }
-
-static inline int32_t readChannelHelper(const uint8_t *buffer, int index, size_t buffer_length) {
-	assert(index >= 0);
-	assert(index + 2 < buffer_length);
-
-	int32_t aux =
-	    ((buffer[index] << 16) | (buffer[index + 1] << 8) | buffer[index + 2]) & 0x00FFFFFF;
-	if (aux > 0x7FFFFF) {
-		aux = ((~(aux) & 0x00FFFFFF) + 1) * -1;
-	}
-	return aux;
+	if (channel > NUM_CHANNELS_ENABLED)
+		return false;
+	writeRegisterMasked(REG_CH0_CFG + channel * 5, input, REGMASK_CHX_CFG_MUX);
+	return true;
 }
 
 static inline void optionalDelay() {
@@ -516,55 +228,16 @@ static inline void optionalDelay() {
 #endif
 }
 
-/// @brief Read ADC port (all Ports)
-/// @param
-/// @return
-ADS131M0x::AdcOutput ADS131M0x::readADC(void) {
-	const uint8_t read_length           = ADC_READ_DATA_SIZE;
-	const uint8_t txBuffer[read_length] = {0}; // Buffer for SPI transfer
-	uint8_t       rxBuffer[read_length] = {};  // Buffer for SPI receive data
+auto ADS131M0x::rawReadADC() -> const AdcRawOutput * {
 
-	AdcOutput res;
-
-	gpio_set_level((gpio_num_t)csPin, 0);
+	gpio_set_level(csPin, 0);
 	optionalDelay();
 
-	spiPort->transferBytes(txBuffer, rxBuffer, sizeof(rxBuffer));
-	// status is bytes 0, 1
-	// ch0 is bytes 3, 4, 5
-	// ch1 is bytes 6, 7, 8
-	// ch2 is bytes 9, 10, 11
-	// ch3 is bytes 12, 13, 14
-	// CRC is bytes 15, 16
-
-	res.status = (rxBuffer[0] << 8) | rxBuffer[1];
-	res.ch0    = readChannelHelper(rxBuffer, 3, sizeof(rxBuffer));
-	res.ch1    = readChannelHelper(rxBuffer, 6, sizeof(rxBuffer));
-	res.ch2    = readChannelHelper(rxBuffer, 9, sizeof(rxBuffer));
-	res.ch3    = readChannelHelper(rxBuffer, 12, sizeof(rxBuffer));
-
-	uint16_t crc            = (rxBuffer[15] << 8) | rxBuffer[16];
-	uint16_t calculated_crc = crc16ccitt(rxBuffer, read_length);
-
-	res.crc_match = (crc == calculated_crc);
+	spi_device_polling_transmit(spiHandle, &trans_desc);
 
 	optionalDelay();
-	gpio_set_level((gpio_num_t)csPin, 1);
-	return res;
-}
-
-ADS131M0x::AdcRawOutput ADS131M0x::rawReadADC() {
-	AdcRawOutput  res;
-	const uint8_t txBuffer[sizeof(res)] = {0}; // Buffer for SPI duplex transfer
-
-	gpio_set_level((gpio_num_t)csPin, 0);
-	optionalDelay();
-
-	spiPort->transferBytes(txBuffer, reinterpret_cast<uint8_t *>(&res), sizeof(res));
-
-	optionalDelay();
-	gpio_set_level((gpio_num_t)csPin, 1);
-	return res;
+	gpio_set_level(csPin, 1);
+	return &adc2spi;
 }
 
 bool ADS131M0x::isCrcOk(const AdcRawOutput *data) {
@@ -577,21 +250,22 @@ bool ADS131M0x::isCrcOk(const AdcRawOutput *data) {
 }
 
 void ADS131M0x::attachISR(AdcISR isr) {
-	gpio_set_direction((gpio_num_t)drdyPin, GPIO_MODE_INPUT);
 	esp_err_t err = gpio_install_isr_service(0);
 	if ((err != ESP_OK) && (err != ESP_ERR_INVALID_STATE))
 		return;
-	gpio_set_intr_type((gpio_num_t)drdyPin, GPIO_INTR_NEGEDGE);
-	gpio_isr_handler_add((gpio_num_t)drdyPin, isr, nullptr);
+	gpio_set_intr_type(drdyPin, GPIO_INTR_NEGEDGE);
+	gpio_isr_handler_add(drdyPin, isr, nullptr);
+
+	delay(1);
 }
 
 #if (CONFIG_MOCK_ADC == 1)
 #include <driver/timer.h>
 
 static bool timerCallback(void *arg) {
-	gpio_set_level((gpio_num_t)PIN_DEBUG_TOP, 1);
+	gpio_set_level(PIN_DEBUG_TOP, 1);
 	((ADS131M0x::AdcISR)arg)(nullptr);
-	gpio_set_level((gpio_num_t)PIN_DEBUG_TOP, 0);
+	gpio_set_level(PIN_DEBUG_TOP, 0);
 	return true;
 }
 
@@ -619,14 +293,14 @@ void MockAdc::attachISR(AdcISR isr) {
 	timer_start(gr, idx);
 }
 
-auto MockAdc::rawReadADC() -> AdcRawOutput {
-	AdcRawOutput a{
+auto MockAdc::rawReadADC() -> const AdcRawOutput * {
+	static AdcRawOutput a{
 	    .status = 0x1234,
 	};
 	static uint8_t val = 42;
 	for (int i = 3; i < sizeof(a.data); i += 3) {
 		a.data[i] = ++val;
 	}
-	return a;
+	return &a;
 }
 #endif // CONFIG_MOCK_ADC
