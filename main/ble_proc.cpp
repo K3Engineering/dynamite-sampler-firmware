@@ -1,4 +1,5 @@
 #include <esp_log.h>
+#include <esp_mac.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/stream_buffer.h>
 
@@ -97,8 +98,10 @@ static void taskSetupBle(void *setupDone) {
 	// Create the BLE Device
 	// Name the device with the mac address to make it unique for testing purposes.
 	// TODO this probably isn't the elegant way to do this.
-	char bleName[CONFIG_BT_NIMBLE_GAP_DEVICE_NAME_MAX_LEN];
-	snprintf(bleName, sizeof(bleName), "DS %" PRIx64, ESP.getEfuseMac());
+	char     bleName[CONFIG_BT_NIMBLE_GAP_DEVICE_NAME_MAX_LEN];
+	uint64_t _chipmacid = 0LL;
+	esp_efuse_mac_get_default((uint8_t *)(&_chipmacid));
+	snprintf(bleName, sizeof(bleName), "DS %" PRIx64, _chipmacid);
 	NimBLEDevice::init(bleName);
 
 	NimBLEDevice::setMTU(BLE_ATT_MTU_MAX);
