@@ -30,15 +30,17 @@ struct NvsDataLoadcellCalibration {
 };
 #pragma pack(pop)
 
-static size_t readLoadcellCalibration(void *data) {
+// TODO return esp_err_t instead
+static size_t readLoadcellCalibration(void *data, const size_t calibration_length) {
 
-	constexpr esp_partition_type_t    CUSTOM_PARTITION_CALIBRATION = esp_partition_type_t(0x40);
-	constexpr esp_partition_subtype_t CUSTOM_SUBTYPE_CALIBRATION   = esp_partition_subtype_t(6);
+	// This uniquely identifies the partition. This is duplicated in partitions.csv
+	constexpr esp_partition_type_t    CALIB_PARTITION_TYPE    = esp_partition_type_t(0x40);
+	constexpr esp_partition_subtype_t CALIB_PARTITION_SUBTYPE = esp_partition_subtype_t(6);
+	constexpr char                   *CALIB_PARTITION_LABEL   = "loadcell_calib";
 
-	// NvsDataLoadcellCalibration data;
 	if (const esp_partition_t *ptr = esp_partition_find_first(
-	        CUSTOM_PARTITION_CALIBRATION, CUSTOM_SUBTYPE_CALIBRATION, "loadcell_calib")) {
-		if (ESP_OK == esp_partition_read_raw(ptr, 0, data, sizeof(NvsDataLoadcellCalibration))) {
+	        CALIB_PARTITION_TYPE, CALIB_PARTITION_SUBTYPE, CALIB_PARTITION_LABEL)) {
+		if (ESP_OK == esp_partition_read_raw(ptr, 0, data, calibration_length)) {
 			ESP_LOGI(TAG, "Read NVS data for loadcell calibration");
 			return sizeof(NvsDataLoadcellCalibration);
 		}
@@ -63,15 +65,11 @@ extern "C" void app_main(void) {
 	esp_efuse_mac_get_default((uint8_t *)(&_chipmacid));
 	ESP_LOGI(TAG, "MAC address: 0x%" PRIx64, _chipmacid);
 
-	uint8_t data[sizeof(NvsDataLoadcellCalibration)] = {0};
+	const size_t calibration_length       = sizeof(NvsDataLoadcellCalibration);
+	uint8_t      data[calibration_length] = {0};
+	readLoadcellCalibration(data, calibration_length);
 
-	const size_t calibration_length = readLoadcellCalibration(data);
-
-	// for (int i = 0; i < calibration_length; i++) {
-	// 	Serial.print(data[i]);
-	// }
-	// Serial.println("  calibration dump");
-
+	// TODO decide what to do if calibration data could not be read
 	setupBle(CORE_BLE, data, calibration_length);
 	setupAdc(CORE_APP);
 
