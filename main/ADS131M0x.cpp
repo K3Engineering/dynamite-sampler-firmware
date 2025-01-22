@@ -60,7 +60,7 @@ uint8_t ADS131M0x::writeRegister(uint8_t address, uint16_t value) {
 	*(uint16_t *)spi2adc.data = 0;
 	spi_device_polling_transmit(spiHandle, &trans_desc);
 
-	return adc2spi.status;
+	return __bswap16(adc2spi.status);
 }
 
 uint16_t ADS131M0x::readRegister(uint8_t address) {
@@ -71,7 +71,7 @@ uint16_t ADS131M0x::readRegister(uint8_t address) {
 	spi2adc.status = 0;
 	spi_device_polling_transmit(spiHandle, &trans_desc);
 
-	return adc2spi.status;
+	return __bswap16(adc2spi.status);
 }
 
 /**
