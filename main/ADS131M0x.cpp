@@ -139,10 +139,6 @@ void ADS131M0x::init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pi
 	gpio_set_direction(resetPin, GPIO_MODE_OUTPUT);
 	gpio_set_direction(csPin, GPIO_MODE_OUTPUT);
 	gpio_set_direction(drdyPin, GPIO_MODE_INPUT);
-
-	// Just in case set_level did not work before set_direction
-	gpio_set_level(resetPin, 1);
-	gpio_set_level(csPin, 1);
 }
 
 void ADS131M0x::setupAccess(spi_host_device_t spiDevice, uint32_t spi_clock_speed,
