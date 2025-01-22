@@ -4,6 +4,7 @@
 
 #include <driver/gpio.h>
 #include <esp_log.h>
+#include <esp_timer.h>
 
 #include <string.h>
 
@@ -17,17 +18,26 @@ constexpr char TAG[] = "ADC";
 static AdcClass     adc;
 static TaskHandle_t adcReadTaskHandle = NULL;
 
+static inline void requestTaskSwitch(BaseType_t needSwitch) {
+#if (CONFIG_MOCK_ADC == 1)
+	esp_timer_isr_dispatch_need_yield();
+#else
+	portYIELD_FROM_ISR(needSwitch);
+#endif
+}
+
 // When we flag a piece of code with the IRAM_ATTR attribute, the compiled code
 // is placed in the ESP32’s Internal RAM (IRAM). Otherwise the code is kept in
 // Flash. And Flash on ESP32 is much slower than internal RAM.
 static void IRAM_ATTR isrAdcDrdy(void *) {
-
+	gpio_set_level(PIN_DEBUG_TOP, 1);
 	// unblock the task that will read the ADC & handle putting in the buffer
 	if (adcReadTaskHandle != NULL) {
 		BaseType_t taskWoken = pdFALSE;
 		vTaskNotifyGiveFromISR(adcReadTaskHandle, &taskWoken);
-		portYIELD_FROM_ISR(taskWoken);
+		requestTaskSwitch(taskWoken);
 	}
+	gpio_set_level(PIN_DEBUG_TOP, 0);
 }
 
 // Read ADC values. If BLE device is connected, place them in the buffer.

@@ -262,35 +262,17 @@ void ADS131M0x::attachISR(AdcISR isr) {
 #if (CONFIG_MOCK_ADC == 1)
 #include <driver/timer.h>
 
-static bool timerCallback(void *arg) {
-	gpio_set_level(PIN_DEBUG_TOP, 1);
-	((ADS131M0x::AdcISR)arg)(nullptr);
-	gpio_set_level(PIN_DEBUG_TOP, 0);
-	return true;
-}
-
 void MockAdc::attachISR(AdcISR isr) {
-
-	static constexpr timer_config_t config = {
-	    .alarm_en    = TIMER_ALARM_EN,
-	    .counter_en  = TIMER_PAUSE,
-	    .intr_type   = TIMER_INTR_LEVEL,
-	    .counter_dir = TIMER_COUNT_UP,
-	    .auto_reload = TIMER_AUTORELOAD_EN,
-	    .clk_src     = TIMER_SRC_CLK_DEFAULT,
-	    .divider     = 0x80,
+	esp_timer_handle_t            th;
+	const esp_timer_create_args_t tparam{
+	    .callback              = isr,
+	    .arg                   = nullptr,
+	    .dispatch_method       = ESP_TIMER_ISR,
+	    .name                  = "MockAdcTmr",
+	    .skip_unhandled_events = true,
 	};
-
-	constexpr timer_group_t gr  = TIMER_GROUP_0;
-	constexpr timer_idx_t   idx = TIMER_0;
-
-	if (ESP_OK != timer_init(gr, idx, &config))
-		return;
-	timer_set_counter_value(gr, idx, 0);
-	timer_set_alarm_value(gr, idx, 0x4000);
-	timer_isr_callback_add(gr, idx, timerCallback, (void *)isr, 0);
-	timer_enable_intr(gr, idx);
-	timer_start(gr, idx);
+	esp_timer_create(&tparam, &th);
+	esp_timer_start_periodic(th, 100 * 1000);
 }
 
 auto MockAdc::rawReadADC() -> const AdcRawOutput * {

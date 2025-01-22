@@ -299,9 +299,9 @@ class ADS131M0x {
 #if (CONFIG_MOCK_ADC == 1)
 class MockAdc {
   public:
-	void init(uint8_t cs_pin, uint8_t drdy_pin, uint8_t reset_pin) {}
-	void setupAccess(spi_host_device_t spiDevice, uint32_t spi_clock_speed, uint8_t clk_pin,
-	                 uint8_t miso_pin, uint8_t mosi_pin) {}
+	void init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pin) {}
+	void setupAccess(spi_host_device_t spiDevice, uint32_t spi_clock_speed, gpio_num_t clk_pin,
+	                 gpio_num_t miso_pin, gpio_num_t mosi_pin) {}
 	void reset() {}
 	bool setChannelPGA(uint8_t channel, uint16_t pga) { return true; }
 	bool setPowerMode(uint8_t powerMode) { return true; }
