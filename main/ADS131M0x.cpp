@@ -199,6 +199,10 @@ bool ADS131M0x::isCrcOk(const AdcRawOutput *data) {
 	uint16_t crc           = (ptr[0] << 8) | ptr[1];
 	uint16_t calculatedCrc = crc16ccitt(ptr, sizeof(*data) - DATA_WORD_LENGTH);
 
+	if (crc != calculatedCrc) {
+		ESP_LOGE(TAG, "CRC err %X != %X", crc, calculatedCrc);
+	}
+
 	return crc == calculatedCrc;
 }
 
