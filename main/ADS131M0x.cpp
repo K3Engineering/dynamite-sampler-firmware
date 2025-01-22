@@ -4,17 +4,20 @@
 #include <driver/spi_master.h>
 #include <esp_log.h>
 
+#include <byteswap.h>
+
 #include "debug_pin.h"
 
 constexpr char TAG[] = "ADS131";
 
 static inline void delayMSec(uint32_t ms) { vTaskDelay(ms / portTICK_PERIOD_MS); }
 
-static constexpr uint16_t crc16ccitt(const uint8_t *ptr, size_t count) {
+static constexpr uint16_t crc16ccitt(const void *data, size_t count) {
 	static constexpr uint16_t CRC_INIT_VAL = 0xFFFF;
 	static constexpr uint16_t CRC_POLYNOM  = 0x1021;
 
-	uint16_t crc = CRC_INIT_VAL;
+	const uint8_t *ptr = (const uint8_t *)data;
+	uint16_t       crc = CRC_INIT_VAL;
 	while (count > 0) {
 		--count;
 		static_assert(sizeof(*ptr << 8) >= sizeof(crc));
@@ -47,8 +50,9 @@ spi_transaction_t ADS131M0x::trans_desc = {
 };
 
 uint8_t ADS131M0x::writeRegister(uint8_t address, uint16_t value) {
-	spi2adc.status            = CMD_WRITE_REG | (address << 7);
-	*(uint16_t *)spi2adc.data = value;
+	spi2adc.status = CMD_WRITE_REG | (address << 7);
+	static_assert(_BYTE_ORDER == _LITTLE_ENDIAN);
+	*(uint16_t *)spi2adc.data = __bswap16(value);
 
 	spi_device_polling_transmit(spiHandle, &trans_desc);
 
@@ -110,8 +114,8 @@ void ADS131M0x::init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pi
 	gpio_set_direction(drdyPin, GPIO_MODE_INPUT);
 }
 
-void ADS131M0x::setupAccess(spi_host_device_t spiDevice, uint32_t spi_clock_speed,
-                            gpio_num_t clk_pin, gpio_num_t miso_pin, gpio_num_t mosi_pin) {
+void ADS131M0x::setupAccess(spi_host_device_t spiDevice, int spi_clock_speed, gpio_num_t clk_pin,
+                            gpio_num_t miso_pin, gpio_num_t mosi_pin) {
 	spi_bus_config_t buscfg = {
 	    .mosi_io_num     = mosi_pin,
 	    .miso_io_num     = miso_pin,
@@ -128,7 +132,7 @@ void ADS131M0x::setupAccess(spi_host_device_t spiDevice, uint32_t spi_clock_spee
 
 	spi_device_interface_config_t devcfg = {
 	    .mode           = 1, // SPI mode 1
-	    .clock_speed_hz = (int)spi_clock_speed,
+	    .clock_speed_hz = spi_clock_speed,
 	    .spics_io_num   = -1,
 	    .queue_size     = 1, // Queue is not used, but the library requires a non zero value.
 	};
@@ -194,11 +198,9 @@ auto ADS131M0x::rawReadADC() -> const AdcRawOutput * {
 }
 
 bool ADS131M0x::isCrcOk(const AdcRawOutput *data) {
-	const uint8_t *crc_ptr = reinterpret_cast<const uint8_t *>(&data->crc);
-	uint16_t       crc     = (crc_ptr[0] << 8) | crc_ptr[1];
-
-	const uint8_t *data_cast     = reinterpret_cast<const uint8_t *>(data);
-	uint16_t       calculatedCrc = crc16ccitt(data_cast, sizeof(*data) - DATA_WORD_LENGTH);
+	static_assert(_BYTE_ORDER == _LITTLE_ENDIAN);
+	uint16_t crc           = __bswap16(data->crc);
+	uint16_t calculatedCrc = crc16ccitt(data, sizeof(*data) - DATA_WORD_LENGTH);
 
 	if (crc != calculatedCrc) {
 		ESP_LOGE(TAG, "CRC err %X != %X", crc, calculatedCrc);

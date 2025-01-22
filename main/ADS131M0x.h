@@ -261,7 +261,7 @@ class ADS131M0x {
 
 	void init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pin);
 
-	void setupAccess(spi_host_device_t spiDevice, uint32_t spi_clock_speed, gpio_num_t clk_pin,
+	void setupAccess(spi_host_device_t spiDevice, int spi_clock_speed, gpio_num_t clk_pin,
 	                 gpio_num_t miso_pin, gpio_num_t mosi_pin);
 	void reset();
 
