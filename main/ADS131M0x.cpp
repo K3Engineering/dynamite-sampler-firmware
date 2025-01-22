@@ -161,6 +161,7 @@ void ADS131M0x::setupAccess(spi_host_device_t spiDevice, uint32_t spi_clock_spee
 	    .mode           = 1, // SPI mode 1
 	    .clock_speed_hz = (int)spi_clock_speed,
 	    .spics_io_num   = -1,
+	    .queue_size     = 1, // Queue is not used, but the library requires a non zero value.
 	};
 	spi_device_handle_t handle;
 	ret = spi_bus_add_device(spiDevice, &devcfg, &handle);
