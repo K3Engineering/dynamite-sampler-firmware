@@ -18,7 +18,7 @@ constexpr char TAG[] = "ADC";
 static AdcClass     adc;
 static TaskHandle_t adcReadTaskHandle = NULL;
 
-static inline void requestTaskSwitch(BaseType_t needSwitch) {
+static inline void requestTaskSwitchFromISR(BaseType_t needSwitch) {
 #if (CONFIG_MOCK_ADC == 1)
 	esp_timer_isr_dispatch_need_yield();
 #else
@@ -35,7 +35,7 @@ static void IRAM_ATTR isrAdcDrdy(void *) {
 	if (adcReadTaskHandle != NULL) {
 		BaseType_t taskWoken = pdFALSE;
 		vTaskNotifyGiveFromISR(adcReadTaskHandle, &taskWoken);
-		requestTaskSwitch(taskWoken);
+		requestTaskSwitchFromISR(taskWoken);
 	}
 	gpio_set_level(PIN_DEBUG_TOP, 0);
 }
@@ -43,7 +43,7 @@ static void IRAM_ATTR isrAdcDrdy(void *) {
 // Read ADC values. If BLE device is connected, place them in the buffer.
 // When accumulated enough, notify the ble task
 static void adcReadAndBuffer() {
-
+	gpio_set_level(PIN_DEBUG_BOT, 1);
 	const AdcClass::AdcRawOutput *adcReading = adc.rawReadADC();
 
 	if (!bleAccess.deviceConnected)
@@ -56,6 +56,7 @@ static void adcReadAndBuffer() {
 	if (xStreamBufferBytesAvailable(bleAccess.adcStreamBufferHandle) >= ADC_FEED_CHUNK_SZ) {
 		xTaskNotifyGive(bleAccess.bleAdcFeedPublisherTaskHandle);
 	}
+	gpio_set_level(PIN_DEBUG_BOT, 0);
 }
 
 // Task that handles calling the read adc function and placing the values in the buffer.

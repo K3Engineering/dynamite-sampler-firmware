@@ -3,28 +3,12 @@
 #include <driver/gpio.h>
 #include <driver/spi_master.h>
 #include <esp_log.h>
-#include <esp_timer.h>
 
 #include "debug_pin.h"
 
 constexpr char TAG[] = "ADS131";
 
-static inline void delay(uint32_t ms) { vTaskDelay(ms / portTICK_PERIOD_MS); }
-
-static void delayMicroseconds(uint32_t us) {
-	uint64_t m = (uint64_t)esp_timer_get_time();
-	if (us) {
-		uint64_t e = (m + us);
-		if (m > e) { // overflow
-			while ((uint64_t)esp_timer_get_time() > e) {
-				;
-			}
-		}
-		while ((uint64_t)esp_timer_get_time() < e) {
-			;
-		}
-	}
-}
+static inline void delayMSec(uint32_t ms) { vTaskDelay(ms / portTICK_PERIOD_MS); }
 
 static constexpr uint16_t crc16ccitt(const uint8_t *ptr, size_t count) {
 	static constexpr uint16_t CRC_INIT_VAL = 0xFFFF;
@@ -63,10 +47,6 @@ spi_transaction_t ADS131M0x::trans_desc = {
 };
 
 uint8_t ADS131M0x::writeRegister(uint8_t address, uint16_t value) {
-
-	gpio_set_level(csPin, 0);
-	delayMicroseconds(1);
-
 	spi2adc.status            = CMD_WRITE_REG | (address << 7);
 	*(uint16_t *)spi2adc.data = value;
 
@@ -76,25 +56,15 @@ uint8_t ADS131M0x::writeRegister(uint8_t address, uint16_t value) {
 	*(uint16_t *)spi2adc.data = 0;
 	spi_device_polling_transmit(spiHandle, &trans_desc);
 
-	delayMicroseconds(1);
-	gpio_set_level(csPin, 1);
-
 	return adc2spi.status;
 }
 
 uint16_t ADS131M0x::readRegister(uint8_t address) {
-
-	gpio_set_level(csPin, 0);
-	delayMicroseconds(1);
-
 	spi2adc.status = CMD_READ_REG | (address << 7);
 	spi_device_polling_transmit(spiHandle, &trans_desc);
 
 	spi2adc.status = 0;
 	spi_device_polling_transmit(spiHandle, &trans_desc);
-
-	delayMicroseconds(1);
-	gpio_set_level(csPin, 1);
 
 	return adc2spi.status;
 }
@@ -120,12 +90,11 @@ void ADS131M0x::writeRegisterMasked(uint8_t address, uint16_t value, uint16_t ma
 /// @brief Hardware reset (reset low activ)
 void ADS131M0x::reset() {
 	gpio_set_level(resetPin, 1);
-	delay(100);
+	delayMSec(100);
 	gpio_set_level(resetPin, 0);
-	delay(100);
+	delayMSec(100);
 	gpio_set_level(resetPin, 1);
-	delay(1);
-	return;
+	delayMSec(1);
 }
 
 void ADS131M0x::init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pin) {
@@ -134,7 +103,7 @@ void ADS131M0x::init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pi
 	resetPin = reset_pin;
 
 	gpio_set_level(resetPin, 1);
-	gpio_set_level(csPin, 1);
+	gpio_set_level(csPin, 0);
 
 	gpio_set_direction(resetPin, GPIO_MODE_OUTPUT);
 	gpio_set_direction(csPin, GPIO_MODE_OUTPUT);
@@ -219,21 +188,8 @@ bool ADS131M0x::setInputChannelSelection(uint8_t channel, uint8_t input) {
 	return true;
 }
 
-static inline void optionalDelay() {
-#ifndef NO_CS_DELAY
-	delayMicroseconds(1);
-#endif
-}
-
 auto ADS131M0x::rawReadADC() -> const AdcRawOutput * {
-
-	gpio_set_level(csPin, 0);
-	optionalDelay();
-
 	spi_device_polling_transmit(spiHandle, &trans_desc);
-
-	optionalDelay();
-	gpio_set_level(csPin, 1);
 	return &adc2spi;
 }
 
@@ -252,11 +208,11 @@ void ADS131M0x::attachISR(AdcISR isr) {
 		return;
 	gpio_set_intr_type(drdyPin, GPIO_INTR_NEGEDGE);
 	gpio_isr_handler_add(drdyPin, isr, nullptr);
-
-	delay(1);
 }
 
 #if (CONFIG_MOCK_ADC == 1)
+
+#include <esp_timer.h>
 
 void MockAdc::attachISR(AdcISR isr) {
 	esp_timer_handle_t            th;
