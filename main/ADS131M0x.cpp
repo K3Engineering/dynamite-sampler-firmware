@@ -260,7 +260,6 @@ void ADS131M0x::attachISR(AdcISR isr) {
 }
 
 #if (CONFIG_MOCK_ADC == 1)
-#include <driver/timer.h>
 
 void MockAdc::attachISR(AdcISR isr) {
 	esp_timer_handle_t            th;
@@ -272,7 +271,7 @@ void MockAdc::attachISR(AdcISR isr) {
 	    .skip_unhandled_events = true,
 	};
 	esp_timer_create(&tparam, &th);
-	esp_timer_start_periodic(th, 100 * 1000);
+	esp_timer_start_periodic(th, 1 * 1000);
 }
 
 auto MockAdc::rawReadADC() -> const AdcRawOutput * {
