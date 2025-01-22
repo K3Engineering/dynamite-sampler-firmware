@@ -4,7 +4,7 @@
 #include <driver/spi_master.h>
 #include <esp_log.h>
 
-#include <byteswap.h>
+#include <endian.h>
 
 #include "debug_pin.h"
 
@@ -50,8 +50,8 @@ spi_transaction_t ADS131M0x::trans_desc = {
 };
 
 uint8_t ADS131M0x::writeRegister(uint8_t address, uint16_t value) {
-	spi2adc.status = CMD_WRITE_REG | (address << 7);
 	static_assert(_BYTE_ORDER == _LITTLE_ENDIAN);
+	spi2adc.status            = __bswap16(CMD_WRITE_REG | (address << 7));
 	*(uint16_t *)spi2adc.data = __bswap16(value);
 
 	spi_device_polling_transmit(spiHandle, &trans_desc);
@@ -64,7 +64,8 @@ uint8_t ADS131M0x::writeRegister(uint8_t address, uint16_t value) {
 }
 
 uint16_t ADS131M0x::readRegister(uint8_t address) {
-	spi2adc.status = CMD_READ_REG | (address << 7);
+	static_assert(_BYTE_ORDER == _LITTLE_ENDIAN);
+	spi2adc.status = __bswap16(CMD_READ_REG | (address << 7));
 	spi_device_polling_transmit(spiHandle, &trans_desc);
 
 	spi2adc.status = 0;
