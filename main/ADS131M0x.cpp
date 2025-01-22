@@ -194,10 +194,11 @@ auto ADS131M0x::rawReadADC() -> const AdcRawOutput * {
 }
 
 bool ADS131M0x::isCrcOk(const AdcRawOutput *data) {
-	const uint8_t *ptr = reinterpret_cast<const uint8_t *>(&data->crc);
+	const uint8_t *crc_ptr = reinterpret_cast<const uint8_t *>(&data->crc);
+	uint16_t       crc     = (crc_ptr[0] << 8) | crc_ptr[1];
 
-	uint16_t crc           = (ptr[0] << 8) | ptr[1];
-	uint16_t calculatedCrc = crc16ccitt(ptr, sizeof(*data) - DATA_WORD_LENGTH);
+	const uint8_t *data_cast     = reinterpret_cast<const uint8_t *>(data);
+	uint16_t       calculatedCrc = crc16ccitt(data_cast, sizeof(*data) - DATA_WORD_LENGTH);
 
 	if (crc != calculatedCrc) {
 		ESP_LOGE(TAG, "CRC err %X != %X", crc, calculatedCrc);
