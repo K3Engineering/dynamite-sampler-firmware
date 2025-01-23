@@ -30,20 +30,17 @@ static inline void requestTaskSwitchFromISR(BaseType_t needSwitch) {
 // is placed in the ESP32’s Internal RAM (IRAM). Otherwise the code is kept in
 // Flash. And Flash on ESP32 is much slower than internal RAM.
 static void IRAM_ATTR isrAdcDrdy(void *) {
-	gpio_set_level(PIN_DEBUG_TOP, 1);
 	// unblock the task that will read the ADC & handle putting in the buffer
 	if (adcReadTaskHandle != NULL) {
 		BaseType_t taskWoken = pdFALSE;
 		vTaskNotifyGiveFromISR(adcReadTaskHandle, &taskWoken);
 		requestTaskSwitchFromISR(taskWoken);
 	}
-	gpio_set_level(PIN_DEBUG_TOP, 0);
 }
 
 // Read ADC values. If BLE device is connected, place them in the buffer.
 // When accumulated enough, notify the ble task
 static void adcReadAndBuffer() {
-	gpio_set_level(PIN_DEBUG_BOT, 1);
 	const AdcClass::AdcRawOutput *adcReading = adc.rawReadADC();
 
 	if (!bleAccess.deviceConnected)
@@ -56,7 +53,6 @@ static void adcReadAndBuffer() {
 	if (xStreamBufferBytesAvailable(bleAccess.adcStreamBufferHandle) >= ADC_FEED_CHUNK_SZ) {
 		xTaskNotifyGive(bleAccess.bleAdcFeedPublisherTaskHandle);
 	}
-	gpio_set_level(PIN_DEBUG_BOT, 0);
 }
 
 // Task that handles calling the read adc function and placing the values in the buffer.

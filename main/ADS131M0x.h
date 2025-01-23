@@ -59,6 +59,7 @@
 #define RSP_RESET_OK 0xFF24
 #endif
 #define RSP_RESET_NOK 0x0011
+#define RSP_WRITE_REG 0x4000
 
 // Registers Read Only
 #define REG_ID     0x00
@@ -281,8 +282,8 @@ class ADS131M0x {
 	static bool isCrcOk(const AdcRawOutput *data);
 
   private:
-	uint8_t writeRegister(uint8_t address, uint16_t value);
-	void    writeRegisterMasked(uint8_t address, uint16_t value, uint16_t mask);
+	bool writeRegister(uint8_t address, uint16_t value);
+	bool writeRegisterMasked(uint8_t address, uint16_t value, uint16_t mask);
 
 	spi_device_handle_t spiHandle;
 

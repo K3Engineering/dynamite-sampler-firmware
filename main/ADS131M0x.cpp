@@ -49,10 +49,9 @@ spi_transaction_t ADS131M0x::trans_desc = {
     .rx_buffer = &adc2spi,
 };
 
-uint8_t ADS131M0x::writeRegister(uint8_t address, uint16_t value) {
-	static_assert(_BYTE_ORDER == _LITTLE_ENDIAN);
-	spi2adc.status            = __bswap16(CMD_WRITE_REG | (address << 7));
-	*(uint16_t *)spi2adc.data = __bswap16(value);
+bool ADS131M0x::writeRegister(uint8_t address, uint16_t value) {
+	spi2adc.status            = htobe16(CMD_WRITE_REG | (address << 7));
+	*(uint16_t *)spi2adc.data = htobe16(value);
 
 	spi_device_polling_transmit(spiHandle, &trans_desc);
 
@@ -60,18 +59,17 @@ uint8_t ADS131M0x::writeRegister(uint8_t address, uint16_t value) {
 	*(uint16_t *)spi2adc.data = 0;
 	spi_device_polling_transmit(spiHandle, &trans_desc);
 
-	return __bswap16(adc2spi.status);
+	return be16toh(adc2spi.status) == (RSP_WRITE_REG | (address << 7));
 }
 
 uint16_t ADS131M0x::readRegister(uint8_t address) {
-	static_assert(_BYTE_ORDER == _LITTLE_ENDIAN);
-	spi2adc.status = __bswap16(CMD_READ_REG | (address << 7));
+	spi2adc.status = htobe16(CMD_READ_REG | (address << 7));
 	spi_device_polling_transmit(spiHandle, &trans_desc);
 
 	spi2adc.status = 0;
 	spi_device_polling_transmit(spiHandle, &trans_desc);
 
-	return __bswap16(adc2spi.status);
+	return be16toh(adc2spi.status);
 }
 
 /**
@@ -79,7 +77,7 @@ uint16_t ADS131M0x::readRegister(uint8_t address) {
  * It does not carry out the shift of bits (shift), it is necessary to pass the shifted value to the
  * correct position
  */
-void ADS131M0x::writeRegisterMasked(uint8_t address, uint16_t value, uint16_t mask) {
+bool ADS131M0x::writeRegisterMasked(uint8_t address, uint16_t value, uint16_t mask) {
 	// Read the current content of the register
 	uint16_t register_contents = readRegister(address);
 	// Change the mask bit by bit (it remains 1 in the bits that must not be touched and 0 in the
@@ -89,7 +87,7 @@ void ADS131M0x::writeRegisterMasked(uint8_t address, uint16_t value, uint16_t ma
 	// OR is made with the value to load in the registry. value must be in the correct position
 	// (shitf)
 	register_contents = register_contents | value;
-	writeRegister(address, register_contents);
+	return writeRegister(address, register_contents);
 }
 
 /// @brief Hardware reset (reset low activ)
@@ -199,13 +197,8 @@ auto ADS131M0x::rawReadADC() -> const AdcRawOutput * {
 }
 
 bool ADS131M0x::isCrcOk(const AdcRawOutput *data) {
-	static_assert(_BYTE_ORDER == _LITTLE_ENDIAN);
-	uint16_t crc           = __bswap16(data->crc);
+	uint16_t crc           = be16toh(data->crc);
 	uint16_t calculatedCrc = crc16ccitt(data, sizeof(*data) - DATA_WORD_LENGTH);
-
-	if (crc != calculatedCrc) {
-		ESP_LOGE(TAG, "CRC err %X != %X", crc, calculatedCrc);
-	}
 
 	return crc == calculatedCrc;
 }
