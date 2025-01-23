@@ -191,7 +191,7 @@ bool ADS131M0x::setInputChannelSelection(uint8_t channel, uint8_t input) {
 	return true;
 }
 
-auto ADS131M0x::rawReadADC() -> const AdcRawOutput * {
+const ADS131M0x::AdcRawOutput *ADS131M0x::rawReadADC() {
 	if (ESP_OK == spi_device_polling_start(spiHandle, &transDesc, portMAX_DELAY)) {
 		spi_device_polling_end(spiHandle, portMAX_DELAY);
 	}
@@ -230,7 +230,7 @@ void MockAdc::attachISR(AdcISR isr) {
 	esp_timer_start_periodic(th, 1 * 1000);
 }
 
-auto MockAdc::rawReadADC() -> const AdcRawOutput * {
+const MockAdc::AdcRawOutput *MockAdc::rawReadADC() {
 	static AdcRawOutput a{
 	    .status = 0x1234,
 	};
