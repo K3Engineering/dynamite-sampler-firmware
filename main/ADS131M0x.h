@@ -294,7 +294,7 @@ class ADS131M0x {
 	static AdcRawOutput spi2adc;
 	static AdcRawOutput adc2spi;
 
-	static spi_transaction_t trans_desc;
+	static spi_transaction_t transDesc;
 };
 
 #if (CONFIG_MOCK_ADC == 1)

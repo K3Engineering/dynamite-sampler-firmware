@@ -38,7 +38,7 @@ static constexpr uint16_t crc16ccitt(const void *data, size_t count) {
 DMA_ATTR ADS131M0x::AdcRawOutput ADS131M0x::spi2adc;
 DMA_ATTR ADS131M0x::AdcRawOutput ADS131M0x::adc2spi;
 
-spi_transaction_t ADS131M0x::trans_desc = {
+spi_transaction_t ADS131M0x::transDesc = {
     .flags     = SPI_TRANS_DMA_BUFFER_ALIGN_MANUAL,
     .cmd       = 0,
     .addr      = 0,
@@ -53,21 +53,21 @@ bool ADS131M0x::writeRegister(uint8_t address, uint16_t value) {
 	spi2adc.status            = htobe16(CMD_WRITE_REG | (address << 7));
 	*(uint16_t *)spi2adc.data = htobe16(value);
 
-	spi_device_polling_transmit(spiHandle, &trans_desc);
+	spi_device_polling_transmit(spiHandle, &transDesc);
 
 	spi2adc.status            = 0;
 	*(uint16_t *)spi2adc.data = 0;
-	spi_device_polling_transmit(spiHandle, &trans_desc);
+	spi_device_polling_transmit(spiHandle, &transDesc);
 
 	return be16toh(adc2spi.status) == (RSP_WRITE_REG | (address << 7));
 }
 
 uint16_t ADS131M0x::readRegister(uint8_t address) {
 	spi2adc.status = htobe16(CMD_READ_REG | (address << 7));
-	spi_device_polling_transmit(spiHandle, &trans_desc);
+	spi_device_polling_transmit(spiHandle, &transDesc);
 
 	spi2adc.status = 0;
-	spi_device_polling_transmit(spiHandle, &trans_desc);
+	spi_device_polling_transmit(spiHandle, &transDesc);
 
 	return be16toh(adc2spi.status);
 }
@@ -192,7 +192,9 @@ bool ADS131M0x::setInputChannelSelection(uint8_t channel, uint8_t input) {
 }
 
 auto ADS131M0x::rawReadADC() -> const AdcRawOutput * {
-	spi_device_polling_transmit(spiHandle, &trans_desc);
+	if (ESP_OK == spi_device_polling_start(spiHandle, &transDesc, portMAX_DELAY)) {
+		spi_device_polling_end(spiHandle, portMAX_DELAY);
+	}
 	return &adc2spi;
 }
 
