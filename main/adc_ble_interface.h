@@ -19,9 +19,8 @@ struct BleAdcFeedData {
 	uint8_t  data[DATA_SIZE];
 	uint8_t  crc;
 
-	BleAdcFeedData(uint16_t status_, const void *other_data_, uint8_t crc_)
-	    : status{status_}, crc{crc_} {
-		memcpy(data, other_data_, sizeof(data));
+	BleAdcFeedData(uint16_t status_, const void *data_, uint8_t crc_) : status{status_}, crc{crc_} {
+		memcpy(data, data_, sizeof(data));
 	}
 };
 #pragma pack(pop)
