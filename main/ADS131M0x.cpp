@@ -83,10 +83,10 @@ bool ADS131M0x::writeRegisterMasked(uint8_t address, uint16_t value, uint16_t ma
 	// Change the mask bit by bit (it remains 1 in the bits that must not be touched and 0 in the
 	// bits to be modified) An AND is performed with the current content of the record. "0" remain
 	// in the part to be modified
-	register_contents = register_contents & ~mask;
+	register_contents &= ~mask;
 	// OR is made with the value to load in the registry. value must be in the correct position
 	// (shitf)
-	register_contents = register_contents | value;
+	register_contents |= value;
 	return writeRegister(address, register_contents);
 }
 
@@ -174,7 +174,7 @@ bool ADS131M0x::setChannelPGA(uint8_t channel, uint16_t pga) {
 	static_assert(REGMASK_GAIN_PGAGAIN2 == (REGMASK_GAIN_PGAGAIN0 << 8));
 	static_assert(REGMASK_GAIN_PGAGAIN3 == (REGMASK_GAIN_PGAGAIN0 << 12));
 
-	if (channel > NUM_CHANNELS_ENABLED)
+	if (channel >= NUM_CHANNELS_ENABLED)
 		return false;
 	writeRegisterMasked(REG_GAIN, pga << (channel * 4), REGMASK_GAIN_PGAGAIN0 << (channel * 4));
 	return true;
@@ -185,7 +185,7 @@ bool ADS131M0x::setInputChannelSelection(uint8_t channel, uint8_t input) {
 	static_assert(REG_CH2_CFG == REG_CH0_CFG + 5 * 2);
 	static_assert(REG_CH3_CFG == REG_CH0_CFG + 5 * 3);
 
-	if (channel > NUM_CHANNELS_ENABLED)
+	if (channel >= NUM_CHANNELS_ENABLED)
 		return false;
 	writeRegisterMasked(REG_CH0_CFG + channel * 5, input, REGMASK_CHX_CFG_MUX);
 	return true;
