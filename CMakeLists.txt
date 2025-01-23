@@ -9,9 +9,6 @@ set(COMPONENTS main)
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
-# Prevents arduino from releasing BLE memory
-add_compile_definitions(ARDUINO_ARCH_ESP32=1)
-
 find_package(Git)
 set(GIT_REVISION "unknown")
 if (GIT_FOUND)

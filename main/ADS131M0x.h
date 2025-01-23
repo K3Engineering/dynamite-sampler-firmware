@@ -4,12 +4,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <driver/spi_master.h>
+#include <soc/gpio_num.h>
+
 #include "sdkconfig.h"
-
-class SPIClass;
-
-// define for 2-channel version ADS131M02
-// #define IS_M02
 
 // no delay after CS-active at adc_read
 // #define NO_CS_DELAY
@@ -61,6 +59,7 @@ class SPIClass;
 #define RSP_RESET_OK 0xFF24
 #endif
 #define RSP_RESET_NOK 0x0011
+#define RSP_WRITE_REG 0x4000
 
 // Registers Read Only
 #define REG_ID     0x00
@@ -243,10 +242,6 @@ class SPIClass;
 #define SPI_MASTER_DUMMY16 0xFFFF
 #define SPI_MASTER_DUMMY32 0xFFFFFFFF
 
-/**
- * @brief Arduino class for the TI ADS131M02 and ADS131M04 ADC-converter with SPI Interface
- *
- */
 class ADS131M0x {
 	static constexpr size_t NUM_CHANNELS_ENABLED = 4;
 	static constexpr size_t DATA_WORD_LENGTH     = 3; // in bytes
@@ -254,16 +249,6 @@ class ADS131M0x {
 	    (1 + NUM_CHANNELS_ENABLED + 1) * DATA_WORD_LENGTH; // status, channels, CRC
 
   public:
-	struct AdcOutput {
-		uint16_t status;
-		int32_t  ch0;
-		int32_t  ch1;
-#ifndef IS_M02
-		int32_t ch2;
-		int32_t ch3;
-#endif
-		bool crc_match;
-	};
 #pragma pack(push, 1)
 	struct AdcRawOutput {
 		uint16_t status;
@@ -275,59 +260,51 @@ class ADS131M0x {
 #pragma pack(pop)
 	static_assert(sizeof(AdcRawOutput) == ADC_READ_DATA_SIZE);
 
-	void   init(uint8_t cs_pin, uint8_t drdy_pin, uint8_t reset_pin);
-	void   setupAccess(SPIClass *port, uint32_t spi_clock_speed, uint8_t clk_pin, uint8_t miso_pin,
-	                   uint8_t mosi_pin);
-	int8_t isDataReadySoft(uint8_t channel);
-	bool   isDataReady(void);
-	void   reset(void);
-	bool   isResetStatus(void);
-	bool   isLockSPI(void);
-	bool   setDrdyFormat(uint8_t drdyFormat);
-	bool   setDrdyStateWhenUnavailable(uint8_t drdyState);
-	bool   setPowerMode(uint8_t powerMode);
-	bool   setChannelEnable(uint8_t channel, uint16_t enable);
-	bool   setChannelPGA(uint8_t channel, uint16_t pga);
-	void   setGlobalChop(uint16_t global_chop);
-	void   setGlobalChopDelay(uint16_t delay);
-	bool   setInputChannelSelection(uint8_t channel, uint8_t input);
-	bool   setChannelOffsetCalibration(uint8_t channel, int32_t offset);
-	bool   setChannelGainCalibration(uint8_t channel, uint32_t gain);
-	bool   setOsr(uint16_t osr);
-
-	uint16_t isResetOK(void);
+	void init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pin);
+	void setupAccess(spi_host_device_t spiDevice, int spi_clock_speed, gpio_num_t clk_pin,
+	                 gpio_num_t miso_pin, gpio_num_t mosi_pin);
+	void reset();
+	bool setPowerMode(uint8_t powerMode);
+	bool setChannelPGA(uint8_t channel, uint16_t pga);
+	bool setInputChannelSelection(uint8_t channel, uint8_t input);
+	bool setOsr(uint16_t osr);
 
 	typedef void (*AdcISR)(void *);
 	void attachISR(AdcISR isr);
 
-	AdcOutput    readADC(void);
-	AdcRawOutput rawReadADC(void);
+	const AdcRawOutput *rawReadADC();
 
-	uint8_t  writeRegister(uint8_t address, uint16_t value);
-	void     writeRegisterMasked(uint8_t address, uint16_t value, uint16_t mask);
 	uint16_t readRegister(uint8_t address);
 
 	static bool isCrcOk(const AdcRawOutput *data);
 
   private:
-	uint8_t csPin;
-	uint8_t drdyPin;
-	uint8_t resetPin;
+	bool writeRegister(uint8_t address, uint16_t value);
+	bool writeRegisterMasked(uint8_t address, uint16_t value, uint16_t mask);
 
-	SPIClass *spiPort;
+	spi_device_handle_t spiHandle;
+
+	gpio_num_t csPin;
+	gpio_num_t drdyPin;
+	gpio_num_t resetPin;
+
+	static AdcRawOutput spi2adc;
+	static AdcRawOutput adc2spi;
+
+	static spi_transaction_t transDesc;
 };
 
 #if (CONFIG_MOCK_ADC == 1)
 class MockAdc {
   public:
-	void init(uint8_t cs_pin, uint8_t drdy_pin, uint8_t reset_pin) {}
-	void setupAccess(SPIClass *port, uint32_t spi_clock_speed, uint8_t clk_pin, uint8_t miso_pin,
-	                 uint8_t mosi_pin) {}
+	void init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pin) {}
+	void setupAccess(spi_host_device_t spiDevice, uint32_t spi_clock_speed, gpio_num_t clk_pin,
+	                 gpio_num_t miso_pin, gpio_num_t mosi_pin) {}
 	void reset() {}
 	bool setChannelPGA(uint8_t channel, uint16_t pga) { return true; }
 	bool setPowerMode(uint8_t powerMode) { return true; }
 	bool setInputChannelSelection(uint8_t channel, uint8_t input) { return true; }
-	bool setOsr(uint16_t osr) { return true; };
+	bool setOsr(uint16_t osr) { return true; }
 
 	uint16_t readRegister(uint8_t address) { return 0; }
 
@@ -336,9 +313,7 @@ class MockAdc {
 
 	void attachISR(AdcISR isr);
 
-	AdcRawOutput rawReadADC();
-
-	void setClockSpeed(uint32_t cspeed) {}
+	const AdcRawOutput *rawReadADC();
 
 	static bool isCrcOk(const AdcRawOutput *data) { return true; };
 };
