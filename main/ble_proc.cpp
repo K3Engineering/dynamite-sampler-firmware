@@ -119,11 +119,8 @@ static void taskSetupBle(void *setupDone) {
 	static AdcPublCallbacks feedCb;
 	blePublisherCharacteristic->setCallbacks(&feedCb);
 
-	uint32_t calibration_value = 11;
-
-	NimBLECharacteristic *calibrationCharacteristic =
+	calibrationCharacteristic =
 	    srvAdcFeed->createCharacteristic(LC_CALIB_CHARACTERISTIC_UUID, NIMBLE_PROPERTY::READ);
-	calibrationCharacteristic->setValue(calibration_value);
 
 	srvAdcFeed->start();
 
@@ -144,6 +141,7 @@ static void taskSetupBle(void *setupDone) {
 	pAdvertising->enableScanResponse(true);
 
 	NimBLEDevice::startAdvertising();
+	ESP_LOGI(TAG, "BLE setup done, advertising started");
 
 	*(volatile bool *)setupDone = true;
 	vTaskDelete(NULL);
