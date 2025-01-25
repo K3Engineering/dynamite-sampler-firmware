@@ -5,6 +5,7 @@
 
 #include "adc_proc.h"
 #include "ble_proc.h"
+#include "loadcell_calibration.h"
 
 #ifndef GIT_REVISION
 #define GIT_REVISION "?"
@@ -20,32 +21,6 @@ constexpr uint32_t CORE_APP = 1;
 static_assert(CORE_BLE != CORE_APP);
 
 #include "esp_partition.h"
-
-// awaiting final spec
-// TBD - should this just be the first byte of the NVS
-// The length of the calib data is in
-constexpr size_t CALIB_DATA_LENGTH = 12;
-// #pragma pack(push, 1)
-// struct NvsDataLoadcellCalibration {
-// 	uint32_t calibration0;
-// 	uint32_t calibration1;
-// 	uint32_t calibration2;
-// };
-// #pragma pack(pop)
-
-static esp_err_t readLoadcellCalibration(void *data, const size_t calibration_length) {
-
-	// This uniquely identifies the partition. This is duplicated in partitions.csv
-	constexpr esp_partition_type_t    CALIB_PARTITION_TYPE    = esp_partition_type_t(0x40);
-	constexpr esp_partition_subtype_t CALIB_PARTITION_SUBTYPE = esp_partition_subtype_t(6);
-	constexpr char                   *CALIB_PARTITION_LABEL   = "loadcell_calib";
-
-	if (const esp_partition_t *ptr = esp_partition_find_first(
-	        CALIB_PARTITION_TYPE, CALIB_PARTITION_SUBTYPE, CALIB_PARTITION_LABEL)) {
-		return esp_partition_read_raw(ptr, 0, data, calibration_length);
-	}
-	return ESP_FAIL;
-}
 
 extern "C" void app_main(void) {
 	ESP_LOGI(TAG, "Git revision: %s", GIT_REVISION);
@@ -64,15 +39,17 @@ extern "C" void app_main(void) {
 	esp_efuse_mac_get_default((uint8_t *)(&_chipmacid));
 	ESP_LOGI(TAG, "MAC address: 0x%" PRIx64, _chipmacid);
 
-	uint8_t data[CALIB_DATA_LENGTH] = {0};
+	uint8_t data[CALIB_PARTITION_LENGTH];
 
-	esp_err_t err = readLoadcellCalibration(data, CALIB_DATA_LENGTH);
+	size_t data_len = CALIB_PARTITION_LENGTH;
+
+	esp_err_t err = readLoadcellCalibration(data, CALIB_PARTITION_LENGTH);
 	if (ESP_OK != err) {
+		data_len = 0;
 		ESP_LOGE(TAG, "Loading calibration data failed with error: %d", err);
 	}
 
-	// TODO decide what to do if calibration data could not be read
-	setupBle(CORE_BLE, data, CALIB_DATA_LENGTH);
+	setupBle(CORE_BLE, data, data_len);
 	setupAdc(CORE_APP);
 
 	otaConditionalRollback();
