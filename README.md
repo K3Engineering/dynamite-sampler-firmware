@@ -67,6 +67,13 @@ For partition types see: https://docs.espressif.com/projects/esp-idf/en/latest/e
 Note: Partition table on the flash is located at `CONFIG_PARTITION_TABLE_OFFSET`, default: 0x8000.
 Partitions start at CONFIG_PARTITION_TABLE_OFFSET + 0x1000.
 
+#### Custom loadcell calibration flashing script
+
+You can flash the calibration data using the following script:
+`python .\flash_calibration.py <data1> <data1>`
+
+#### ESP tools to flash
+
 The following command copies calibr-data.bin to a partition at 0x310000.
 `python -m esptool --chip esp32s3 -b 460800 --before default_reset --after hard_reset write_flash --flash_mode dio --flash_freq 80m --flash_size detect 0x310000 calibr-data.bin`
 
@@ -77,10 +84,6 @@ from a partition a bit easier:
 `parttool.py write_partition --partition-name loadcell_calib --input build/calibr-data.bin  --ignore-readonly`
 
 The `--ignore-readonly` option is is idf >= 5.4.
-
-TODO: get the partition offset by parsing configuration data.
-
-WIP: `python .\flash_calibration.py`
 
 **NOTE**: The `ms-vscode.hexeditor` vscode plugin is helpfull for looking at binary data files.
 
