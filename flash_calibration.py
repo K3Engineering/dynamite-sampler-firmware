@@ -2,14 +2,27 @@
 """Flash the calibration data to the dynamite sampler board
 """
 
+import argparse
 import binascii
 import struct
+import inspect
+import sys
+from collections.abc import Iterator
+from typing import Self, Optional
+
+from tqdm import tqdm
 
 import esptool
 
 # These are the defaults.
 PARTITION_TABLE_OFFSET = 0x8000
 MAX_PARTITION_LENGTH = 0xC00
+
+
+def generate_calibration_raw(data1: int, data2: int) -> bytes:
+    """Generate the raw bytes to be flashed to the calibration partition"""
+    # TODO this format needs to be synced between this script and the client.
+    return struct.pack("II", data1, data2)
 
 
 class PartitionRow:
@@ -42,8 +55,8 @@ class PartitionRow:
         return self_str
 
     @classmethod
-    def iter_from_raw_table(cls, data: bytes):
-        """Unpack a raw partition table, and yield each row"""
+    def iter_from_raw_table(cls, data: bytes) -> Iterator[Self]:
+        """Unpack a raw partition table, and yield each row as a PartitionRow"""
         for vals in struct.iter_unpack(PartitionRow.STRUCT_FORMAT, data):
             (magic, type, subtype, offset, size, name, flags) = vals
             if magic == PartitionRow.MAGIC_BYTES:
@@ -51,102 +64,115 @@ class PartitionRow:
                 yield cls(type, subtype, offset, size, name, flags)
 
 
-## Detect the port, connect to ESP
-ser_list = esptool.get_port_list([], [], [])
-print("Serial ports found:", ser_list)
+def connect_to_esp() -> esptool.ESPLoader:
+    """Connect to an available ESP."""
+    ## Detect the port, connect to ESP
+    ser_list = esptool.get_port_list([], [], [])
+    print("Serial ports found:", ser_list)
 
-esp: esptool = esptool.get_default_connected_device(
-    ser_list, port=None, connect_attempts=1, initial_baud=esptool.ESPLoader.ESP_ROM_BAUD
-)
+    esp: Optional[esptool.ESPLoader] = esptool.get_default_connected_device(
+        ser_list,
+        port=None,
+        connect_attempts=1,
+        initial_baud=esptool.ESPLoader.ESP_ROM_BAUD,
+    )
+    if esp is None:
+        raise Exception("Could not connect to ESP")
 
-## Read the NVS
-
-description = esp.get_chip_description()
-print(description)
-
-esp = esp.run_stub()
-
-
-def flash_progress(progress, length):
-    print("Progress:", progress, length)
+    return esp
 
 
-data = esp.read_flash(PARTITION_TABLE_OFFSET, MAX_PARTITION_LENGTH, flash_progress)
-print("got partition table")
+def main(partition_name: str, data_to_flash: bytes):
 
+    ## Detect the port, connect to ESP
+    esp = connect_to_esp()
 
-flash_offset = None
-for row in PartitionRow.iter_from_raw_table(data):
-    print(row)
-    if row.name == "loadcell_calib":
-        flash_offset = row.offset
-        break
-
-## Generate the calibration data to flash
-calibration_data = struct.pack("<III", 11, 22, 33)
-print("calibration data")
-print(binascii.hexlify(calibration_data, " "))
-
-## Flash the calibration data to the offset
-
-total_size = len(calibration_data)
-print(f"Binary size: {total_size} bytes")
-
-# Write binary blocks
-
-
-def progress_callback(percent):
-    print(f"Wrote: {int(percent)}%")
-
-
-print(f"ESP flash write size {esp.FLASH_WRITE_SIZE}")
-esp.flash_begin(total_size, flash_offset)
-for i in range(0, total_size, esp.FLASH_WRITE_SIZE):
-    block = calibration_data[i : i + esp.FLASH_WRITE_SIZE]
-    # Pad the last block
-    block = block + bytes([0xFF]) * (esp.FLASH_WRITE_SIZE - len(block))
-    esp.flash_block(block, i + flash_offset)
-    progress_callback(float(i + len(block)) / total_size * 100)
-esp.flash_finish()
-
-# Reset the chip out of bootloader mode
-esp.hard_reset()
-"""
-
-# The port of the connected ESP
-PORT = "/dev/ttyACM0"
-# The binary file
-BIN_FILE = "./firmware.bin"
-# Flash offset to flash the binary to
-FLASH_ADDRESS = 0x10000
-
-def progress_callback(percent):
-    print(f"Wrote: {int(percent)}%")
-
-with detect_chip(PORT) as esp:
+    ## Print the description of the ESP
     description = esp.get_chip_description()
-    features = esp.get_chip_features()
-    print(f"Detected ESP on port {PORT}: {description}")
-    print(f"Features: {", ".join(features)}")
+    print(description)
 
+    ## Not sure what this does, but its required to interface with the esp
     esp = esp.run_stub()
-    with open(BIN_FILE, 'rb') as binary:
-        # Load the binary
-        binary_data = binary.read()
-        total_size = len(binary_data)
-        print(f"Binary size: {total_size} bytes")
 
-        # Write binary blocks
-        esp.flash_begin(total_size, FLASH_ADDRESS)
-        for i in range(0, total_size, esp.FLASH_WRITE_SIZE):
-            block = binary_data[i:i + esp.FLASH_WRITE_SIZE]
-            # Pad the last block
-            block = block + bytes([0xFF]) * (esp.FLASH_WRITE_SIZE - len(block))
-            esp.flash_block(block, i + FLASH_ADDRESS)
-            progress_callback(float(i + len(block)) / total_size * 100)
-        esp.flash_finish()
+    ## Read the NVS
+    print("Reading the NVS partition table")
 
-        # Reset the chip out of bootloader mode
-        esp.hard_reset()
+    def flash_progress(progress, length):
+        print(f"Read {progress:#x} bytes out of {length:#x}")
 
-"""
+    parition_raw = esp.read_flash(
+        PARTITION_TABLE_OFFSET, MAX_PARTITION_LENGTH, flash_progress
+    )
+
+    ## Parse the partition table
+    print(f"Parsing table and looking for partition: {partition_name}")
+    flash_offset = None
+    for row in PartitionRow.iter_from_raw_table(parition_raw):
+        print(row)
+        if row.name == partition_name:
+            flash_offset = row.offset
+            break
+    print(f"Using partition offset {flash_offset:#x}")
+
+    ## Generate the calibration data to flash
+    # calibration_data = struct.pack("<III", 11, 22, 33)
+    print("Data being flashed to partition:")
+    print(binascii.hexlify(data_to_flash, " "))
+
+    ## Flash the calibration data to the offset
+
+    total_size = len(data_to_flash)
+    print(f"Size of data being flashed: {total_size} bytes")
+    print(f"Size of ESP Flash block: {esp.FLASH_WRITE_SIZE} bytes")
+    print("Flashing data")
+    esp.flash_begin(total_size, flash_offset)
+    for i in tqdm(range(0, total_size, esp.FLASH_WRITE_SIZE)):
+        block = data_to_flash[i : i + esp.FLASH_WRITE_SIZE]
+        # Pad the last block
+        block = block + bytes([0xFF]) * (esp.FLASH_WRITE_SIZE - len(block))
+        esp.flash_block(block, i + flash_offset)
+
+    esp.flash_finish()
+
+    print("Reseting the ESP out of bootloader mode.")
+    esp.hard_reset()
+
+    print("Complete.")
+
+
+if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.RawDescriptionHelpFormatter, description=__doc__
+    )
+    parser.add_argument(
+        "-p",
+        "--partition",
+        default="loadcell_calib",  # This is from the partitions.csv
+        help="Name of partition to flash to.",
+    )
+
+    calibration_args = tuple(inspect.getfullargspec(generate_calibration_raw).args)
+    if sys.version_info[:2] <= (3, 12):
+        parser.add_argument(
+            "calib_data",
+            metavar="calib-data",
+            nargs=len(calibration_args),
+            help="The loadcell calibration values: " + ", ".join(calibration_args),
+            type=int,
+        )
+    else:
+        parser.add_argument(
+            "calib_data",
+            metavar=calibration_args,
+            nargs=len(calibration_args),
+            help="The loadcell calibration values",
+            type=int,
+        )
+
+    args = parser.parse_args()
+
+    # Generate the calibration data to flash
+    calibration_data = generate_calibration_raw(*args.calib_data)
+
+    main(args.partition, calibration_data)
