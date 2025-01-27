@@ -56,6 +56,7 @@ launching openocd `openocd -f board/esp32s3-builtin.cfg `
 `usblogview` and `USBDriverTool` were quite helpful
 
 ### NVS Flash initialization
+
 Custom partition table file: `partitions.csv`.
 Partition to store calibration data:
 - custom type `0x40`,
@@ -66,6 +67,30 @@ For partition types see: https://docs.espressif.com/projects/esp-idf/en/latest/e
 Note: Partition table on the flash is located at `CONFIG_PARTITION_TABLE_OFFSET`, default: 0x8000.
 Partitions start at CONFIG_PARTITION_TABLE_OFFSET + 0x1000.
 
+#### Custom loadcell calibration flashing script
+
+You can flash the calibration data using the following script:
+`python .\flash_calibration.py <data1> <data1>`
+
+#### ESP tools to flash
+
 The following command copies calibr-data.bin to a partition at 0x310000.
 `python -m esptool --chip esp32s3 -b 460800 --before default_reset --after hard_reset write_flash --flash_mode dio --flash_freq 80m --flash_size detect 0x310000 calibr-data.bin`
-TODO: get the partition offset by parsing configuration data.
+
+There is also a esp-idf wrapper for `esptool` called `esptool.py` that makes writing / reading
+from a partition a bit easier:
+
+`parttool.py read_partition --partition-name loadcell_calib --output loadcell_calib_outfile`
+`parttool.py write_partition --partition-name loadcell_calib --input build/calibr-data.bin  --ignore-readonly`
+
+The `--ignore-readonly` option is is idf >= 5.4.
+
+**NOTE**: The `ms-vscode.hexeditor` vscode plugin is helpfull for looking at binary data files.
+
+### Python scripts that use esp tools
+
+Add this to your local `settings.json` file:
+```
+    "python.defaultInterpreterPath": "<your-dir>\\.espressif\\tools\\idf-python\\3.11.2\\python.exe",
+    "python.analysis.extraPaths": ["<your-dir>\\.espressif\\python_env\\idf5.3_py3.11_env\\Lib\\site-packages"]
+```
