@@ -240,7 +240,7 @@ void MockAdc::attachISR(AdcISR isr) {
 	gptimer_new_timer(&timer_config, &gptimer);
 
 	static constexpr gptimer_alarm_config_t alarm_config = {
-	    .alarm_count  = 100,
+	    .alarm_count  = 1000,
 	    .reload_count = 0,
 	    .flags =
 	        {
