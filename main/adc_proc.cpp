@@ -18,9 +18,9 @@ constexpr char TAG[] = "ADC";
 static AdcClass     adc;
 static TaskHandle_t adcReadTaskHandle = NULL;
 
-static inline void requestTaskSwitchFromISR(BaseType_t needSwitch) {
+static inline void requestTaskSwitchFromISR(BaseType_t needSwitch, void *ptr) {
 #if (CONFIG_MOCK_ADC == 1)
-	esp_timer_isr_dispatch_need_yield();
+	*(bool *)ptr = (needSwitch == pdTRUE);
 #else
 	portYIELD_FROM_ISR(needSwitch);
 #endif
@@ -29,12 +29,12 @@ static inline void requestTaskSwitchFromISR(BaseType_t needSwitch) {
 // When we flag a piece of code with the IRAM_ATTR attribute, the compiled code
 // is placed in the ESP32’s Internal RAM (IRAM). Otherwise the code is kept in
 // Flash. And Flash on ESP32 is much slower than internal RAM.
-static void IRAM_ATTR isrAdcDrdy(void *) {
+static void IRAM_ATTR isrAdcDrdy(void *param) {
 	// unblock the task that will read the ADC & handle putting in the buffer
 	if (adcReadTaskHandle != NULL) {
 		BaseType_t taskWoken = pdFALSE;
 		vTaskNotifyGiveFromISR(adcReadTaskHandle, &taskWoken);
-		requestTaskSwitchFromISR(taskWoken);
+		requestTaskSwitchFromISR(taskWoken, param);
 	}
 }
 
