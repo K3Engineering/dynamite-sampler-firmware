@@ -54,25 +54,27 @@ async def send_ota(device_name: str, firmware_bin: bytes):
         async def _ota_notification_handler(sender: int, data: bytearray):
             if data == SVR_CHR_OTA_CONTROL_REQUEST_ACK:
                 print("ESP32: OTA request acknowledged.")
-                await queue.put("ack")
+                await queue.put("ack1")
             elif data == SVR_CHR_OTA_CONTROL_REQUEST_NAK:
                 print("ESP32: OTA request NOT acknowledged.")
-                await queue.put("nak")
+                await queue.put("nak1")
                 await client.stop_notify(OTA_CONTROL_UUID)
             elif data == SVR_CHR_OTA_CONTROL_DONE_ACK:
                 print("ESP32: OTA done acknowledged.")
-                await queue.put("ack")
+                await queue.put("ack2")
                 try:
                     await client.stop_notify(OTA_CONTROL_UUID)
                 except:
                     print("I think the connection died?")
             elif data == SVR_CHR_OTA_CONTROL_DONE_NAK:
                 print("ESP32: OTA done NOT acknowledged.")
-                await queue.put("nak")
+                await queue.put("nak2")
                 try:
                     await client.stop_notify(OTA_CONTROL_UUID)
                 except:
                     print("I think the connection died?")
+            elif data == SVR_CHR_OTA_CONTROL_NOP:
+                print("ESP32: OTA standby.")
             else:
                 print(f"Notification received: sender: {sender}, data: {data}")
 
@@ -83,20 +85,22 @@ async def send_ota(device_name: str, firmware_bin: bytes):
         # Even if the MTU is larger, no need to split the data into multiple packets.
         packet_size = min(client.mtu_size - 3, 244)
 
-        # write the packet size to OTA Data
-        print(f"Sending packet size: {packet_size}.")
+        # write firmware_bin size to OTA Data
+        file_size = len(firmware_bin)
+        print(f"Sending file size: {file_size}.")
         await client.write_gatt_char(
-            OTA_DATA_UUID, packet_size.to_bytes(2, "little"), response=True
+            OTA_DATA_UUID, file_size.to_bytes(4, "little"), response=True
         )
 
         # write the request OP code to OTA Control
         print("Sending OTA request.")
-        await client.write_gatt_char(OTA_CONTROL_UUID, SVR_CHR_OTA_CONTROL_REQUEST)
+        await client.write_gatt_char(OTA_CONTROL_UUID, SVR_CHR_OTA_CONTROL_REQUEST, response=True)
 
         # wait for the response
-        await asyncio.sleep(1)
-        if await queue.get() == "ack":
+        # await asyncio.sleep(1)
+        if await queue.get() == "ack1":
 
+            print("Sending data...")
             # sequentially write all packets to OTA data
             num_packages = 0
             with tqdm(total=len(firmware_bin), unit="bytes") as pbar:
@@ -120,8 +124,8 @@ async def send_ota(device_name: str, firmware_bin: bytes):
             )
 
             # wait for the response
-            await asyncio.sleep(1)
-            if await queue.get() == "ack":
+            # await asyncio.sleep(1)
+            if await queue.get() == "ack2":
                 print(f"OTA successful!")
             else:
                 print("OTA failed.")

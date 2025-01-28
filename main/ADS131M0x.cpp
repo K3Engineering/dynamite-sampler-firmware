@@ -215,19 +215,46 @@ void ADS131M0x::attachISR(AdcISR isr) {
 
 #if (CONFIG_MOCK_ADC == 1)
 
-#include <esp_timer.h>
+#include <driver/gptimer.h>
+
+static bool IRAM_ATTR mockTimerCb(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata,
+                                  void *user_ctx) {
+	bool res = false;
+	((MockAdc::AdcISR)user_ctx)(&res);
+	return res;
+}
 
 void MockAdc::attachISR(AdcISR isr) {
-	esp_timer_handle_t            th;
-	const esp_timer_create_args_t tparam{
-	    .callback              = isr,
-	    .arg                   = nullptr,
-	    .dispatch_method       = ESP_TIMER_ISR,
-	    .name                  = "MockAdcTmr",
-	    .skip_unhandled_events = true,
+	static constexpr gptimer_config_t timer_config = {
+	    .clk_src       = GPTIMER_CLK_SRC_DEFAULT,
+	    .direction     = GPTIMER_COUNT_UP,
+	    .resolution_hz = 1000 * 1000,
+	    .intr_priority = 0,
+	    .flags =
+	        {
+	            .intr_shared         = 0,
+	            .backup_before_sleep = 0,
+	        },
 	};
-	esp_timer_create(&tparam, &th);
-	esp_timer_start_periodic(th, 1 * 1000);
+	gptimer_handle_t gptimer = 0;
+	gptimer_new_timer(&timer_config, &gptimer);
+
+	static constexpr gptimer_alarm_config_t alarm_config = {
+	    .alarm_count  = 1000,
+	    .reload_count = 0,
+	    .flags =
+	        {
+	            .auto_reload_on_alarm = true,
+	        },
+	};
+	gptimer_set_alarm_action(gptimer, &alarm_config);
+
+	static constexpr gptimer_event_callbacks_t cbs = {
+	    .on_alarm = mockTimerCb,
+	};
+	gptimer_register_event_callbacks(gptimer, &cbs, (void *)isr);
+	gptimer_enable(gptimer);
+	gptimer_start(gptimer);
 }
 
 const MockAdc::AdcRawOutput *MockAdc::rawReadADC() {
