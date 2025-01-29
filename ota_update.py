@@ -48,12 +48,15 @@ async def send_ota(device_name: str, firmware_bin: bytes):
     t0 = datetime.datetime.now()
     queue = asyncio.Queue()
 
+    def on_disconnected(client):
+            print("Disconnected callback!", datetime.datetime.now())
+        
     esp32 = await _search_for_esp32(device_name)
-    async with BleakClient(esp32) as client:
+    async with BleakClient(esp32, disconnected_callback=on_disconnected) as client:
 
         async def _ota_notification_handler(sender: int, data: bytearray):
             if data == SVR_CHR_OTA_CONTROL_REQUEST_ACK:
-                print("ESP32: OTA request acknowledged.")
+                print("ESP32: OTA request acknowledged.", datetime.datetime.now())
                 await queue.put("ack1")
             elif data == SVR_CHR_OTA_CONTROL_REQUEST_NAK:
                 print("ESP32: OTA request NOT acknowledged.")
@@ -74,6 +77,7 @@ async def send_ota(device_name: str, firmware_bin: bytes):
                 except:
                     print("I think the connection died?")
             elif data == SVR_CHR_OTA_CONTROL_NOP:
+                await queue.put("rdy")
                 print("ESP32: OTA standby.")
             else:
                 print(f"Notification received: sender: {sender}, data: {data}")
@@ -89,13 +93,18 @@ async def send_ota(device_name: str, firmware_bin: bytes):
         file_size = len(firmware_bin)
         print(f"Sending file size: {file_size}.")
         await client.write_gatt_char(
-            OTA_DATA_UUID, file_size.to_bytes(4, "little"), response=True
+            OTA_CONTROL_UUID, file_size.to_bytes(4, "little"), response=True
         )
 
-        # write the request OP code to OTA Control
-        print("Sending OTA request.")
-        await client.write_gatt_char(OTA_CONTROL_UUID, SVR_CHR_OTA_CONTROL_REQUEST, response=True)
+        if await queue.get() == "rdy":
 
+            # write the request OP code to OTA Control
+            print("Sending OTA request.", datetime.datetime.now())
+            await client.write_gatt_char(OTA_CONTROL_UUID, SVR_CHR_OTA_CONTROL_REQUEST, response=True)
+
+        else:
+            print("ESP32 is not ready.")
+    
         # wait for the response
         # await asyncio.sleep(1)
         if await queue.get() == "ack1":
@@ -109,7 +118,7 @@ async def send_ota(device_name: str, firmware_bin: bytes):
                     pbar.update(n=len(pkg))
                     num_packages += 1
 
-                    # Response=True (write request) is currently required, since the
+                    # Response=True (write request) is primary choice, since the
                     # OTA handler can't always keep up with the incoming packets. And
                     # for some reason the LL doesn't stop accepting even if the buffer
                     # is full.
@@ -125,6 +134,7 @@ async def send_ota(device_name: str, firmware_bin: bytes):
 
             # wait for the response
             # await asyncio.sleep(1)
+            print("Waiting for confirmation...")
             if await queue.get() == "ack2":
                 print(f"OTA successful!")
             else:
