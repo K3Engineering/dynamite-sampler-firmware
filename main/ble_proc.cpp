@@ -93,6 +93,8 @@ static void taskSetupBle(void *setupDone) {
 	         mac[2], mac[1], mac[0]);
 	NimBLEDevice::init(bleName);
 
+	NimBLEDevice::setPower(-24); // -24dbm ESP_PWR_LVL_N24
+
 	NimBLEDevice::setMTU(BLE_ATT_MTU_MAX);
 
 	// Create the BLE Server
