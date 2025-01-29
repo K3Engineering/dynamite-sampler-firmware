@@ -104,6 +104,8 @@ static void taskSetupBle(void *setupDone) {
 	snprintf(bleName, sizeof(bleName), "DS %" PRIx64, _chipmacid);
 	NimBLEDevice::init(bleName);
 
+	NimBLEDevice::setPower(-24); // -24dbm ESP_PWR_LVL_N24
+
 	NimBLEDevice::setMTU(BLE_ATT_MTU_MAX);
 
 	// Create the BLE Server
