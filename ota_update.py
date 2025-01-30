@@ -26,10 +26,11 @@ async def _search_for_esp32(device_name):
     print(f"Searching for '{device_name}'...")
     esp32 = None
 
-    devices = await BleakScanner.discover()
-    print("Available devices:")
-    for device in devices:
-        print(device.name, end="")
+    devices_and_adv = await BleakScanner.discover(return_adv=True)
+    print("RSSI, Device name:")
+
+    for device, adv_data in devices_and_adv.values():
+        print(adv_data.rssi, device.name, end="")
         if device.name == device_name:
             esp32 = device
             print(" - device name matches", end="")
