@@ -23,9 +23,11 @@ constexpr char ADC_FEED_CHR_UUID[] = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
 //     0xa8, 0x26, 0x1b, 0x36, 0x07, 0xea, 0xf5, 0xb7, 0x88, 0x46, 0xe1, 0x36, 0x3e, 0x48, 0xb5,
 //     0xbe);
 //======================== <\UUIDs>
+constexpr char LC_CALIB_CHARACTERISTIC_UUID[] = "10adce11-68a6-450b-9810-ca11b39fd283";
 
 static NimBLEServer         *bleServer                  = NULL;
 static NimBLECharacteristic *blePublisherCharacteristic = NULL;
+static NimBLECharacteristic *calibrationCharacteristic  = NULL;
 static uint16_t              adcNotifyChrHandle;
 
 BleAccess bleAccess{
@@ -116,6 +118,10 @@ static void taskSetupBle(void *setupDone) {
 	    srvAdcFeed->createCharacteristic(ADC_FEED_CHR_UUID, NIMBLE_PROPERTY::NOTIFY);
 	static AdcPublCallbacks feedCb;
 	blePublisherCharacteristic->setCallbacks(&feedCb);
+
+	calibrationCharacteristic =
+	    srvAdcFeed->createCharacteristic(LC_CALIB_CHARACTERISTIC_UUID, NIMBLE_PROPERTY::READ);
+
 	srvAdcFeed->start();
 
 	setupBleOta(bleServer);
@@ -135,12 +141,13 @@ static void taskSetupBle(void *setupDone) {
 	pAdvertising->enableScanResponse(true);
 
 	NimBLEDevice::startAdvertising();
+	ESP_LOGI(TAG, "BLE setup done, advertising started");
 
 	*(volatile bool *)setupDone = true;
 	vTaskDelete(NULL);
 }
 
-void setupBle(int core) {
+void setupBle(int core, const uint8_t *calibrationData, const size_t calibrationLength) {
 	// This buffer is to share the ADC values from the adc read task and BLE notify task
 	bleAccess.adcStreamBufferHandle = xStreamBufferCreate(ADC_FEED_CHUNK_SZ * 8, 1);
 	assert(bleAccess.adcStreamBufferHandle != NULL);
@@ -149,6 +156,8 @@ void setupBle(int core) {
 	xTaskCreatePinnedToCore(taskSetupBle, "task_BLE_setup", 1024 * 5, (void *)&done, 1, NULL, core);
 	while (!done)
 		vTaskDelay(10);
+
+	calibrationCharacteristic->setValue(calibrationData, calibrationLength);
 
 	// TODO figure out priority for the BLE task
 	xTaskCreatePinnedToCore(taksBlePublishAdcBuffer, "task_BLE_publish", 1024 * 5, NULL, 3,
