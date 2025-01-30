@@ -3,7 +3,8 @@
 
 #include <esp_partition.h>
 
-// This is defined in the partitions.csv
+// A large arbirtary size of the partition to read. It will hold all the possible data.
+// Its made to be large enough so that the format can change without changing the firmware.
 // It can't be larger than the max BLE characteristic length of 512 (0x200)
 constexpr size_t CALIB_PARTITION_LENGTH = 0xff;
 
