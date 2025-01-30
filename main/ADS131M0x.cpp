@@ -116,12 +116,20 @@ void ADS131M0x::init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pi
 void ADS131M0x::setupAccess(spi_host_device_t spiDevice, int spi_clock_speed, gpio_num_t clk_pin,
                             gpio_num_t miso_pin, gpio_num_t mosi_pin) {
 	spi_bus_config_t buscfg = {
-	    .mosi_io_num     = mosi_pin,
-	    .miso_io_num     = miso_pin,
-	    .sclk_io_num     = clk_pin,
-	    .quadwp_io_num   = -1,
-	    .quadhd_io_num   = -1,
-	    .max_transfer_sz = sizeof(AdcRawOutput),
+	    .mosi_io_num           = mosi_pin,
+	    .miso_io_num           = miso_pin,
+	    .sclk_io_num           = clk_pin,
+	    .quadwp_io_num         = -1,
+	    .quadhd_io_num         = -1,
+	    .data4_io_num          = -1,
+	    .data5_io_num          = -1,
+	    .data6_io_num          = -1,
+	    .data7_io_num          = -1,
+	    .data_io_default_level = 0,
+	    .max_transfer_sz       = sizeof(AdcRawOutput),
+	    .flags                 = SPICOMMON_BUSFLAG_MASTER,
+	    .isr_cpu_id            = ESP_INTR_CPU_AFFINITY_AUTO,
+	    .intr_flags            = 0,
 	};
 	esp_err_t ret = spi_bus_initialize(spiDevice, &buscfg, SPI_DMA_CH_AUTO);
 	if (ESP_OK != ret) {
@@ -130,10 +138,21 @@ void ADS131M0x::setupAccess(spi_host_device_t spiDevice, int spi_clock_speed, gp
 	}
 
 	spi_device_interface_config_t devcfg = {
-	    .mode           = 1, // SPI mode 1
-	    .clock_speed_hz = spi_clock_speed,
-	    .spics_io_num   = -1,
-	    .queue_size     = 1, // Queue is not used, but the library requires a non zero value.
+	    .command_bits     = 0,
+	    .address_bits     = 0,
+	    .dummy_bits       = 0,
+	    .mode             = 1, // SPI mode 1
+	    .clock_source     = SPI_CLK_SRC_DEFAULT,
+	    .duty_cycle_pos   = 0,
+	    .cs_ena_pretrans  = 0,
+	    .cs_ena_posttrans = 0,
+	    .clock_speed_hz   = spi_clock_speed,
+	    .input_delay_ns   = 0,
+	    .spics_io_num     = -1,
+	    .flags            = 0,
+	    .queue_size       = 1, // Queue is not used, but the library requires a non zero value.
+	    .pre_cb           = nullptr,
+	    .post_cb          = nullptr,
 	};
 	spi_device_handle_t handle;
 	ret = spi_bus_add_device(spiDevice, &devcfg, &handle);
@@ -233,6 +252,7 @@ void MockAdc::attachISR(AdcISR isr) {
 	    .flags =
 	        {
 	            .intr_shared         = 0,
+	            .allow_pd            = 0,
 	            .backup_before_sleep = 0,
 	        },
 	};
@@ -259,7 +279,11 @@ void MockAdc::attachISR(AdcISR isr) {
 
 const MockAdc::AdcRawOutput *MockAdc::rawReadADC() {
 	static AdcRawOutput a{
-	    .status = 0x1234,
+	    .status        = 0x1234,
+	    .status_unused = 0,
+	    .data          = {},
+	    .crc           = 0,
+	    .crc_unused    = 0,
 	};
 	static uint8_t val = 42;
 	for (int i = 3; i < sizeof(a.data); i += 3) {
