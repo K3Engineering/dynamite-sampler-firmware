@@ -1,6 +1,5 @@
 # Base line configuration common to all builds
 
-CONFIG_IDF_TARGET="esp32s3"
 
 CONFIG_BT_ENABLED=y
 CONFIG_BT_NIMBLE_ENABLED=y
