@@ -49,8 +49,8 @@ async def send_ota(device_name: str, firmware_bin: bytes):
     queue = asyncio.Queue()
 
     def on_disconnected(client):
-            print("Disconnected callback!", datetime.datetime.now())
-        
+        print("Disconnected callback!", datetime.datetime.now())
+
     esp32 = await _search_for_esp32(device_name)
     async with BleakClient(esp32, disconnected_callback=on_disconnected) as client:
 
@@ -100,11 +100,13 @@ async def send_ota(device_name: str, firmware_bin: bytes):
 
             # write the request OP code to OTA Control
             print("Sending OTA request.", datetime.datetime.now())
-            await client.write_gatt_char(OTA_CONTROL_UUID, SVR_CHR_OTA_CONTROL_REQUEST, response=True)
+            await client.write_gatt_char(
+                OTA_CONTROL_UUID, SVR_CHR_OTA_CONTROL_REQUEST, response=True
+            )
 
         else:
             print("ESP32 is not ready.")
-    
+
         # wait for the response
         # await asyncio.sleep(1)
         if await queue.get() == "ack1":
