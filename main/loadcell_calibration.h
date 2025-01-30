@@ -13,7 +13,7 @@ static esp_err_t readLoadcellCalibration(void *data, const size_t calibration_le
 	// This uniquely identifies the partition. This is duplicated in partitions.csv
 	constexpr esp_partition_type_t    CALIB_PARTITION_TYPE    = esp_partition_type_t(0x40);
 	constexpr esp_partition_subtype_t CALIB_PARTITION_SUBTYPE = esp_partition_subtype_t(6);
-	constexpr char                   *CALIB_PARTITION_LABEL   = "loadcell_calib";
+	constexpr char                    CALIB_PARTITION_LABEL[] = "loadcell_calib";
 
 	if (const esp_partition_t *ptr = esp_partition_find_first(
 	        CALIB_PARTITION_TYPE, CALIB_PARTITION_SUBTYPE, CALIB_PARTITION_LABEL)) {
