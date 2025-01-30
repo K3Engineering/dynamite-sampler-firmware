@@ -1,10 +1,10 @@
-#include "esp_ota_ops.h"
-#include <NimBLEDevice.h>
 #include <esp_log.h>
+#include <esp_ota_ops.h>
+
+#include <NimBLEDevice.h>
 
 #include "adc_ble_interface.h"
 #include "ble_ota_interface.h"
-
 #include "ble_proc.h"
 
 constexpr char TAG[] = "OTA";
@@ -42,43 +42,81 @@ typedef enum {
 
 typedef uint8_t  OtaRequestType;
 typedef uint8_t  OtaReplyType;
-typedef uint16_t OtaPacketSizeType;
+typedef uint32_t OtaFileSizeType;
 
 typedef struct {
-	uint16_t otaControlValHandle;
-	uint16_t otaDataValHandle;
-
 	const esp_partition_t *updatePartition;
 	esp_ota_handle_t       updateHandle;
-	uint16_t               numPkgsReceived;
-	OtaPacketSizeType      packetSize;
+
+	size_t numBytesReceived;
+	size_t fileSize;
 
 	OtaReplyType otaStatus;
 	bool         updating;
 } OtaControlData;
 
-static OtaControlData otaControlData;
+static OtaControlData otaControlData{
+    .updatePartition  = nullptr,
+    .updateHandle     = 0,
+    .numBytesReceived = 0,
+    .fileSize         = 0,
+    .otaStatus        = SVR_CHR_OTA_CONTROL_NOP,
+    .updating         = false,
+};
 
 static bool processOtaBegin(OtaControlData *control) {
 	if (control->updating)
 		return false;
+	if (control->otaStatus != SVR_CHR_OTA_CONTROL_NOP)
+		return false;
+
+	control->otaStatus = SVR_CHR_OTA_CONTROL_REQUEST_NAK;
+	if (!control->fileSize)
+		return true;
 
 	control->updatePartition = esp_ota_get_next_update_partition(NULL);
+	if ((!control->updatePartition) || (control->updatePartition->size < control->fileSize))
+		return true;
+
+	// Erasing the Partition takes some time. Pass in the image size to erase it now.
+	// If it erased as the parition is written OTA_WITH_SEQUENTIAL_WRITES,
+	// esp_ota_write() can block up to ~70ms, which causes write commands to be dropped.
 	esp_err_t err =
-	    esp_ota_begin(control->updatePartition, OTA_WITH_SEQUENTIAL_WRITES, &control->updateHandle);
+	    esp_ota_begin(control->updatePartition, control->fileSize, &control->updateHandle);
 	if (err == ESP_OK) {
 		control->otaStatus = SVR_CHR_OTA_CONTROL_REQUEST_ACK;
 		control->updating  = true;
 	} else {
-		esp_ota_abort(control->updateHandle);
-		control->otaStatus    = SVR_CHR_OTA_CONTROL_REQUEST_NAK;
-		control->updateHandle = 0;
-		control->updating     = false;
 		ESP_LOGE(TAG, "esp_ota_begin error %d (%s)", err, esp_err_to_name(err));
 	}
-	control->numPkgsReceived = 0;
-
 	return true;
+}
+
+static bool checkDataSize(const OtaControlData *control) {
+	if (control->fileSize == control->numBytesReceived) {
+		return true;
+	}
+	ESP_LOGE(TAG, "Wrong fileSize");
+	return false;
+}
+
+static bool finishUpdate(esp_ota_handle_t updateHandle) {
+	esp_err_t err = esp_ota_end(updateHandle);
+	if (err == ESP_OK) {
+		return true;
+	}
+	ESP_LOGE(TAG, "esp_ota_end, err %d", err);
+	return false;
+}
+
+static bool setBootPartition(const esp_partition_t *updatePartition) {
+	esp_err_t err = esp_ota_set_boot_partition(updatePartition);
+	if (err == ESP_OK) {
+		return true;
+	}
+	ESP_LOGE(TAG, "esp_ota_set_boot_partition x%X, err %d (%s)!", (size_t)updatePartition->address,
+	         err, esp_err_to_name(err));
+	return false;
 }
 
 static bool processOtaDone(OtaControlData *control) {
@@ -86,21 +124,20 @@ static bool processOtaDone(OtaControlData *control) {
 		return false;
 
 	ESP_LOGI(TAG, "processOtaDone");
-	control->updating = false;
-	esp_err_t err     = esp_ota_end(control->updateHandle);
-	ESP_LOGE(TAG, "esp_ota_end, err %d", err);
-	if (err == ESP_OK) {
-		err = esp_ota_set_boot_partition(control->updatePartition);
-		ESP_LOGE(TAG, "esp_ota_set_boot_partition=%d (%s)!", err, esp_err_to_name(err));
+	control->otaStatus = SVR_CHR_OTA_CONTROL_DONE_NAK;
+	if (!checkDataSize(control)) {
+		esp_ota_abort(control->updateHandle);
+	} else if (finishUpdate(control->updateHandle) && setBootPartition(control->updatePartition)) {
+		control->otaStatus = SVR_CHR_OTA_CONTROL_DONE_ACK;
 	}
-
-	control->otaStatus =
-	    (err == ESP_OK) ? SVR_CHR_OTA_CONTROL_DONE_ACK : SVR_CHR_OTA_CONTROL_DONE_NAK;
-
+	control->updating         = false;
+	control->updateHandle     = 0;
+	control->fileSize         = 0;
+	control->numBytesReceived = 0;
 	return true;
 }
 
-static void conditionalRestart(OtaControlData *control) {
+static void conditionalRestart(const OtaControlData *control) {
 	// restart the ESP to finish the OTA
 	if (SVR_CHR_OTA_CONTROL_DONE_ACK == control->otaStatus) {
 		ESP_LOGI(TAG, "Preparing to restart!");
@@ -109,78 +146,94 @@ static void conditionalRestart(OtaControlData *control) {
 	}
 }
 
+static bool processOtaFileSize(OtaControlData *control, OtaFileSizeType netData) {
+	if (control->updating)
+		return false;
+
+	control->fileSize         = le32toh(netData);
+	control->numBytesReceived = 0;
+	control->otaStatus        = SVR_CHR_OTA_CONTROL_NOP;
+	ESP_LOGI(TAG, "File size: %u", control->fileSize);
+	return true;
+}
+
 // Implements OTA control flow, while OtaDataChrCallbacks implements binary download.
 class OtaControlChrCallbacks : public NimBLECharacteristicCallbacks {
-	void onRead(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
-		ESP_LOGD(TAG, "onRead");
-		pCharacteristic->setValue(otaControlData.otaStatus);
-	}
-
 	void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
+		bool         res   = false;
 		const size_t omLen = pCharacteristic->getLength();
 		if (sizeof(OtaRequestType) == omLen) {
-			auto code = pCharacteristic->getValue<OtaRequestType>();
-			ESP_LOGI(TAG, "OTA ctrl recv %u", code);
-			bool res = false;
+			OtaRequestType code = pCharacteristic->getValue<OtaRequestType>();
+			ESP_LOGI(TAG, "Ctrl recv %u", code);
 			if (SVR_CHR_OTA_CONTROL_REQUEST == code) {
-				res = processOtaBegin(&otaControlData);
+				res = processOtaBegin(control);
 			} else if (SVR_CHR_OTA_CONTROL_DONE == code) {
-				ESP_LOGI(TAG, "OTA done control, num pkgs received: %d",
-				         otaControlData.numPkgsReceived);
-				res = processOtaDone(&otaControlData);
+				res = processOtaDone(control);
 			}
-			if (res) {
-				// notify the client that it's request has been acknowledged
-				pCharacteristic->notify(&otaControlData.otaStatus, sizeof(otaControlData.otaStatus),
-				                        connInfo.getConnHandle());
-				ESP_LOGI(TAG, "OTA (n)ack %u", otaControlData.otaStatus);
+		} else if (sizeof(OtaFileSizeType) == omLen) {
+			res = processOtaFileSize(control, pCharacteristic->getValue<OtaFileSizeType>());
+		}
 
-				conditionalRestart(&otaControlData);
-			}
+		if (res) {
+			// notify the client that it's request has been acknowledged
+			pCharacteristic->notify(&control->otaStatus, sizeof(control->otaStatus),
+			                        connInfo.getConnHandle());
+			ESP_LOGI(TAG, "(n)ack %u", control->otaStatus);
+
+			conditionalRestart(control);
 		}
 	}
 
 	void onSubscribe(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo,
 	                 uint16_t subValue) override {
-		ESP_LOGD(TAG, "onSubscribe");
+		ESP_LOGI(TAG, "onSubscribe control %u", subValue);
+		if (control->updating) {
+			esp_ota_abort(control->updateHandle);
+		}
+		control->updating         = false;
+		control->updateHandle     = 0;
+		control->fileSize         = 0;
+		control->numBytesReceived = 0;
+		control->otaStatus        = SVR_CHR_OTA_CONTROL_NOP;
 	}
+
+	OtaControlData *const control;
+
+  public:
+	explicit OtaControlChrCallbacks(OtaControlData *control_) : control{control_} {}
 };
 
-static OtaPacketSizeType decodeOtaPacketSz(OtaPacketSizeType netData) {
-	const uint8_t *data = (const uint8_t *)&netData;
-	return data[0] + (data[1] << 8);
-}
-
 // Hack to expose protected getAttVal()
-static inline const void *getChrDataPtr(const NimBLECharacteristic *pCharacteristic) {
+static inline const void *getChrValuePtr(const NimBLECharacteristic *pCharacteristic) {
 	class MyCharacteristic : public NimBLECharacteristic {
 	  public:
-		const uint8_t *dataBegin() const { return getAttVal().begin(); }
+		const uint8_t *valuePtr() const { return getAttVal().data(); }
 	};
-	return static_cast<const MyCharacteristic *>(pCharacteristic)->dataBegin();
+	return static_cast<const MyCharacteristic *>(pCharacteristic)->valuePtr();
 }
 
 class OtaDataChrCallbacks : public NimBLECharacteristicCallbacks {
 	void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
+		if (!control->updating)
+			return;
+
 		const size_t omLen = pCharacteristic->getLength();
-		if (otaControlData.updating) {
-			const void *val = getChrDataPtr(pCharacteristic);
-			// esp_ota_write can block up to ~70ms. Write commands might be dropped.
-			// Use write request (response=True) to make sure nothing is lost.
-			// Downside is that it is quite a bit slower.
-			esp_err_t err = esp_ota_write(otaControlData.updateHandle, val, omLen);
+		const void  *val   = getChrValuePtr(pCharacteristic);
+		control->numBytesReceived += omLen;
+
+		if (control->numBytesReceived <= control->fileSize) {
+			esp_err_t err = esp_ota_write(control->updateHandle, val, omLen);
 			if (err != ESP_OK) {
 				ESP_LOGE(TAG, "esp_ota_write failed err: %d", err);
 			}
-			otaControlData.numPkgsReceived++;
-		} else {
-			if (sizeof(OtaPacketSizeType) == omLen) {
-				OtaPacketSizeType val     = pCharacteristic->getValue<OtaPacketSizeType>();
-				otaControlData.packetSize = decodeOtaPacketSz(val);
-				ESP_LOGI(TAG, "Packet size: %u", otaControlData.packetSize);
-			}
 		}
+		ESP_LOGD(TAG, ".");
 	}
+
+	OtaControlData *const control;
+
+  public:
+	explicit OtaDataChrCallbacks(OtaControlData *control_) : control{control_} {}
 };
 
 void otaConditionalRollback() {
@@ -211,14 +264,13 @@ void setupBleOta(NimBLEServer *server) { // Create the BLE Services
 
 	NimBLEService        *srvOTA        = server->createService(&OTA_SVC_UUID);
 	NimBLECharacteristic *chrOtaControl = srvOTA->createCharacteristic(
-	    &OTA_CONTROL_CHR_UUID,
-	    NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::NOTIFY, 16);
-	static OtaControlChrCallbacks otaControlCb;
+	    &OTA_CONTROL_CHR_UUID, NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::NOTIFY, 16);
+	static OtaControlChrCallbacks otaControlCb(&otaControlData);
 	chrOtaControl->setCallbacks(&otaControlCb);
 
 	NimBLECharacteristic *chrOtaData =
 	    srvOTA->createCharacteristic(&OTA_DATA_CHR_UUID, NIMBLE_PROPERTY::WRITE, 512 + 128);
-	static OtaDataChrCallbacks otaDataCb;
+	static OtaDataChrCallbacks otaDataCb(&otaControlData);
 	chrOtaData->setCallbacks(&otaDataCb);
 
 	srvDeviceInfo->start();

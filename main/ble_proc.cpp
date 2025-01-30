@@ -45,8 +45,8 @@ class MyServerCallbacks : public NimBLEServerCallbacks {
 		// Best case, devices can handle 7.5ms interval connection (android phone)
 		// older iOS might be 15ms, Windows PC might be 30ms. Connection interval is set in
 		// increments of 1.25ms.
-		// Don't skip any connection intervals, and timout after 500ms
-		server->updateConnParams(connInfo.getConnHandle(), 6, 6 * 4, 0, 50);
+		// Don't skip any connection intervals, and timout after 10*N ms
+		server->updateConnParams(connInfo.getConnHandle(), 6, 6 * 4, 0, 500);
 		ESP_LOGD(TAG, "On connect callback on core %u", xPortGetCoreID());
 	};
 
