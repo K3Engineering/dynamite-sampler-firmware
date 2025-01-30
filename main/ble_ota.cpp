@@ -78,6 +78,9 @@ static bool processOtaBegin(OtaControlData *control) {
 	if ((!control->updatePartition) || (control->updatePartition->size < control->fileSize))
 		return true;
 
+	// Erasing the Partition takes some time. Pass in the image size to erase it now.
+	// If it erased as the parition is written OTA_WITH_SEQUENTIAL_WRITES,
+	// esp_ota_write() can block up to ~70ms, which causes write commands to be dropped.
 	esp_err_t err =
 	    esp_ota_begin(control->updatePartition, control->fileSize, &control->updateHandle);
 	if (err == ESP_OK) {
@@ -217,9 +220,7 @@ class OtaDataChrCallbacks : public NimBLECharacteristicCallbacks {
 		const size_t omLen = pCharacteristic->getLength();
 		const void  *val   = getChrValuePtr(pCharacteristic);
 		control->numBytesReceived += omLen;
-		// esp_ota_write can block up to ~70ms. Write commands might be dropped.
-		// Use write request (response=True) to make sure nothing is lost.
-		// Downside is that it is quite a bit slower.
+
 		if (control->numBytesReceived <= control->fileSize) {
 			esp_err_t err = esp_ota_write(control->updateHandle, val, omLen);
 			if (err != ESP_OK) {
