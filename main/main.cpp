@@ -17,8 +17,8 @@ constexpr char TAG[] = "DYNA";
 // Core1 is for everything else. Setup & loop run on core 1.
 // ISR is handled on the core that sets it.
 constexpr uint32_t CORE_BLE = CONFIG_BT_NIMBLE_PINNED_TO_CORE;
-constexpr uint32_t CORE_APP = 1;
-static_assert(CORE_BLE != CORE_APP);
+constexpr uint32_t CORE_APP = 0;
+// static_assert(CORE_BLE != CORE_APP);
 
 #include "esp_partition.h"
 
