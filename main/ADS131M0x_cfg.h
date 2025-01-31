@@ -21,7 +21,7 @@ constexpr ADS131Cfg ads131Cfg = {
     .osr       = OSR_4096,
 };
 
-static void ads131SetupTrace(ADS131M0x &adc) {
+static void ads131SetupTrace(AdcClass &adc) {
 #ifdef CONFIG_MOCK_ADC
 	constexpr char TAG[] = "Mock ADC";
 #else
