@@ -95,7 +95,7 @@ static void taskSetupAdc(void *setupDone) {
 	adc.setPowerMode(ads131UserConfig.powerMode);
 	adc.setOsr(ads131UserConfig.osr);
 
-	ads131SetupTrace(adc);
+	ads131LogRegisterMap(adc);
 
 	adc.attachISR(isrAdcDrdy);
 
