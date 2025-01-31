@@ -32,9 +32,9 @@ extern "C" void app_main(void) {
 	otaConditionalRollback();
 
 	constexpr esp_pm_config_t pmConfig = {
-	    .max_freq_mhz       = 80,
-	    .min_freq_mhz       = 10,
-	    .light_sleep_enable = false,
+	    .max_freq_mhz       = 48,
+	    .min_freq_mhz       = 2,
+	    .light_sleep_enable = true,
 	};
 	if (esp_err_t err = esp_pm_configure(&pmConfig)) {
 		ESP_LOGE(TAG, "pm err %d", err);
