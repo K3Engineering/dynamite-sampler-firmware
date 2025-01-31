@@ -1,7 +1,10 @@
 #ifndef ADS131M0x_CFG_h
 #define ADS131M0x_CFG_h
 
+#include <esp_log.h>
+
 #include "ADS131M0x.h"
+#include "sdkconfig.h"
 
 struct ADS131Cfg {
 	uint8_t pga[4];
@@ -9,7 +12,7 @@ struct ADS131Cfg {
 	uint8_t osr;
 };
 
-constexpr ADS131Cfg ads131Cfg = {
+constexpr ADS131Cfg ads131UserConfig = {
     .pga =
         {
             CHANNEL_PGA_1,
@@ -21,9 +24,9 @@ constexpr ADS131Cfg ads131Cfg = {
     .osr       = OSR_4096,
 };
 
-static void ads131SetupTrace(AdcClass &adc) {
+static inline void ads131SetupTrace(AdcClass &adc) {
 #ifdef CONFIG_MOCK_ADC
-	constexpr char TAG[] = "Mock ADC";
+	constexpr char TAG[] = "MockADC";
 #else
 	constexpr char TAG[] = "ADS131";
 #endif
