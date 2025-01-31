@@ -7,11 +7,6 @@
 #include <driver/spi_master.h>
 #include <soc/gpio_num.h>
 
-#include "sdkconfig.h"
-
-// no delay after CS-active at adc_read
-// #define NO_CS_DELAY
-
 #define DRDY_STATE_LOGIC_HIGH 0 // DEFAULS
 #define DRDY_STATE_HI_Z       1
 
@@ -175,73 +170,6 @@
 // Mask Register CHX_GCAL_LSB
 #define REGMASK_CHX_GCAL0_LSB 0xFF00
 
-//   --------------------------------------------------------------------
-
-// Conversion modes
-#define CONVERSION_MODE_CONT   0
-#define CONVERSION_MODE_SINGLE 1
-
-// Data Format
-#define DATA_FORMAT_TWO_COMPLEMENT 0
-#define DATA_FORMAT_BINARY         1
-
-// Measure Mode
-#define MEASURE_UNIPOLAR 1
-#define MEASURE_BIPOLAR  0
-
-// Clock Type
-#define CLOCK_EXTERNAL 1
-#define CLOCK_INTERNAL 0
-
-// PGA Gain
-#define PGA_GAIN_1   0
-#define PGA_GAIN_2   1
-#define PGA_GAIN_4   2
-#define PGA_GAIN_8   3
-#define PGA_GAIN_16  4
-#define PGA_GAIN_32  5
-#define PGA_GAIN_64  6
-#define PGA_GAIN_128 7
-
-// Input Filter
-#define FILTER_SINC    0
-#define FILTER_FIR     2
-#define FILTER_FIR_IIR 3
-
-// Data Mode
-#define DATA_MODE_24BITS 0
-#define DATA_MODE_32BITS 1
-
-// Data Rate
-#define DATA_RATE_0  0
-#define DATA_RATE_1  1
-#define DATA_RATE_2  2
-#define DATA_RATE_3  3
-#define DATA_RATE_4  4
-#define DATA_RATE_5  5
-#define DATA_RATE_6  6
-#define DATA_RATE_7  7
-#define DATA_RATE_8  8
-#define DATA_RATE_9  9
-#define DATA_RATE_10 10
-#define DATA_RATE_11 11
-#define DATA_RATE_12 12
-#define DATA_RATE_13 13
-#define DATA_RATE_14 14
-#define DATA_RATE_15 15
-
-// Sync Mpdes
-#define SYNC_CONTINUOUS 1
-#define SYNC_PULSE      0
-
-// DIO Config Mode
-#define DIO_OUTPUT 1
-#define DIO_INPUT  0
-
-#define SPI_MASTER_DUMMY   0xFF
-#define SPI_MASTER_DUMMY16 0xFFFF
-#define SPI_MASTER_DUMMY32 0xFFFFFFFF
-
 class ADS131M0x {
 	static constexpr size_t NUM_CHANNELS_ENABLED = 4;
 	static constexpr size_t DATA_WORD_LENGTH     = 3; // in bytes
@@ -266,6 +194,7 @@ class ADS131M0x {
 	void reset();
 	bool setPowerMode(uint8_t powerMode);
 	bool setChannelPGA(uint8_t channel, uint16_t pga);
+	bool setPGA(uint8_t pgaChan0, uint8_t pgaChan1, uint8_t pgaChan2, uint8_t pgaChan3);
 	bool setInputChannelSelection(uint8_t channel, uint8_t input);
 	bool setOsr(uint16_t osr);
 
@@ -274,11 +203,17 @@ class ADS131M0x {
 
 	const AdcRawOutput *rawReadADC();
 
-	uint16_t readRegister(uint8_t address);
+	uint16_t readID();
+	uint16_t readSTATUS();
+	uint16_t readMODE();
+	uint16_t readCLOCK();
+	uint16_t readPGA();
 
 	static bool isCrcOk(const AdcRawOutput *data);
 
   private:
+	uint16_t readRegister(uint8_t address);
+
 	bool writeRegister(uint8_t address, uint16_t value);
 	bool writeRegisterMasked(uint8_t address, uint16_t value, uint16_t mask);
 
@@ -302,11 +237,18 @@ class MockAdc {
 	                 gpio_num_t miso_pin, gpio_num_t mosi_pin) {}
 	void reset() {}
 	bool setChannelPGA(uint8_t channel, uint16_t pga) { return true; }
+	bool setPGA(uint8_t pgaChan0, uint8_t pgaChan1, uint8_t pgaChan2, uint8_t pgaChan3) {
+		return true;
+	}
 	bool setPowerMode(uint8_t powerMode) { return true; }
 	bool setInputChannelSelection(uint8_t channel, uint8_t input) { return true; }
 	bool setOsr(uint16_t osr) { return true; }
 
-	uint16_t readRegister(uint8_t address) { return 0; }
+	uint16_t readID() { return 0; }
+	uint16_t readSTATUS() { return 0; }
+	uint16_t readMODE() { return 0; }
+	uint16_t readCLOCK() { return 0; }
+	uint16_t readPGA() { return 0; }
 
 	typedef ADS131M0x::AdcISR       AdcISR;
 	typedef ADS131M0x::AdcRawOutput AdcRawOutput;

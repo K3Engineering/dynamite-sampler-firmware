@@ -199,6 +199,10 @@ bool ADS131M0x::setChannelPGA(uint8_t channel, uint16_t pga) {
 	return true;
 }
 
+bool ADS131M0x::setPGA(uint8_t pgaChan0, uint8_t pgaChan1, uint8_t pgaChan2, uint8_t pgaChan3) {
+	return writeRegister(REG_GAIN, pgaChan0 | (pgaChan1 << 4) | (pgaChan2 << 8) | (pgaChan3 << 12));
+}
+
 bool ADS131M0x::setInputChannelSelection(uint8_t channel, uint8_t input) {
 	static_assert(REG_CH1_CFG == REG_CH0_CFG + 5);
 	static_assert(REG_CH2_CFG == REG_CH0_CFG + 5 * 2);
@@ -216,6 +220,12 @@ const ADS131M0x::AdcRawOutput *ADS131M0x::rawReadADC() {
 	}
 	return &adc2spi;
 }
+
+uint16_t ADS131M0x::readID() { return readRegister(REG_ID); }
+uint16_t ADS131M0x::readSTATUS() { return readRegister(REG_STATUS); }
+uint16_t ADS131M0x::readMODE() { return readRegister(REG_MODE); }
+uint16_t ADS131M0x::readCLOCK() { return readRegister(REG_CLOCK); }
+uint16_t ADS131M0x::readPGA() { return readRegister(REG_GAIN); }
 
 bool ADS131M0x::isCrcOk(const AdcRawOutput *data) {
 	uint16_t crc           = be16toh(data->crc);

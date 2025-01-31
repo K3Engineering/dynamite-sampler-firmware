@@ -11,6 +11,7 @@
 #include "adc_ble_interface.h"
 #include "adc_proc.h"
 
+#include "ADS131M0x_cfg.h"
 #include "debug_pin.h"
 
 constexpr char TAG[] = "ADC";
@@ -84,26 +85,17 @@ static void taskSetupAdc(void *setupDone) {
 	adc.init(PIN_CS_ADC, PIN_DRDY, PIN_ADC_RESET);
 	adc.setupAccess(SPI3_HOST, SPI_MASTER_FREQ_20M, PIN_NUM_CLK, PIN_NUM_MISO, PIN_NUM_MOSI);
 
-	// adc.setMultiplexer(0x00); // AIN0 AIN1
-	// adc.setPGAbypass(0);
-
 	adc.reset();
 
 	for (uint8_t chan = 0; chan < 4; ++chan) {
 		adc.setInputChannelSelection(chan, INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS);
 	}
+	adc.setPGA(ads131UserConfig.pga[0], ads131UserConfig.pga[1], ads131UserConfig.pga[2],
+	           ads131UserConfig.pga[3]);
+	adc.setPowerMode(ads131UserConfig.powerMode);
+	adc.setOsr(ads131UserConfig.osr);
 
-	adc.setChannelPGA(0, PGA_GAIN_1);
-	adc.setChannelPGA(1, PGA_GAIN_32);
-	adc.setChannelPGA(2, PGA_GAIN_32);
-
-	adc.setPowerMode(POWER_MODE_HIGH_RESOLUTION);
-
-	adc.setOsr(OSR_4096);
-
-	for (uint8_t addr = 0; addr < 4; ++addr) {
-		ESP_LOGI(TAG, "%u register contents %u", addr, adc.readRegister(addr));
-	}
+	ads131LogRegisterMap(adc);
 
 	adc.attachISR(isrAdcDrdy);
 
