@@ -26,12 +26,6 @@ extern "C" void app_main(void) {
 	ESP_LOGI(TAG, "Git revision: %s", GIT_REVISION);
 	ESP_LOGI(TAG, "Running on Core: %u", esp_cpu_get_core_id());
 
-#ifndef CONFIG_MOCK_ADC
-	ESP_LOGI(TAG, "Mock adc flag not set");
-#else
-	ESP_LOGI(TAG, "Mock ADC flag: %u", CONFIG_MOCK_ADC);
-#endif
-
 	// ESP_LOGI(TAG, "Config PM SLP IRAM OPT (put lightsleep into ram): %u",
 	// CONFIG_PM_SLP_IRAM_OPT);
 

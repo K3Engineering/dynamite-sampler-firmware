@@ -11,6 +11,7 @@
 #include "adc_ble_interface.h"
 #include "adc_proc.h"
 
+#include "ADS131M0x_cfg.h"
 #include "debug_pin.h"
 
 constexpr char TAG[] = "ADC";
@@ -84,31 +85,16 @@ static void taskSetupAdc(void *setupDone) {
 	adc.init(PIN_CS_ADC, PIN_DRDY, PIN_ADC_RESET);
 	adc.setupAccess(SPI3_HOST, SPI_MASTER_FREQ_20M, PIN_NUM_CLK, PIN_NUM_MISO, PIN_NUM_MOSI);
 
-	// adc.setMultiplexer(0x00); // AIN0 AIN1
-	// adc.setPGAbypass(0);
-
 	adc.reset();
 
 	for (uint8_t chan = 0; chan < 4; ++chan) {
 		adc.setInputChannelSelection(chan, INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS);
 	}
-	adc.setPGA(CHANNEL_PGA_1, CHANNEL_PGA_32, CHANNEL_PGA_32, CHANNEL_PGA_1);
-	adc.setPowerMode(POWER_MODE_HIGH_RESOLUTION);
-	adc.setOsr(OSR_4096);
+	adc.setPGA(ads131Cfg.pga[0], ads131Cfg.pga[1], ads131Cfg.pga[2], ads131Cfg.pga[3]);
+	adc.setPowerMode(ads131Cfg.powerMode);
+	adc.setOsr(ads131Cfg.osr);
 
-	ESP_LOGI(TAG, "ID x%X", adc.readID() >> 8);
-	ESP_LOGI(TAG, "STATUS x%X", adc.readSTATUS());
-	ESP_LOGI(TAG, "MODE x%X", adc.readMODE());
-	uint16_t clock = adc.readCLOCK();
-	ESP_LOGI(TAG, "RESOLUTION %u", clock & 0x03);
-	ESP_LOGI(TAG, "OSR %u", 128 << ((clock >> 2) & 0x07));
-	ESP_LOGI(TAG, "Turbo %c", (clock & 0x20) ? 'Y' : 'N');
-	ESP_LOGI(TAG, "Ch enabled x%X", (clock >> 8) & 0x0F);
-	uint16_t pga = adc.readPGA();
-	for (size_t i = 0; i < sizeof(pga) * 2; ++i) {
-		ESP_LOGI(TAG, "GAIN ch %u = %u", i, 1 << (pga & 0x07));
-		pga >>= 4;
-	}
+	ads131SetupTrace(adc);
 
 	adc.attachISR(isrAdcDrdy);
 
