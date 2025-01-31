@@ -92,17 +92,22 @@ static void taskSetupAdc(void *setupDone) {
 	for (uint8_t chan = 0; chan < 4; ++chan) {
 		adc.setInputChannelSelection(chan, INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS);
 	}
-
-	adc.setChannelPGA(0, PGA_GAIN_1);
-	adc.setChannelPGA(1, PGA_GAIN_32);
-	adc.setChannelPGA(2, PGA_GAIN_32);
-
+	adc.setPGA(CHANNEL_PGA_1, CHANNEL_PGA_32, CHANNEL_PGA_32, CHANNEL_PGA_1);
 	adc.setPowerMode(POWER_MODE_HIGH_RESOLUTION);
-
 	adc.setOsr(OSR_4096);
 
-	for (uint8_t addr = 0; addr < 4; ++addr) {
-		ESP_LOGI(TAG, "%u register contents %u", addr, adc.readRegister(addr));
+	ESP_LOGI(TAG, "ID x%X", adc.readID() >> 8);
+	ESP_LOGI(TAG, "STATUS x%X", adc.readSTATUS());
+	ESP_LOGI(TAG, "MODE x%X", adc.readMODE());
+	uint16_t clock = adc.readCLOCK();
+	ESP_LOGI(TAG, "RESOLUTION %u", clock & 0x03);
+	ESP_LOGI(TAG, "OSR %u", 128 << ((clock >> 2) & 0x07));
+	ESP_LOGI(TAG, "Turbo %c", (clock & 0x20) ? 'Y' : 'N');
+	ESP_LOGI(TAG, "Ch enabled x%X", (clock >> 8) & 0x0F);
+	uint16_t pga = adc.readPGA();
+	for (size_t i = 0; i < sizeof(pga) * 2; ++i) {
+		ESP_LOGI(TAG, "GAIN ch %u = %u", i, 1 << (pga & 0x07));
+		pga >>= 4;
 	}
 
 	adc.attachISR(isrAdcDrdy);
