@@ -29,13 +29,13 @@ extern "C" void app_main(void) {
 	// ESP_LOGI(TAG, "Config PM SLP IRAM OPT (put lightsleep into ram): %u",
 	// CONFIG_PM_SLP_IRAM_OPT);
 
-	uint64_t _chipmacid = 0LL;
-	esp_efuse_mac_get_default((uint8_t *)(&_chipmacid));
-	ESP_LOGI(TAG, "MAC address: 0x%" PRIx64, _chipmacid);
+	uint8_t mac[8]; // size - see esp_efuse_mac_get_default() docs.
+	esp_efuse_mac_get_default(mac);
+	ESP_LOGI(TAG, "MAC address: %02x%02x%02x%02x%02x%02x", mac[5], mac[4], mac[3], mac[2], mac[1],
+	         mac[0]);
 
 	uint8_t data[CALIB_PARTITION_LENGTH];
-
-	size_t data_len = CALIB_PARTITION_LENGTH;
+	size_t  data_len = CALIB_PARTITION_LENGTH;
 
 	esp_err_t err = readLoadcellCalibration(data, CALIB_PARTITION_LENGTH);
 	if (ESP_OK != err) {

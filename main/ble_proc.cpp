@@ -100,10 +100,12 @@ static void taskSetupBle(void *setupDone) {
 	// Create the BLE Device
 	// Name the device with the mac address to make it unique for testing purposes.
 	// TODO this probably isn't the elegant way to do this.
-	char     bleName[CONFIG_BT_NIMBLE_GAP_DEVICE_NAME_MAX_LEN];
-	uint64_t _chipmacid = 0LL;
-	esp_efuse_mac_get_default((uint8_t *)(&_chipmacid));
-	snprintf(bleName, sizeof(bleName), "DS %" PRIx64, _chipmacid);
+	char bleName[CONFIG_BT_NIMBLE_GAP_DEVICE_NAME_MAX_LEN];
+
+	uint8_t mac[8]; // size - see esp_efuse_mac_get_default() docs.
+	esp_efuse_mac_get_default(mac);
+	snprintf(bleName, sizeof(bleName), "DS %02x%02x%02x%02x%02x%02x", mac[5], mac[4], mac[3],
+	         mac[2], mac[1], mac[0]);
 	NimBLEDevice::init(bleName);
 
 	NimBLEDevice::setMTU(BLE_ATT_MTU_MAX);
