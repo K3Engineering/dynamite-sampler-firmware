@@ -7,6 +7,7 @@
 
 #include "adc_ble_interface.h"
 #include "ble_ota_interface.h"
+#include "loadcell_calibration.h"
 
 #include "ble_proc.h"
 
@@ -27,8 +28,7 @@ constexpr char LC_CALIB_CHARACTERISTIC_UUID[] = "10adce11-68a6-450b-9810-ca11b39
 
 static NimBLEServer         *bleServer                  = NULL;
 static NimBLECharacteristic *blePublisherCharacteristic = NULL;
-static NimBLECharacteristic *calibrationCharacteristic  = NULL;
-static uint16_t              adcNotifyChrHandle;
+static uint16_t              adcNotifyChrHandle; // TODO: rename
 
 BleAccess bleAccess{
     .adcStreamBufferHandle         = NULL,
@@ -49,12 +49,12 @@ class MyServerCallbacks : public NimBLEServerCallbacks {
 		// increments of 1.25ms.
 		// Don't skip any connection intervals, and timout after 10*N ms
 		server->updateConnParams(connInfo.getConnHandle(), 6, 6 * 4, 0, 500);
-		ESP_LOGD(TAG, "On connect callback on core %u", xPortGetCoreID());
+		ESP_LOGD(TAG, "Server onConnect, core %u", xPortGetCoreID());
 	};
 
 	void onDisconnect(NimBLEServer *server, NimBLEConnInfo &connInfo, int reason) override {
 		NimBLEDevice::startAdvertising();
-		ESP_LOGD(TAG, "On disco callback on core %u", xPortGetCoreID());
+		ESP_LOGD(TAG, "Server onDisco, core %u", xPortGetCoreID());
 	}
 };
 
@@ -100,10 +100,9 @@ static void taskSetupBle(void *setupDone) {
 	// Create the BLE Device
 	// Name the device with the mac address to make it unique for testing purposes.
 	// TODO this probably isn't the elegant way to do this.
-	char bleName[CONFIG_BT_NIMBLE_GAP_DEVICE_NAME_MAX_LEN];
-
 	uint8_t mac[8]; // size - see esp_efuse_mac_get_default() docs.
 	esp_efuse_mac_get_default(mac);
+	char bleName[CONFIG_BT_NIMBLE_GAP_DEVICE_NAME_MAX_LEN];
 	snprintf(bleName, sizeof(bleName), "DS %02x%02x%02x%02x%02x%02x", mac[5], mac[4], mac[3],
 	         mac[2], mac[1], mac[0]);
 	NimBLEDevice::init(bleName);
@@ -121,8 +120,12 @@ static void taskSetupBle(void *setupDone) {
 	static AdcPublCallbacks feedCb;
 	blePublisherCharacteristic->setCallbacks(&feedCb);
 
-	calibrationCharacteristic =
+	NimBLECharacteristic *calibrationCharacteristic =
 	    srvAdcFeed->createCharacteristic(LC_CALIB_CHARACTERISTIC_UUID, NIMBLE_PROPERTY::READ);
+	CalibrationData calibration;
+	if (readLoadcellCalibration(&calibration)) {
+		calibrationCharacteristic->setValue(calibration.data, sizeof(calibration.data));
+	}
 
 	srvAdcFeed->start();
 
@@ -149,7 +152,7 @@ static void taskSetupBle(void *setupDone) {
 	vTaskDelete(NULL);
 }
 
-void setupBle(int core, const uint8_t *calibrationData, const size_t calibrationLength) {
+void setupBle(int core) {
 	// This buffer is to share the ADC values from the adc read task and BLE notify task
 	bleAccess.adcStreamBufferHandle = xStreamBufferCreate(ADC_FEED_CHUNK_SZ * 8, 1);
 	assert(bleAccess.adcStreamBufferHandle != NULL);
@@ -158,8 +161,6 @@ void setupBle(int core, const uint8_t *calibrationData, const size_t calibration
 	xTaskCreatePinnedToCore(taskSetupBle, "task_BLE_setup", 1024 * 5, (void *)&done, 1, NULL, core);
 	while (!done)
 		vTaskDelay(10);
-
-	calibrationCharacteristic->setValue(calibrationData, calibrationLength);
 
 	// TODO figure out priority for the BLE task
 	xTaskCreatePinnedToCore(taksBlePublishAdcBuffer, "task_BLE_publish", 1024 * 5, NULL, 3,
