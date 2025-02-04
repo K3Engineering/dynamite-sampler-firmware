@@ -11,8 +11,6 @@
 
 constexpr char TAG[] = "OTA";
 
-constexpr TickType_t REBOOT_DEEP_SLEEP_TIMEOUT = 500;
-
 constexpr char DEVICE_MANUFACTURER_NAME[] = "K3 Engineering";
 
 //======================== <UUIDs>
@@ -33,19 +31,18 @@ constexpr ble_uuid128_t OTA_DATA_CHR_UUID = BLE_UUID128_INIT(
     0xb0, 0xa5, 0xf8, 0x45, 0x8d, 0xca, 0x89, 0x9b, 0xd8, 0x4c, 0x40, 0x1f, 0x88, 0x88, 0x40, 0x23);
 //======================== <\UUIDs>
 
-typedef enum {
-	SVR_CHR_OTA_CONTROL_NOP,
-	SVR_CHR_OTA_CONTROL_REQUEST,
-	SVR_CHR_OTA_CONTROL_REQUEST_ACK,
-	SVR_CHR_OTA_CONTROL_REQUEST_NAK,
-	SVR_CHR_OTA_CONTROL_DONE,
-	SVR_CHR_OTA_CONTROL_DONE_ACK,
-	SVR_CHR_OTA_CONTROL_DONE_NAK,
-} svr_chr_ota_control_val_t;
-
 typedef uint8_t  OtaRequestType;
 typedef uint8_t  OtaReplyType;
 typedef uint32_t OtaFileSizeType;
+
+constexpr OtaRequestType SVR_CHR_OTA_CONTROL_REQUEST = 1;
+constexpr OtaRequestType SVR_CHR_OTA_CONTROL_DONE    = 4;
+
+constexpr OtaReplyType SVR_CHR_OTA_CONTROL_NOP         = 0;
+constexpr OtaReplyType SVR_CHR_OTA_CONTROL_REQUEST_ACK = 2;
+constexpr OtaReplyType SVR_CHR_OTA_CONTROL_REQUEST_NAK = 3;
+constexpr OtaReplyType SVR_CHR_OTA_CONTROL_DONE_ACK    = 5;
+constexpr OtaReplyType SVR_CHR_OTA_CONTROL_DONE_NAK    = 6;
 
 typedef struct {
 	const esp_partition_t *updatePartition;
@@ -142,6 +139,7 @@ static bool processOtaDone(OtaControlData *control) {
 
 static void conditionalRestart(const OtaControlData *control) {
 	// restart the ESP to finish the OTA
+	static constexpr TickType_t REBOOT_DEEP_SLEEP_TIMEOUT = 500;
 	if (SVR_CHR_OTA_CONTROL_DONE_ACK == control->otaStatus) {
 		ESP_LOGI(TAG, "Preparing to restart!");
 		vTaskDelay(pdMS_TO_TICKS(REBOOT_DEEP_SLEEP_TIMEOUT));
