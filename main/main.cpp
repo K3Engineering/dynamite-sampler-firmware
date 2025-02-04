@@ -5,7 +5,6 @@
 
 #include "adc_proc.h"
 #include "ble_proc.h"
-#include "loadcell_calibration.h"
 
 #ifndef GIT_REVISION
 #define GIT_REVISION "?"
@@ -20,8 +19,6 @@ constexpr uint32_t CORE_BLE = CONFIG_BT_NIMBLE_PINNED_TO_CORE;
 constexpr uint32_t CORE_APP = 1;
 static_assert(CORE_BLE != CORE_APP);
 
-#include "esp_partition.h"
-
 extern "C" void app_main(void) {
 	ESP_LOGI(TAG, "Git revision: %s", GIT_REVISION);
 	ESP_LOGI(TAG, "Running on Core: %u", esp_cpu_get_core_id());
@@ -29,21 +26,12 @@ extern "C" void app_main(void) {
 	// ESP_LOGI(TAG, "Config PM SLP IRAM OPT (put lightsleep into ram): %u",
 	// CONFIG_PM_SLP_IRAM_OPT);
 
-	uint64_t _chipmacid = 0LL;
-	esp_efuse_mac_get_default((uint8_t *)(&_chipmacid));
-	ESP_LOGI(TAG, "MAC address: 0x%" PRIx64, _chipmacid);
+	uint8_t mac[8]; // size - see esp_efuse_mac_get_default() docs.
+	esp_efuse_mac_get_default(mac);
+	ESP_LOGI(TAG, "MAC address: %02x%02x%02x%02x%02x%02x", mac[5], mac[4], mac[3], mac[2], mac[1],
+	         mac[0]);
 
-	uint8_t data[CALIB_PARTITION_LENGTH];
-
-	size_t data_len = CALIB_PARTITION_LENGTH;
-
-	esp_err_t err = readLoadcellCalibration(data, CALIB_PARTITION_LENGTH);
-	if (ESP_OK != err) {
-		data_len = 0;
-		ESP_LOGE(TAG, "Loading calibration data failed with error: %d", err);
-	}
-
-	setupBle(CORE_BLE, data, data_len);
+	setupBle(CORE_BLE);
 	setupAdc(CORE_APP);
 
 	otaConditionalRollback();
