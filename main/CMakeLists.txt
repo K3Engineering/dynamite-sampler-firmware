@@ -4,10 +4,11 @@ idf_component_register(
 )
 
 # A custom target is always out of date. This forces cmake to run the COMMAND on every build.
+set(build_metadata_filepath ${CMAKE_CURRENT_BINARY_DIR}/build_metadata.h)
 add_custom_target(
     build_metadata_target
-    COMMAND python ${CMAKE_CURRENT_SOURCE_DIR}/generate_build_metadata.py > ${CMAKE_CURRENT_BINARY_DIR}/build_metadata.h
-    COMMENT "Generating build metadata header file. NEW APPROACH"
-    BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/meta.h
+    COMMAND python ${CMAKE_CURRENT_SOURCE_DIR}/generate_build_metadata.py > ${build_metadata_filepath}
+    COMMENT "Generating build metadata header file."
+    BYPRODUCTS ${build_metadata_filepath}
 )
 add_dependencies(${COMPONENT_TARGET} build_metadata_target)
