@@ -37,4 +37,30 @@ constexpr OtaReplyType SVR_CHR_OTA_CONTROL_DONE_NAK    = 6;
 
 //======================== </OTA Update>
 
+//======================== <ADC Data>
+#pragma pack(push, 1)
+
+struct DynamiteAdcSample {
+	static constexpr size_t BITS_PER_SAMPLE = 24;
+
+	uint8_t val[BITS_PER_SAMPLE / 8];
+};
+
+struct DynamiteAdcFeedData {
+	static constexpr size_t NUM_CHANELS = 4;
+
+	uint16_t          status;
+	DynamiteAdcSample data[NUM_CHANELS];
+	uint8_t           crc;
+};
+
+struct DynamiteAdcFeedChunk {
+	static constexpr size_t SZ = 16;
+
+	DynamiteAdcFeedData data[SZ];
+};
+
+#pragma pack(pop)
+//======================== </ADC Data>
+
 #endif // __dynamite_sampler_api_h__

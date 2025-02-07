@@ -1,6 +1,8 @@
-#pragma once
+#ifndef __dynamite_uuid_h__
+#define __dynamite_uuid_h__
 
 #include <host/ble_uuid.h>
+#include <stdint.h>
 
 #include "dynamite_sampler_api.h"
 
@@ -21,7 +23,7 @@ constexpr uint8_t fromHex(char x) {
 }
 
 template <size_t LEN>
-    requires(LEN == sizeof(ble_uuid128_t::value) * 2 + 4 + 1)
+    requires(LEN == BLE_UUID_STR_LEN)
 consteval ble_uuid128_t UUID128_FROM_STRING(const char (&uuid_s)[LEN]) {
 	const size_t sz = sizeof(ble_uuid128_t::value);
 	char         noDash[sz * 2]{};
@@ -32,7 +34,7 @@ consteval ble_uuid128_t UUID128_FROM_STRING(const char (&uuid_s)[LEN]) {
 		}
 	}
 	ble_uuid128_t uuid128{};
-	uuid128.u = static_cast<ble_uuid_t>(BLE_UUID_TYPE_128);
+	uuid128.u.type = BLE_UUID_TYPE_128;
 	for (size_t i = 0; i < sz; ++i) {
 		uuid128.value[sz - i - 1] = (fromHex(noDash[i * 2]) << 4) | fromHex(noDash[i * 2 + 1]);
 	}
@@ -53,3 +55,5 @@ constexpr ble_uuid128_t LC_CALIB_CHARACTERISTIC_UUID128 =
 constexpr ble_uuid128_t OTA_SVC_UUID128         = UUID128_FROM_STRING(OTA_SVC_UUID);
 constexpr ble_uuid128_t OTA_CONTROL_CHR_UUID128 = UUID128_FROM_STRING(OTA_CONTROL_CHR_UUID);
 constexpr ble_uuid128_t OTA_DATA_CHR_UUID128    = UUID128_FROM_STRING(OTA_DATA_CHR_UUID);
+
+#endif
