@@ -8,12 +8,11 @@
 #include "ble_proc.h"
 
 #include "build_metadata.h"
-#include "dynamite_sampler_api.h"
+#include "dynamite_uuid.h"
 
 constexpr char TAG[] = "OTA";
 
-constexpr char DEVICE_MANUFACTURER_NAME[] = "3K";
-constexpr char DEVICE_MODEL_NUMBER[]      = "0.1d";
+constexpr char DEVICE_MANUFACTURER_NAME[] = "K3 Engineering";
 
 typedef struct {
 	const esp_partition_t *updatePartition;
@@ -226,7 +225,7 @@ void otaConditionalRollback() {
 }
 
 void setupBleOta(NimBLEServer *server) { // Create the BLE Services
-	NimBLEService *srvOTA = server->createService(OTA_SVC_UUID);
+	NimBLEService *srvOTA = server->createService(&OTA_SVC_UUID128);
 
 	NimBLECharacteristic *chrOtaControl = srvOTA->createCharacteristic(
 	    &OTA_CONTROL_CHR_UUID128, NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::NOTIFY, 16);

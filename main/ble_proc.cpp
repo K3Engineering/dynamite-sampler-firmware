@@ -8,7 +8,7 @@
 #include "adc_ble_interface.h"
 #include "ble_ota_interface.h"
 #include "ble_proc.h"
-#include "dynamite_sampler_api.h"
+#include "dynamite_uuid.h"
 #include "loadcell_calibration.h"
 
 constexpr char TAG[] = "BLE";
