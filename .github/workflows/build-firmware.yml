@@ -9,9 +9,6 @@ jobs:
     steps:
     - name: Checkout repo
       uses: actions/checkout@v4
-      with:
-        # To be able to do git describe
-        fetch-tags: true
 
     - name: esp-idf build
       uses: espressif/esp-idf-ci-action@v1
