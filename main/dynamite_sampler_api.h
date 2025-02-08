@@ -7,7 +7,6 @@
 
 constexpr uint16_t DEVICE_INFO_SVC_UUID         = 0x180A;
 constexpr uint16_t DEVICE_MAKE_NAME_CHR_UUID    = 0x2A29;
-constexpr uint16_t DEVICE_MODEL_NUM_CHR_UUID    = 0x2A24;
 constexpr uint16_t DEVICE_FIRMWARE_VER_CHR_UUID = 0x2A26;
 
 constexpr char ADC_FEED_SVC_UUID[] = "e331016b-6618-4f8f-8997-1a2c7c9e5fa3";
