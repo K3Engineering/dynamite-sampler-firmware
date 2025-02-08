@@ -18,9 +18,9 @@ jobs:
         path: '.'
         command: idf.py $(python ./generate_idf_flags_from_config_json.py release) build
 
-    # this is the same way the CMake generates the tag.
+    # this is the same way the main/generate_build_metadata.py generates the version.
     - name: Get git description
-      run: echo "TAG=$(echo $(git describe --always --dirty))" >> $GITHUB_ENV
+      run: echo "TAG=$(echo $(git describe --always --dirty --tags))" >> $GITHUB_ENV
 
     - name: Upload bin
       uses: actions/upload-artifact@v4

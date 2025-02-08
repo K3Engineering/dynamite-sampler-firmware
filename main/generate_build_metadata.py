@@ -17,7 +17,9 @@ def eprint(*args, **kwargs):
 # --always: if there isn't a tag, use the git hash.
 # --dirty: append -dirty if there are uncommited changes. Since the changes are not
 # commited, the next best thing is to make it apparent that the firmware has been changed.
-r = subprocess.run(["git", "describe", "--always", "--dirty"], capture_output=True)
+# --tags: use the non-annotated tags too, since github releases uses that.
+git_cmd = ["git", "describe", "--always", "--dirty", "--tags"]
+r = subprocess.run(git_cmd, capture_output=True)
 git_describe = r.stdout.strip().decode("utf-8")
 
 output = f"""/*
