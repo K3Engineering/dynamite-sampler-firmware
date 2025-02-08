@@ -1,0 +1,18 @@
+changelog:
+
+  categories:
+    - title: Breaking Changes
+      labels:
+        - SemVer-Major
+    - title: New Features
+      labels:
+        - SemVer-Minor
+    - title: Bugfixes & Refactors
+      labels:
+        - SemVer-Patch
+    - title: Not Firmware changes
+      labels:
+        - SemVer-None
+    - title: Other Changes
+      labels:
+        - "*"
