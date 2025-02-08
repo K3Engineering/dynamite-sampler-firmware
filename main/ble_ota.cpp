@@ -257,15 +257,8 @@ void otaConditionalRollback() {
 }
 
 void setupBleOta(NimBLEServer *server) { // Create the BLE Services
-	NimBLEService        *srvDeviceInfo = server->createService(DEVICE_INFO_SVC_UUID.value);
-	NimBLECharacteristic *chrDevName    = srvDeviceInfo->createCharacteristic(
-        DEVICE_MAKE_NAME_CHR_UUID.value, NIMBLE_PROPERTY::READ, sizeof(DEVICE_MANUFACTURER_NAME));
-	chrDevName->setValue(DEVICE_MANUFACTURER_NAME);
-	NimBLECharacteristic *chrFirmwareVer = srvDeviceInfo->createCharacteristic(
-	    DEVICE_FIRMWARE_VER_CHR_UUID.value, NIMBLE_PROPERTY::READ, sizeof(GIT_DESCRIBE));
-	chrFirmwareVer->setValue(GIT_DESCRIBE);
+	NimBLEService *srvOTA = server->createService(&OTA_SVC_UUID);
 
-	NimBLEService        *srvOTA        = server->createService(&OTA_SVC_UUID);
 	NimBLECharacteristic *chrOtaControl = srvOTA->createCharacteristic(
 	    &OTA_CONTROL_CHR_UUID, NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::NOTIFY, 16);
 	static OtaControlChrCallbacks otaControlCb(&otaControlData);
@@ -276,6 +269,26 @@ void setupBleOta(NimBLEServer *server) { // Create the BLE Services
 	static OtaDataChrCallbacks otaDataCb(&otaControlData);
 	chrOtaData->setCallbacks(&otaDataCb);
 
-	srvDeviceInfo->start();
 	srvOTA->start();
+}
+
+// Set the BLE standardized device info
+void setDeviceInfo(NimBLEServer *server) {
+	// TODO: move this function into a separate file since it isn't really part of OTA and
+	// it depends on GIT_DESCRIBE which gets updated every build.
+	// TODO: the standardized UUIDs could probably be moved into this function, since
+	// they aren't used anywhere else.
+	NimBLEService *srvDeviceInfo = server->createService(DEVICE_INFO_SVC_UUID.value);
+
+	NimBLECharacteristic *chrDevName = srvDeviceInfo->createCharacteristic(
+	    DEVICE_MAKE_NAME_CHR_UUID.value, NIMBLE_PROPERTY::READ, sizeof(DEVICE_MANUFACTURER_NAME));
+	chrDevName->setValue(DEVICE_MANUFACTURER_NAME);
+	ESP_LOGI(TAG, "Set Device manufacture name to: %s", DEVICE_MANUFACTURER_NAME);
+
+	NimBLECharacteristic *chrFirmwareVer = srvDeviceInfo->createCharacteristic(
+	    DEVICE_FIRMWARE_VER_CHR_UUID.value, NIMBLE_PROPERTY::READ, sizeof(GIT_DESCRIBE));
+	chrFirmwareVer->setValue(GIT_DESCRIBE);
+	ESP_LOGI(TAG, "Set Device Firmware version to: %s", GIT_DESCRIBE);
+
+	srvDeviceInfo->start();
 }
