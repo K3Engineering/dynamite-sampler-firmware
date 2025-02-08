@@ -8,44 +8,11 @@
 #include "ble_proc.h"
 
 #include "build_metadata.h"
+#include "dynamite_uuid.h"
 
 constexpr char TAG[] = "OTA";
 
-constexpr TickType_t REBOOT_DEEP_SLEEP_TIMEOUT = 500;
-
 constexpr char DEVICE_MANUFACTURER_NAME[] = "K3 Engineering";
-
-//======================== <UUIDs>
-constexpr ble_uuid16_t DEVICE_INFO_SVC_UUID =
-    BLE_UUID16_INIT(0x180A); // BT Device Information Service
-constexpr ble_uuid16_t DEVICE_MAKE_NAME_CHR_UUID =
-    BLE_UUID16_INIT(0x2A29); // BT Manufacturer Name String
-constexpr ble_uuid16_t DEVICE_MODEL_NUMBER_CHR_UUID =
-    BLE_UUID16_INIT(0x2A24); // BT ModelNumberString
-constexpr ble_uuid16_t DEVICE_FIRMWARE_VER_CHR_UUID =
-    BLE_UUID16_INIT(0x2A26); // Firmware Revision String
-
-constexpr ble_uuid128_t OTA_SVC_UUID = BLE_UUID128_INIT(
-    0xd8, 0xe6, 0xfd, 0x1d, 0x4a, 024, 0xc6, 0xb1, 0x53, 0x4c, 0x4c, 0x59, 0x6d, 0xd9, 0xf1, 0xd6);
-constexpr ble_uuid128_t OTA_CONTROL_CHR_UUID = BLE_UUID128_INIT(
-    0x30, 0xd8, 0xe3, 0x3a, 0x0e, 0x27, 0x22, 0xb7, 0xa4, 0x46, 0xc0, 0x21, 0xaa, 0x71, 0xd6, 0x7a);
-constexpr ble_uuid128_t OTA_DATA_CHR_UUID = BLE_UUID128_INIT(
-    0xb0, 0xa5, 0xf8, 0x45, 0x8d, 0xca, 0x89, 0x9b, 0xd8, 0x4c, 0x40, 0x1f, 0x88, 0x88, 0x40, 0x23);
-//======================== <\UUIDs>
-
-typedef enum {
-	SVR_CHR_OTA_CONTROL_NOP,
-	SVR_CHR_OTA_CONTROL_REQUEST,
-	SVR_CHR_OTA_CONTROL_REQUEST_ACK,
-	SVR_CHR_OTA_CONTROL_REQUEST_NAK,
-	SVR_CHR_OTA_CONTROL_DONE,
-	SVR_CHR_OTA_CONTROL_DONE_ACK,
-	SVR_CHR_OTA_CONTROL_DONE_NAK,
-} svr_chr_ota_control_val_t;
-
-typedef uint8_t  OtaRequestType;
-typedef uint8_t  OtaReplyType;
-typedef uint32_t OtaFileSizeType;
 
 typedef struct {
 	const esp_partition_t *updatePartition;
@@ -142,6 +109,7 @@ static bool processOtaDone(OtaControlData *control) {
 
 static void conditionalRestart(const OtaControlData *control) {
 	// restart the ESP to finish the OTA
+	static constexpr TickType_t REBOOT_DEEP_SLEEP_TIMEOUT = 500;
 	if (SVR_CHR_OTA_CONTROL_DONE_ACK == control->otaStatus) {
 		ESP_LOGI(TAG, "Preparing to restart!");
 		vTaskDelay(pdMS_TO_TICKS(REBOOT_DEEP_SLEEP_TIMEOUT));
@@ -257,15 +225,15 @@ void otaConditionalRollback() {
 }
 
 void setupBleOta(NimBLEServer *server) { // Create the BLE Services
-	NimBLEService *srvOTA = server->createService(&OTA_SVC_UUID);
+	NimBLEService *srvOTA = server->createService(&OTA_SVC_UUID128);
 
 	NimBLECharacteristic *chrOtaControl = srvOTA->createCharacteristic(
-	    &OTA_CONTROL_CHR_UUID, NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::NOTIFY, 16);
+	    &OTA_CONTROL_CHR_UUID128, NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::NOTIFY, 16);
 	static OtaControlChrCallbacks otaControlCb(&otaControlData);
 	chrOtaControl->setCallbacks(&otaControlCb);
 
 	NimBLECharacteristic *chrOtaData =
-	    srvOTA->createCharacteristic(&OTA_DATA_CHR_UUID, NIMBLE_PROPERTY::WRITE, 512 + 128);
+	    srvOTA->createCharacteristic(&OTA_DATA_CHR_UUID128, NIMBLE_PROPERTY::WRITE, 512 + 128);
 	static OtaDataChrCallbacks otaDataCb(&otaControlData);
 	chrOtaData->setCallbacks(&otaDataCb);
 
@@ -278,15 +246,15 @@ void setDeviceInfo(NimBLEServer *server) {
 	// it depends on GIT_DESCRIBE which gets updated every build.
 	// TODO: the standardized UUIDs could probably be moved into this function, since
 	// they aren't used anywhere else.
-	NimBLEService *srvDeviceInfo = server->createService(DEVICE_INFO_SVC_UUID.value);
+	NimBLEService *srvDeviceInfo = server->createService(DEVICE_INFO_SVC_UUID16.value);
 
 	NimBLECharacteristic *chrDevName = srvDeviceInfo->createCharacteristic(
-	    DEVICE_MAKE_NAME_CHR_UUID.value, NIMBLE_PROPERTY::READ, sizeof(DEVICE_MANUFACTURER_NAME));
+	    DEVICE_MAKE_NAME_CHR_UUID16.value, NIMBLE_PROPERTY::READ, sizeof(DEVICE_MANUFACTURER_NAME));
 	chrDevName->setValue(DEVICE_MANUFACTURER_NAME);
 	ESP_LOGI(TAG, "Set Device manufacture name to: %s", DEVICE_MANUFACTURER_NAME);
 
 	NimBLECharacteristic *chrFirmwareVer = srvDeviceInfo->createCharacteristic(
-	    DEVICE_FIRMWARE_VER_CHR_UUID.value, NIMBLE_PROPERTY::READ, sizeof(GIT_DESCRIBE));
+	    DEVICE_FIRMWARE_VER_CHR_UUID16.value, NIMBLE_PROPERTY::READ, sizeof(GIT_DESCRIBE));
 	chrFirmwareVer->setValue(GIT_DESCRIBE);
 	ESP_LOGI(TAG, "Set Device Firmware version to: %s", GIT_DESCRIBE);
 

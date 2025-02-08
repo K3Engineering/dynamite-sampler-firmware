@@ -7,28 +7,15 @@
 
 #include "adc_ble_interface.h"
 #include "ble_ota_interface.h"
-#include "loadcell_calibration.h"
-
 #include "ble_proc.h"
+#include "dynamite_uuid.h"
+#include "loadcell_calibration.h"
 
 constexpr char TAG[] = "BLE";
 
-//======================== <UUIDs>
-constexpr char ADC_FEED_SVC_UUID[] = "e331016b-6618-4f8f-8997-1a2c7c9e5fa3";
-constexpr char ADC_FEED_CHR_UUID[] = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
-
-// static constexpr ble_uuid128_t ADC_FEED_SVC_UUID = BLE_UUID128_INIT(
-//     0xa3, 0x5f, 0x9e, 0x7c, 0x2c, 0x1a, 0x97, 0x89, 0x8f, 0x4f, 0x18, 0x66, 0x6b, 0x01, 0x31,
-//     0xe3);
-// static constexpr ble_uuid128_t ADC_FEED_CHR_UUID = BLE_UUID128_INIT(
-//     0xa8, 0x26, 0x1b, 0x36, 0x07, 0xea, 0xf5, 0xb7, 0x88, 0x46, 0xe1, 0x36, 0x3e, 0x48, 0xb5,
-//     0xbe);
-//======================== <\UUIDs>
-constexpr char LC_CALIB_CHARACTERISTIC_UUID[] = "10adce11-68a6-450b-9810-ca11b39fd283";
-
-static NimBLEServer         *bleServer                  = NULL;
-static NimBLECharacteristic *blePublisherCharacteristic = NULL;
-static uint16_t              adcNotifyChrHandle; // TODO: rename
+static NimBLEServer         *bleServer                = NULL;
+static NimBLECharacteristic *adcFeedBleCharacteristic = NULL;
+static uint16_t              adcFeedConnectionHandle; // TODO: rename
 
 BleAccess bleAccess{
     .adcStreamBufferHandle         = NULL,
@@ -58,11 +45,11 @@ class MyServerCallbacks : public NimBLEServerCallbacks {
 	}
 };
 
-class AdcPublCallbacks : public NimBLECharacteristicCallbacks {
+class AdcFeedCallbacks : public NimBLECharacteristicCallbacks {
 	void onSubscribe(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo,
 	                 uint16_t subValue) override {
 		bleAccess.deviceConnected = subValue & 1;
-		adcNotifyChrHandle        = connInfo.getConnHandle();
+		adcFeedConnectionHandle   = connInfo.getConnHandle();
 		//  TODO: stop reading the ADC and stop the interupt when disconnected
 	}
 };
@@ -76,7 +63,7 @@ static void blePublishAdcBuffer() {
 		size_t  bytesRead =
 		    xStreamBufferReceive(bleAccess.adcStreamBufferHandle, batch, sizeof(batch), 0);
 		if (bytesRead == ADC_FEED_CHUNK_SZ) {
-			blePublisherCharacteristic->notify(batch, bytesRead, adcNotifyChrHandle);
+			adcFeedBleCharacteristic->notify(batch, bytesRead, adcFeedConnectionHandle);
 		}
 	}
 }
@@ -114,14 +101,14 @@ static void taskSetupBle(void *setupDone) {
 	static MyServerCallbacks serverCb;
 	bleServer->setCallbacks(&serverCb, false);
 
-	NimBLEService *srvAdcFeed = bleServer->createService(ADC_FEED_SVC_UUID);
-	blePublisherCharacteristic =
-	    srvAdcFeed->createCharacteristic(ADC_FEED_CHR_UUID, NIMBLE_PROPERTY::NOTIFY);
-	static AdcPublCallbacks feedCb;
-	blePublisherCharacteristic->setCallbacks(&feedCb);
+	NimBLEService *srvAdcFeed = bleServer->createService(&DYNAMITE_SAMPLER_SVC_UUID128);
+	adcFeedBleCharacteristic =
+	    srvAdcFeed->createCharacteristic(&ADC_FEED_CHR_UUID128, NIMBLE_PROPERTY::NOTIFY);
+	static AdcFeedCallbacks feedCb;
+	adcFeedBleCharacteristic->setCallbacks(&feedCb);
 
 	NimBLECharacteristic *calibrationCharacteristic =
-	    srvAdcFeed->createCharacteristic(LC_CALIB_CHARACTERISTIC_UUID, NIMBLE_PROPERTY::READ);
+	    srvAdcFeed->createCharacteristic(&LC_CALIB_CHR_UUID128, NIMBLE_PROPERTY::READ);
 	CalibrationData calibration;
 	if (readLoadcellCalibration(&calibration)) {
 		calibrationCharacteristic->setValue(calibration.data, sizeof(calibration.data));
