@@ -6,10 +6,6 @@
 #include "adc_proc.h"
 #include "ble_proc.h"
 
-#ifndef GIT_REVISION
-#define GIT_REVISION "?"
-#endif
-
 constexpr char TAG[] = "DYNA";
 
 // Core0 is for BLE
@@ -20,7 +16,6 @@ constexpr uint32_t CORE_APP = 1;
 static_assert(CORE_BLE != CORE_APP);
 
 extern "C" void app_main(void) {
-	ESP_LOGI(TAG, "Git revision: %s", GIT_REVISION);
 	ESP_LOGI(TAG, "Running on Core: %u", esp_cpu_get_core_id());
 
 	// ESP_LOGI(TAG, "Config PM SLP IRAM OPT (put lightsleep into ram): %u",

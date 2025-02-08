@@ -129,6 +129,7 @@ static void taskSetupBle(void *setupDone) {
 
 	srvAdcFeed->start();
 
+	setDeviceInfo(bleServer);
 	setupBleOta(bleServer);
 
 	// Start advertising

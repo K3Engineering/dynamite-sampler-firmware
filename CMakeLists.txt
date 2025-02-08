@@ -9,20 +9,6 @@ set(COMPONENTS main)
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
-find_package(Git)
-set(GIT_REVISION "unknown")
-if (GIT_FOUND)
-    execute_process(
-        COMMAND ${GIT_EXECUTABLE} describe --always --dirty
-        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-        OUTPUT_VARIABLE GIT_REVISION
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-    )
-    message(STATUS "Git Revision ${GIT_REVISION}")
-else()
-    message(STATUS "Git not found")
-endif()
-
 project(dynamite-sampler-firmware)
 
 set(CMAKE_CXX_STANDARD 20)
