@@ -108,7 +108,7 @@ static void taskSetupBle(void *setupDone) {
 	blePublisherCharacteristic->setCallbacks(&feedCb);
 
 	NimBLECharacteristic *calibrationCharacteristic =
-	    srvAdcFeed->createCharacteristic(&LC_CALIB_CHARACTERISTIC_UUID128, NIMBLE_PROPERTY::READ);
+	    srvAdcFeed->createCharacteristic(&LC_CALIB_CHR_UUID128, NIMBLE_PROPERTY::READ);
 	CalibrationData calibration;
 	if (readLoadcellCalibration(&calibration)) {
 		calibrationCharacteristic->setValue(calibration.data, sizeof(calibration.data));
