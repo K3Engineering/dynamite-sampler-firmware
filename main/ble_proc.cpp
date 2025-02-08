@@ -13,9 +13,9 @@
 
 constexpr char TAG[] = "BLE";
 
-static NimBLEServer         *bleServer                  = NULL;
-static NimBLECharacteristic *blePublisherCharacteristic = NULL;
-static uint16_t              adcNotifyChrHandle; // TODO: rename
+static NimBLEServer         *bleServer                = NULL;
+static NimBLECharacteristic *adcFeedBleCharacteristic = NULL;
+static uint16_t              adcFeedConnectionHandle; // TODO: rename
 
 BleAccess bleAccess{
     .adcStreamBufferHandle         = NULL,
@@ -45,11 +45,11 @@ class MyServerCallbacks : public NimBLEServerCallbacks {
 	}
 };
 
-class AdcPublCallbacks : public NimBLECharacteristicCallbacks {
+class AdcFeedCallbacks : public NimBLECharacteristicCallbacks {
 	void onSubscribe(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo,
 	                 uint16_t subValue) override {
 		bleAccess.deviceConnected = subValue & 1;
-		adcNotifyChrHandle        = connInfo.getConnHandle();
+		adcFeedConnectionHandle   = connInfo.getConnHandle();
 		//  TODO: stop reading the ADC and stop the interupt when disconnected
 	}
 };
@@ -63,7 +63,7 @@ static void blePublishAdcBuffer() {
 		size_t  bytesRead =
 		    xStreamBufferReceive(bleAccess.adcStreamBufferHandle, batch, sizeof(batch), 0);
 		if (bytesRead == ADC_FEED_CHUNK_SZ) {
-			blePublisherCharacteristic->notify(batch, bytesRead, adcNotifyChrHandle);
+			adcFeedBleCharacteristic->notify(batch, bytesRead, adcFeedConnectionHandle);
 		}
 	}
 }
@@ -101,11 +101,11 @@ static void taskSetupBle(void *setupDone) {
 	static MyServerCallbacks serverCb;
 	bleServer->setCallbacks(&serverCb, false);
 
-	NimBLEService *srvAdcFeed = bleServer->createService(&ADC_FEED_SVC_UUID128);
-	blePublisherCharacteristic =
+	NimBLEService *srvAdcFeed = bleServer->createService(&DYNAMITE_SAMPLER_SVC_UUID128);
+	adcFeedBleCharacteristic =
 	    srvAdcFeed->createCharacteristic(&ADC_FEED_CHR_UUID128, NIMBLE_PROPERTY::NOTIFY);
-	static AdcPublCallbacks feedCb;
-	blePublisherCharacteristic->setCallbacks(&feedCb);
+	static AdcFeedCallbacks feedCb;
+	adcFeedBleCharacteristic->setCallbacks(&feedCb);
 
 	NimBLECharacteristic *calibrationCharacteristic =
 	    srvAdcFeed->createCharacteristic(&LC_CALIB_CHR_UUID128, NIMBLE_PROPERTY::READ);
