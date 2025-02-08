@@ -22,12 +22,10 @@ constexpr uint8_t fromHex(char x) {
 	return 0;
 }
 
-template <size_t LEN>
-    requires(LEN == BLE_UUID_STR_LEN)
-consteval ble_uuid128_t UUID128_FROM_STRING(const char (&uuid_s)[LEN]) {
+consteval ble_uuid128_t UUID128_FROM_STRING(const char (&uuid_s)[BLE_UUID_STR_LEN]) {
 	const size_t sz = sizeof(ble_uuid128_t::value);
 	char         noDash[sz * 2]{};
-	for (size_t i = 0, j = 0; i < LEN - 1; ++i) {
+	for (size_t i = 0, j = 0; i < sizeof(uuid_s) - 1; ++i) {
 		if (uuid_s[i] != '-') {
 			noDash[j] = uuid_s[i];
 			j++;
