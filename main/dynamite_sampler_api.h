@@ -41,12 +41,13 @@ constexpr OtaReplyType SVR_CHR_OTA_CONTROL_DONE_NAK    = 6;
 #pragma pack(push, 1)
 
 struct DynamiteAdcSample {
-	static constexpr size_t BITS_PER_SAMPLE = 24;
+	static constexpr size_t SAMPLE_BITS  = 24;
+	static constexpr size_t SAMPLE_BYTES = (SAMPLE_BITS + 7) / 8;
 
-	uint8_t val[BITS_PER_SAMPLE / 8];
+	uint8_t sample[SAMPLE_BYTES];
 };
 
-struct DynamiteAdcFeedData {
+struct DynamiteFeedData {
 	static constexpr size_t NUM_CHANELS = 4;
 
 	uint16_t          status;
@@ -54,10 +55,8 @@ struct DynamiteAdcFeedData {
 	uint8_t           crc;
 };
 
-struct DynamiteAdcFeedChunk {
-	static constexpr size_t SZ = 16;
-
-	DynamiteAdcFeedData data[SZ];
+struct DynamiteFeedChunk {
+	DynamiteFeedData data[16];
 };
 
 #pragma pack(pop)
