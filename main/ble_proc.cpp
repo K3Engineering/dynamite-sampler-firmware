@@ -20,7 +20,7 @@ static uint16_t              adcFeedConnectionHandle; // TODO: rename
 BleAccess bleAccess{
     .adcStreamBufferHandle         = NULL,
     .bleAdcFeedPublisherTaskHandle = NULL,
-    .deviceConnected               = false,
+    .clientSubscribed              = false,
 };
 
 class MyServerCallbacks : public NimBLEServerCallbacks {
@@ -48,8 +48,8 @@ class MyServerCallbacks : public NimBLEServerCallbacks {
 class AdcFeedCallbacks : public NimBLECharacteristicCallbacks {
 	void onSubscribe(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo,
 	                 uint16_t subValue) override {
-		bleAccess.deviceConnected = subValue & 1;
-		adcFeedConnectionHandle   = connInfo.getConnHandle();
+		bleAccess.clientSubscribed = subValue & 1;
+		adcFeedConnectionHandle    = connInfo.getConnHandle();
 		//  TODO: stop reading the ADC and stop the interupt when disconnected
 	}
 };
@@ -57,7 +57,6 @@ class AdcFeedCallbacks : public NimBLECharacteristicCallbacks {
 // Read the adc buffer and update the BLE characteristic
 static void blePublishAdcBuffer() {
 
-	// TODO figure if should check deviceConnected?
 	if (xStreamBufferBytesAvailable(bleAccess.adcStreamBufferHandle) >= ADC_FEED_CHUNK_SZ) {
 		uint8_t batch[ADC_FEED_CHUNK_SZ];
 		size_t  bytesRead =
@@ -121,18 +120,16 @@ static void taskSetupBle(void *setupDone) {
 
 	// Start advertising
 	NimBLEAdvertising *pAdvertising = NimBLEDevice::getAdvertising();
-	pAdvertising->setName(bleName);
-	pAdvertising->addServiceUUID(srvAdcFeed->getUUID());
-	// pAdvertising->addServiceUUID(srvDeviceInfo->getUUID());
-	// pAdvertising->addServiceUUID(srvOTA->getUUID());
-
 	//  Standard BLE advertisement packet is only 31 bytes, so long names don't always fit.
 	//  Scan response allows for devices to request more during the scan.
 	//  This will allow for more than the 31 bytes, like longer names.
 	// If your device is battery powered you may consider setting scan response *to false as it
 	// will extend battery life at the expense of less data sent.
 	pAdvertising->enableScanResponse(true);
-
+	pAdvertising->setName(bleName);
+	pAdvertising->addServiceUUID(srvAdcFeed->getUUID());
+	// pAdvertising->addServiceUUID(srvDeviceInfo->getUUID());
+	// pAdvertising->addServiceUUID(srvOTA->getUUID());
 	NimBLEDevice::startAdvertising();
 	ESP_LOGI(TAG, "BLE setup done, advertising started");
 
