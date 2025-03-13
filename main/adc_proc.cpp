@@ -44,7 +44,7 @@ static void IRAM_ATTR isrAdcDrdy(void *param) {
 static void adcReadAndBuffer() {
 	const AdcClass::AdcRawOutput *adcReading = adc.rawReadADC();
 
-	if (!bleAccess.deviceConnected)
+	if (!bleAccess.clientSubscribed)
 		return;
 
 	BleAdcFeedData toSend(adcReading->status, adcReading->data, adc.isCrcOk(adcReading));
