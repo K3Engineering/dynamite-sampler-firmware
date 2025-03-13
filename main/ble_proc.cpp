@@ -121,18 +121,16 @@ static void taskSetupBle(void *setupDone) {
 
 	// Start advertising
 	NimBLEAdvertising *pAdvertising = NimBLEDevice::getAdvertising();
-	pAdvertising->setName(bleName);
-	pAdvertising->addServiceUUID(srvAdcFeed->getUUID());
-	// pAdvertising->addServiceUUID(srvDeviceInfo->getUUID());
-	// pAdvertising->addServiceUUID(srvOTA->getUUID());
-
 	//  Standard BLE advertisement packet is only 31 bytes, so long names don't always fit.
 	//  Scan response allows for devices to request more during the scan.
 	//  This will allow for more than the 31 bytes, like longer names.
 	// If your device is battery powered you may consider setting scan response *to false as it
 	// will extend battery life at the expense of less data sent.
 	pAdvertising->enableScanResponse(true);
-
+	pAdvertising->setName(bleName);
+	pAdvertising->addServiceUUID(srvAdcFeed->getUUID());
+	// pAdvertising->addServiceUUID(srvDeviceInfo->getUUID());
+	// pAdvertising->addServiceUUID(srvOTA->getUUID());
 	NimBLEDevice::startAdvertising();
 	ESP_LOGI(TAG, "BLE setup done, advertising started");
 
