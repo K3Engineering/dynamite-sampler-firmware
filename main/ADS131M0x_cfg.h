@@ -24,6 +24,17 @@ constexpr ADS131Cfg ads131UserConfig = {
     .osr       = OSR_4096,
 };
 
+// packed ads131UserConfig to expose over BLE
+constexpr uint8_t ads131ConfigBlePack[] = {
+    4, // Num channels
+    ads131UserConfig.powerMode,
+    ads131UserConfig.osr,
+    ads131UserConfig.pga[0],
+    ads131UserConfig.pga[1],
+    ads131UserConfig.pga[2],
+    ads131UserConfig.pga[3],
+};
+
 static inline void ads131LogRegisterMap(AdcClass &adc) {
 #ifdef CONFIG_MOCK_ADC
 	constexpr char TAG[] = "MockADC";

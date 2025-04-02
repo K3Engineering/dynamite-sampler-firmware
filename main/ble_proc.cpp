@@ -5,6 +5,7 @@
 
 #include <NimBLEDevice.h>
 
+#include "ADS131M0x_cfg.h"
 #include "adc_ble_interface.h"
 #include "ble_ota_interface.h"
 #include "ble_proc.h"
@@ -112,6 +113,10 @@ static void taskSetupBle(void *setupDone) {
 	if (readLoadcellCalibration(&calibration)) {
 		calibrationCharacteristic->setValue(calibration.data, sizeof(calibration.data));
 	}
+
+	NimBLECharacteristic *adcConfigCharacteristic =
+	    srvAdcFeed->createCharacteristic(&ADC_CONF_CHR_UUID128, NIMBLE_PROPERTY::READ);
+	adcConfigCharacteristic->setValue(ads131ConfigBlePack, sizeof(ads131ConfigBlePack));
 
 	srvAdcFeed->start();
 
