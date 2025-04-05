@@ -6,12 +6,6 @@
 
 #include "dynamite_sampler_api.h"
 
-constexpr char toHex(uint8_t u) {
-	if (u >= 0x0A)
-		return u - 0x0A + 'a';
-	return u + '0';
-}
-
 constexpr uint8_t fromHex(char x) {
 	if (x >= '0' && x <= '9')
 		return x - '0';
