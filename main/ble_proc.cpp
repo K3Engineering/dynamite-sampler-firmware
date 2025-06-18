@@ -18,6 +18,8 @@ static NimBLEServer         *bleServer                = NULL;
 static NimBLECharacteristic *adcFeedBleCharacteristic = NULL;
 static uint16_t              adcFeedConnectionHandle; // TODO: rename
 
+static NimBLECharacteristic *adcConfigCharacteristic = NULL;
+
 BleAccess bleAccess{
     .adcStreamBufferHandle         = NULL,
     .bleAdcFeedPublisherTaskHandle = NULL,
@@ -114,9 +116,8 @@ static void taskSetupBle(void *setupDone) {
 		calibrationCharacteristic->setValue(calibration.data, sizeof(calibration.data));
 	}
 
-	NimBLECharacteristic *adcConfigCharacteristic =
+	adcConfigCharacteristic =
 	    srvAdcFeed->createCharacteristic(&ADC_CONF_CHR_UUID128, NIMBLE_PROPERTY::READ);
-	adcConfigCharacteristic->setValue(ads131ConfigBlePack, sizeof(ads131ConfigBlePack));
 
 	srvAdcFeed->start();
 
@@ -157,4 +158,8 @@ void setupBle(int core) {
 	                        &bleAccess.bleAdcFeedPublisherTaskHandle, core);
 
 	ESP_LOGI(TAG, "Waiting a client connection to notify...");
+}
+
+void setAdcConfigCharacteristic(const uint8_t *data, const size_t length) {
+	adcConfigCharacteristic->setValue(data, length);
 }
