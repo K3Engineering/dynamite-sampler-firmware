@@ -127,11 +127,11 @@ size_t readAdcRegBleForBle(uint8_t *data) {
 	// Or should there be another definition somewhere? If we have M04, but stream only 2
 	data[1] = 4; // Number of channels streaming over BLE
 
-	// Send the first 5 registers of the ADC configuration in big endian (I think).
-	// read register functions return it as little endian, but memcpy flips it around?
-	// I am a bit confused.
+	// Send the first 5 registers of the ADC configuration:
 	// ID, Status, Mode, Clock, PGA
-	// The readX functions return little endian.
+	// Transmit as little endian.
+	// Read register returns little endian, so no need to flip anything.
+	// TODO - figure out if a defensive host to network call is needed?
 	uint16_t data_id = adc.readID();
 	memcpy(&data[2], &data_id, 2);
 
