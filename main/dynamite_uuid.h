@@ -6,12 +6,6 @@
 
 #include "dynamite_sampler_api.h"
 
-constexpr char toHex(uint8_t u) {
-	if (u >= 0x0A)
-		return u - 0x0A + 'a';
-	return u + '0';
-}
-
 constexpr uint8_t fromHex(char x) {
 	if (x >= '0' && x <= '9')
 		return x - '0';
@@ -48,6 +42,7 @@ constexpr ble_uuid128_t DYNAMITE_SAMPLER_SVC_UUID128 =
     UUID128_FROM_STRING(DYNAMITE_SAMPLER_SVC_UUID);
 constexpr ble_uuid128_t ADC_FEED_CHR_UUID128 = UUID128_FROM_STRING(ADC_FEED_CHR_UUID);
 constexpr ble_uuid128_t LC_CALIB_CHR_UUID128 = UUID128_FROM_STRING(LC_CALIB_CHR_UUID);
+constexpr ble_uuid128_t ADC_CONF_CHR_UUID128 = UUID128_FROM_STRING(ADC_CONF_CHR_UUID);
 
 constexpr ble_uuid128_t OTA_SVC_UUID128         = UUID128_FROM_STRING(OTA_SVC_UUID);
 constexpr ble_uuid128_t OTA_CONTROL_CHR_UUID128 = UUID128_FROM_STRING(OTA_CONTROL_CHR_UUID);

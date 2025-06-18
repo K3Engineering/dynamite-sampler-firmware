@@ -116,3 +116,36 @@ void setupAdc(int core) {
 	xTaskCreatePinnedToCore(taskAdcReadAndBuffer, "task_ADC_read", 1024 * 5, NULL, priority,
 	                        &adcReadTaskHandle, core);
 }
+
+size_t readAdcRegBleForBle(uint8_t *data) {
+	// Read the ADC config data and pack it into the data array.
+	// Returns the length of data written.
+	// TODO this should be factored out into a place what deals with the API and such
+
+	data[0] = 1; // Packing format version
+	// TODO: figure out if this is always going to be ADS131M0x::NUM_CHANNELS_ENABLED
+	// Or should there be another definition somewhere? If we have M04, but stream only 2
+	data[1] = 4; // Number of channels streaming over BLE
+
+	// Send the first 5 registers of the ADC configuration:
+	// ID, Status, Mode, Clock, PGA
+	// Transmit as little endian.
+	// Read register returns little endian, so no need to flip anything.
+	// TODO - figure out if a defensive host to network call is needed?
+	uint16_t data_id = adc.readID();
+	memcpy(&data[2], &data_id, 2);
+
+	uint16_t data_status = adc.readSTATUS();
+	memcpy(&data[4], &data_status, 2);
+
+	uint16_t data_mode = adc.readMODE();
+	memcpy(&data[6], &data_mode, 2);
+
+	uint16_t data_clock = adc.readCLOCK();
+	memcpy(&data[8], &data_clock, 2);
+
+	uint16_t data_pga = adc.readPGA();
+	memcpy(&data[10], &data_pga, 2);
+
+	return 12;
+}

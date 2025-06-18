@@ -17,6 +17,7 @@ constexpr uint16_t DEVICE_FIRMWARE_VER_CHR_UUID = 0x2A26;
 constexpr char DYNAMITE_SAMPLER_SVC_UUID[] = "e331016b-6618-4f8f-8997-1a2c7c9e5fa3";
 constexpr char ADC_FEED_CHR_UUID[]         = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
 constexpr char LC_CALIB_CHR_UUID[]         = "10adce11-68a6-450b-9810-ca11b39fd283";
+constexpr char ADC_CONF_CHR_UUID[]         = "adcc0f19-2575-4502-9a48-0e99974eb34f";
 
 constexpr char OTA_SVC_UUID[]         = "d6f1d96d-594c-4c53-b1c6-144a1dfde6d8";
 constexpr char OTA_CONTROL_CHR_UUID[] = "7ad671aa-21c0-46a4-b722-270e3ae3d830";

@@ -5,6 +5,7 @@
 
 #include <NimBLEDevice.h>
 
+#include "ADS131M0x_cfg.h"
 #include "adc_ble_interface.h"
 #include "ble_ota_interface.h"
 #include "ble_proc.h"
@@ -16,6 +17,8 @@ constexpr char TAG[] = "BLE";
 static NimBLEServer         *bleServer                = NULL;
 static NimBLECharacteristic *adcFeedBleCharacteristic = NULL;
 static uint16_t              adcFeedConnectionHandle; // TODO: rename
+
+static NimBLECharacteristic *adcConfigCharacteristic = NULL;
 
 BleAccess bleAccess{
     .adcStreamBufferHandle         = NULL,
@@ -113,6 +116,9 @@ static void taskSetupBle(void *setupDone) {
 		calibrationCharacteristic->setValue(calibration.data, sizeof(calibration.data));
 	}
 
+	adcConfigCharacteristic =
+	    srvAdcFeed->createCharacteristic(&ADC_CONF_CHR_UUID128, NIMBLE_PROPERTY::READ);
+
 	srvAdcFeed->start();
 
 	setDeviceInfo(bleServer);
@@ -152,4 +158,8 @@ void setupBle(int core) {
 	                        &bleAccess.bleAdcFeedPublisherTaskHandle, core);
 
 	ESP_LOGI(TAG, "Waiting a client connection to notify...");
+}
+
+void setAdcConfigCharacteristic(const uint8_t *data, const size_t length) {
+	adcConfigCharacteristic->setValue(data, length);
 }
