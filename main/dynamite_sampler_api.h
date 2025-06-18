@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+constexpr char DEVICE_MANUFACTURER_NAME[] = "K3 Engineering";
+
 //======================== <UUIDs>
 
 // Bluetooth assigned UUIDs
@@ -10,6 +12,7 @@
 constexpr uint16_t DEVICE_INFO_SVC_UUID         = 0x180A;
 constexpr uint16_t DEVICE_MAKE_NAME_CHR_UUID    = 0x2A29;
 constexpr uint16_t DEVICE_FIRMWARE_VER_CHR_UUID = 0x2A26;
+constexpr uint16_t DEVICE_TX_POWER_CHR_UUID     = 0x2A07;
 
 // Dynamite sampler specific UUIDs
 // TODO: the ADC_FEED_CHR_UUID & OTA UUIDs were copied from sample code originally.
@@ -22,6 +25,11 @@ constexpr char ADC_CONF_CHR_UUID[]         = "adcc0f19-2575-4502-9a48-0e99974eb3
 constexpr char OTA_SVC_UUID[]         = "d6f1d96d-594c-4c53-b1c6-144a1dfde6d8";
 constexpr char OTA_CONTROL_CHR_UUID[] = "7ad671aa-21c0-46a4-b722-270e3ae3d830";
 constexpr char OTA_DATA_CHR_UUID[]    = "23408888-1f40-4cd8-9b89-ca8d45f8a5b0";
+
+// The TX characteristic if for setting only. Use the device info characteristic to
+// read the current power.
+constexpr char TX_PWR_SVC_UUID[] = "74788a4c-72aa-4180-a478-59e969b959c9";
+constexpr char TX_PWR_CHR_UUID[] = "7478c418-35d3-4c3d-99d9-2de090159664";
 
 //======================== </UUIDs>
 
