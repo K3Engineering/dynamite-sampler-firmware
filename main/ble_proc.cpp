@@ -12,6 +12,8 @@
 #include "dynamite_uuid.h"
 #include "loadcell_calibration.h"
 
+#include "build_metadata.h"
+
 constexpr char TAG[] = "BLE";
 
 static NimBLEServer         *bleServer                = NULL;
@@ -19,6 +21,8 @@ static NimBLECharacteristic *adcFeedBleCharacteristic = NULL;
 static uint16_t              adcFeedConnectionHandle; // TODO: rename
 
 static NimBLECharacteristic *adcConfigCharacteristic = NULL;
+
+static NimBLECharacteristic *devInfoTxPowerCharacteristic = NULL;
 
 BleAccess bleAccess{
     .adcStreamBufferHandle         = NULL,
@@ -56,6 +60,60 @@ class AdcFeedCallbacks : public NimBLECharacteristicCallbacks {
 		//  TODO: stop reading the ADC and stop the interupt when disconnected
 	}
 };
+
+static void updateDeviceInfoTXPower() {
+	int power = NimBLEDevice::getPower();
+
+	if (power == 0xff) {
+		ESP_LOGI(TAG, "Trying to getPower failed in updateDeviceInfoTXPower");
+		return;
+	}
+	ESP_LOGD(TAG, "Read TX power: %d", power);
+
+	uint8_t power_cast = (uint8_t)power;
+	devInfoTxPowerCharacteristic->setValue(power_cast);
+	ESP_LOGD(TAG, "Updated TX power chr with cast value: %x", power_cast);
+}
+class TxPowerCallbacks : public NimBLECharacteristicCallbacks {
+	void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
+		// Value written to characteristic.
+		// Should be a single signed int8 that represents the TX dbm.
+		NimBLEAttValue write_val = pCharacteristic->getValue();
+		if (write_val.length() == 0) {
+			ESP_LOGD(TAG, "TX power onWrite, recieved value of length 0");
+			return;
+		}
+		int8_t power = (int8_t)*write_val.data();
+		ESP_LOGD(TAG, "TX power onWrite: %d", power);
+
+		bool res = NimBLEDevice::setPower(power);
+		ESP_LOGD(TAG, "Set TX power result: %d", res);
+
+		updateDeviceInfoTXPower();
+	}
+};
+
+// Set the BLE standardized device info
+void setDeviceInfo(NimBLEServer *server) {
+	NimBLEService *srvDeviceInfo = server->createService(DEVICE_INFO_SVC_UUID16.value);
+
+	NimBLECharacteristic *chrDevName = srvDeviceInfo->createCharacteristic(
+	    DEVICE_MAKE_NAME_CHR_UUID16.value, NIMBLE_PROPERTY::READ, sizeof(DEVICE_MANUFACTURER_NAME));
+	chrDevName->setValue(DEVICE_MANUFACTURER_NAME);
+	ESP_LOGI(TAG, "Set Device manufacture name to: %s", DEVICE_MANUFACTURER_NAME);
+
+	NimBLECharacteristic *chrFirmwareVer = srvDeviceInfo->createCharacteristic(
+	    DEVICE_FIRMWARE_VER_CHR_UUID16.value, NIMBLE_PROPERTY::READ, sizeof(GIT_DESCRIBE));
+	chrFirmwareVer->setValue(GIT_DESCRIBE);
+	ESP_LOGI(TAG, "Set Device Firmware version to: %s", GIT_DESCRIBE);
+
+	devInfoTxPowerCharacteristic = srvDeviceInfo->createCharacteristic(
+	    DEVICE_TX_POWER_CHR_UUID16.value, NIMBLE_PROPERTY::READ, 1);
+
+	updateDeviceInfoTXPower();
+
+	srvDeviceInfo->start();
+}
 
 // Read the adc buffer and update the BLE characteristic
 static void blePublishAdcBuffer() {
@@ -121,7 +179,16 @@ static void taskSetupBle(void *setupDone) {
 
 	srvAdcFeed->start();
 
+	NimBLEService        *srvTxPowerSet = bleServer->createService(&TX_PWR_SVC_UUID128);
+	NimBLECharacteristic *chrTxPowerSet =
+	    srvTxPowerSet->createCharacteristic(&TX_PWR_CHR_UUID128, NIMBLE_PROPERTY::WRITE);
+	static TxPowerCallbacks txSetCb;
+	chrTxPowerSet->setCallbacks(&txSetCb);
+
 	setDeviceInfo(bleServer);
+	// Start it after the devinfo just in case, since the callback can access the dev info
+	// TX power characteristic.
+	srvTxPowerSet->start();
 	setupBleOta(bleServer);
 
 	// Start advertising
