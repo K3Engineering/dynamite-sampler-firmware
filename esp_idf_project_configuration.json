@@ -1,15 +1,19 @@
 {
   "debug": {
     "build": {
-      "compileArgs": ["-DIDF_TARGET=esp32s3"],
+      "compileArgs": [
+        "-DIDF_TARGET=esp32s3"
+      ],
       "ninjaArgs": [],
       "buildDirectoryPath": "${workspaceFolder}/build/debug",
       "sdkconfigDefaults": [
-        "sdkconfig.common",
-        "sdkconfig.debug"
+        "${workspaceFolder}/sdkconfig.common",
+        "${workspaceFolder}/sdkconfig.debug"
       ],
       "sdkconfigFilePath": "${workspaceFolder}/build/sdkconfig.debug"
     },
+    "env": {},
+    "idfTarget": "esp32s3",
     "flashBaudRate": "",
     "monitorBaudRate": "",
     "openOCD": {
@@ -26,16 +30,19 @@
   },
   "debug-mockADC": {
     "build": {
-      "compileArgs": ["-DIDF_TARGET=esp32s3"],
+      "compileArgs": [
+        "-DIDF_TARGET=esp32s3"
+      ],
       "ninjaArgs": [],
       "buildDirectoryPath": "${workspaceFolder}/build/debug-mockadc",
       "sdkconfigDefaults": [
-        "sdkconfig.common",
-        "sdkconfig.debug",
-        "sdkconfig.debug-mockadc"
+        "${workspaceFolder}/sdkconfig.common",
+        "${workspaceFolder}/sdkconfig.debug",
+        "${workspaceFolder}/sdkconfig.debug-mockadc"
       ],
       "sdkconfigFilePath": "${workspaceFolder}/build/sdkconfig.debug-mockadc"
     },
+    "env": {},
     "flashBaudRate": "",
     "monitorBaudRate": "",
     "openOCD": {
@@ -56,11 +63,12 @@
       "ninjaArgs": [],
       "buildDirectoryPath": "${workspaceFolder}/build/release",
       "sdkconfigDefaults": [
-        "sdkconfig.common",
-        "sdkconfig.release"
+        "${workspaceFolder}/sdkconfig.common",
+        "${workspaceFolder}/sdkconfig.release"
       ],
       "sdkconfigFilePath": "${workspaceFolder}/build/sdkconfig.release"
     },
+    "env": {},
     "flashBaudRate": "",
     "monitorBaudRate": "",
     "openOCD": {

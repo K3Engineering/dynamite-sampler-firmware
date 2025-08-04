@@ -39,14 +39,15 @@ DMA_ATTR ADS131M0x::AdcRawOutput ADS131M0x::spi2adc;
 DMA_ATTR ADS131M0x::AdcRawOutput ADS131M0x::adc2spi;
 
 spi_transaction_t ADS131M0x::transDesc = {
-    .flags     = SPI_TRANS_DMA_BUFFER_ALIGN_MANUAL,
-    .cmd       = 0,
-    .addr      = 0,
-    .length    = sizeof(spi2adc) * 8, // in bits.
-    .rxlength  = 0,                   // 0 makes it rxlength set to the value of .length
-    .user      = nullptr,
-    .tx_buffer = &spi2adc,
-    .rx_buffer = &adc2spi,
+    .flags            = SPI_TRANS_DMA_BUFFER_ALIGN_MANUAL,
+    .cmd              = 0,
+    .addr             = 0,
+    .length           = sizeof(spi2adc) * 8, // in bits.
+    .rxlength         = 0,                   // 0 makes it rxlength set to the value of .length
+    .override_freq_hz = 0,
+    .user             = nullptr,
+    .tx_buffer        = &spi2adc,
+    .rx_buffer        = &adc2spi,
 };
 
 bool ADS131M0x::writeRegister(uint8_t address, uint16_t value) {
@@ -115,7 +116,7 @@ void ADS131M0x::init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pi
 
 void ADS131M0x::setupAccess(spi_host_device_t spiDevice, int spi_clock_speed, gpio_num_t clk_pin,
                             gpio_num_t miso_pin, gpio_num_t mosi_pin) {
-	spi_bus_config_t buscfg = {
+	const spi_bus_config_t buscfg = {
 	    .mosi_io_num           = mosi_pin,
 	    .miso_io_num           = miso_pin,
 	    .sclk_io_num           = clk_pin,
@@ -137,7 +138,7 @@ void ADS131M0x::setupAccess(spi_host_device_t spiDevice, int spi_clock_speed, gp
 		return;
 	}
 
-	spi_device_interface_config_t devcfg = {
+	const spi_device_interface_config_t devcfg = {
 	    .command_bits     = 0,
 	    .address_bits     = 0,
 	    .dummy_bits       = 0,
@@ -148,6 +149,7 @@ void ADS131M0x::setupAccess(spi_host_device_t spiDevice, int spi_clock_speed, gp
 	    .cs_ena_posttrans = 0,
 	    .clock_speed_hz   = spi_clock_speed,
 	    .input_delay_ns   = 0,
+	    .sample_point     = SPI_SAMPLING_POINT_PHASE_0,
 	    .spics_io_num     = -1,
 	    .flags            = 0,
 	    .queue_size       = 1, // Queue is not used, but the library requires a non zero value.
