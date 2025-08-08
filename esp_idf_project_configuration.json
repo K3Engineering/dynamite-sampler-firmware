@@ -17,7 +17,7 @@
     "flashBaudRate": "",
     "monitorBaudRate": "",
     "openOCD": {
-      "debugLevel": 4,
+      "debugLevel": 2,
       "configs": [],
       "args": []
     },
@@ -46,7 +46,7 @@
     "flashBaudRate": "",
     "monitorBaudRate": "",
     "openOCD": {
-      "debugLevel": 4,
+      "debugLevel": 2,
       "configs": [],
       "args": []
     },
@@ -72,7 +72,7 @@
     "flashBaudRate": "",
     "monitorBaudRate": "",
     "openOCD": {
-      "debugLevel": 4,
+      "debugLevel": 2,
       "configs": [],
       "args": []
     },
