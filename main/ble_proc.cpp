@@ -63,31 +63,26 @@ class AdcFeedCallbacks : public NimBLECharacteristicCallbacks {
 
 static void updateDeviceInfoTXPower() {
 	int power = NimBLEDevice::getPower();
-
 	if (power == 0xff) {
-		ESP_LOGI(TAG, "Trying to getPower failed in updateDeviceInfoTXPower");
+		ESP_LOGE(TAG, "Trying to getPower failed in updateDeviceInfoTXPower");
 		return;
 	}
-	ESP_LOGD(TAG, "Read TX power: %d", power);
-
-	uint8_t power_cast = (uint8_t)power;
-	devInfoTxPowerCharacteristic->setValue(power_cast);
-	ESP_LOGD(TAG, "Updated TX power chr with cast value: %x", power_cast);
+	devInfoTxPowerCharacteristic->setValue((uint8_t)power);
+	ESP_LOGD(TAG, "Updated TX power chr with value: x%x (getPower=x%x)", (uint8_t)power, power);
 }
+
 class TxPowerCallbacks : public NimBLECharacteristicCallbacks {
 	void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
-		// Value written to characteristic.
-		// Should be a single signed int8 that represents the TX dbm.
-		NimBLEAttValue write_val = pCharacteristic->getValue();
-		if (write_val.length() == 0) {
-			ESP_LOGD(TAG, "TX power onWrite, recieved value of length 0");
+		// Value written to characteristic by a client.
+		const NimBLEAttValue val = pCharacteristic->getValue();
+		if (val.length() == 0) {
+			ESP_LOGW(TAG, "TX power onWrite, recieved value of length 0");
 			return;
 		}
-		int8_t power = (int8_t)*write_val.data();
-		ESP_LOGD(TAG, "TX power onWrite: %d", power);
-
-		bool res = NimBLEDevice::setPower(power);
-		ESP_LOGD(TAG, "Set TX power result: %d", res);
+		// Should be a single signed int8 that represents the TX dbm.
+		int8_t power = *(int8_t *)val.data();
+		bool   res   = NimBLEDevice::setPower(power);
+		ESP_LOGD(TAG, "Set TX power %d result: %d", power, res);
 
 		updateDeviceInfoTXPower();
 	}
@@ -100,7 +95,7 @@ void setDeviceInfo(NimBLEServer *server) {
 	NimBLECharacteristic *chrDevName = srvDeviceInfo->createCharacteristic(
 	    DEVICE_MAKE_NAME_CHR_UUID16.value, NIMBLE_PROPERTY::READ, sizeof(DEVICE_MANUFACTURER_NAME));
 	chrDevName->setValue(DEVICE_MANUFACTURER_NAME);
-	ESP_LOGI(TAG, "Set Device manufacture name to: %s", DEVICE_MANUFACTURER_NAME);
+	ESP_LOGI(TAG, "Set Device manufacturer name to: %s", DEVICE_MANUFACTURER_NAME);
 
 	NimBLECharacteristic *chrFirmwareVer = srvDeviceInfo->createCharacteristic(
 	    DEVICE_FIRMWARE_VER_CHR_UUID16.value, NIMBLE_PROPERTY::READ, sizeof(GIT_DESCRIBE));
@@ -117,7 +112,6 @@ void setDeviceInfo(NimBLEServer *server) {
 
 // Read the adc buffer and update the BLE characteristic
 static void blePublishAdcBuffer() {
-
 	if (xStreamBufferBytesAvailable(bleAccess.adcStreamBufferHandle) >= ADC_FEED_CHUNK_SZ) {
 		uint8_t batch[ADC_FEED_CHUNK_SZ];
 		size_t  bytesRead =
@@ -130,7 +124,6 @@ static void blePublishAdcBuffer() {
 
 // Task that is notified when the ADC buffer is ready to be sent
 static void taksBlePublishAdcBuffer(void *) {
-
 	while (true) {
 		// This task is unblocked when the adc buffer is full and the characteristic
 		// should be notified.
