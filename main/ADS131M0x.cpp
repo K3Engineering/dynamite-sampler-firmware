@@ -38,18 +38,6 @@ static constexpr uint16_t crc16ccitt(const void *data, size_t count) {
 DMA_ATTR ADS131M0x::AdcRawOutput ADS131M0x::spi2adc;
 DMA_ATTR ADS131M0x::AdcRawOutput ADS131M0x::adc2spi;
 
-spi_transaction_t ADS131M0x::transDesc = {
-    .flags            = SPI_TRANS_DMA_BUFFER_ALIGN_MANUAL,
-    .cmd              = 0,
-    .addr             = 0,
-    .length           = sizeof(spi2adc) * 8, // in bits.
-    .rxlength         = 0,                   // 0 makes it rxlength set to the value of .length
-    .override_freq_hz = 0,
-    .user             = nullptr,
-    .tx_buffer        = &spi2adc,
-    .rx_buffer        = &adc2spi,
-};
-
 bool ADS131M0x::writeRegister(uint8_t address, uint16_t value) {
 	spi2adc.status            = htobe16(CMD_WRITE_REG | (address << 7));
 	*(uint16_t *)spi2adc.data = htobe16(value);
@@ -104,6 +92,18 @@ void ADS131M0x::init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pi
 	csPin    = cs_pin;
 	drdyPin  = drdy_pin;
 	resetPin = reset_pin;
+
+	transDesc = {
+	    .flags            = SPI_TRANS_DMA_BUFFER_ALIGN_MANUAL,
+	    .cmd              = 0,
+	    .addr             = 0,
+	    .length           = sizeof(spi2adc) * 8, // in bits.
+	    .rxlength         = 0,                   // 0 makes it rxlength set to the value of .length
+	    .override_freq_hz = 0,
+	    .user             = nullptr,
+	    .tx_buffer        = &spi2adc,
+	    .rx_buffer        = &adc2spi,
+	};
 
 	gpio_set_level(resetPin, 1);
 	gpio_set_level(csPin, 0);
@@ -247,40 +247,35 @@ void ADS131M0x::enableAdcInterrupt() { gpio_set_intr_type(drdyPin, GPIO_INTR_NEG
 
 void ADS131M0x::disableAdcInterrupt() { gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE); }
 
-void uint16_to_hex(uint16_t value, char *buffer) {
-	static const char hex_chars[] = "0123456789ABCDEF";
+struct TagVal16 {
+	char txt[6];
 
-	// Process each nibble (4 bits) from most significant to least
-	for (int i = 0; i < 4; ++i) {
-		// Shift and mask to get the relevant nibble
-		uint8_t nibble = (value >> ((3 - i) * 4)) & 0xF;
-		buffer[i]      = hex_chars[nibble];
-	}
+	TagVal16(const char *tag, uint16_t val) {
+		txt[0] = tag[0];
+		txt[1] = tag[1];
 
-	buffer[4] = '\0'; // Null-terminate the string
-}
+		static const char hexChar[] = "0123456789ABCDEF";
 
-static char *addRegVal(char *to, const char *tag, uint16_t val) {
-	while (*tag) {
-		*to++ = *tag++;
+		txt[2] = hexChar[(val >> 12) & 0x0F];
+		txt[3] = hexChar[(val >> 8) & 0x0F];
+		txt[4] = hexChar[(val >> 4) & 0x0F];
+		txt[5] = hexChar[val & 0x0F];
 	}
-	static const char hexChar[] = "0123456789ABCDEF";
-	for (int i = 0; i < 4; ++i) {
-		to[3 - i] = hexChar[val & 0x0F];
-		val >>= 4;
-	}
-	return to + 4;
-}
+};
 
 // Should not be called while ADC is running
 void ADS131M0x::stashConfigAsText() {
+#pragma pack(push, 1)
+	TagVal16 configArr[] = {{"id", readID()},
+	                        {"st", readSTATUS()},
+	                        {"mo", readMODE()},
+	                        {"cl", readCLOCK()},
+	                        {"pg", readPGA()}};
+#pragma pack(pop)
+
+	static_assert(sizeof(configText) > sizeof(configArr));
 	memset(configText, 0, sizeof(configText));
-	char *cp = configText;
-	cp       = addRegVal(cp, "id", readID());
-	cp       = addRegVal(cp, "st", readSTATUS());
-	cp       = addRegVal(cp, "mo", readMODE());
-	cp       = addRegVal(cp, "cl", readCLOCK());
-	cp       = addRegVal(cp, "pg", readPGA());
+	memcpy(configText, configArr, sizeof(configArr));
 
 	// ESP_LOGI(TAG, "REGISTER: ID 0x%X", adc.readID() >> 8);
 	// ESP_LOGI(TAG, "REGISTER: STATUS 0x%X", adc.readSTATUS());

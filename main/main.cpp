@@ -26,8 +26,8 @@ extern "C" void app_main(void) {
 	ESP_LOGI(TAG, "MAC address: %02x%02x%02x%02x%02x%02x", mac[5], mac[4], mac[3], mac[2], mac[1],
 	         mac[0]);
 
-	setupBle(CORE_BLE);
 	setupAdc(CORE_APP);
+	setupBle(CORE_BLE);
 
 	otaConditionalRollback();
 

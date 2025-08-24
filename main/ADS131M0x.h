@@ -225,6 +225,7 @@ class ADS131M0x {
 	uint16_t readPGA();
 
 	spi_device_handle_t spiHandle;
+	spi_transaction_t   transDesc;
 
 	gpio_num_t csPin;
 	gpio_num_t drdyPin;
@@ -232,10 +233,10 @@ class ADS131M0x {
 
 	char configText[256];
 
+	// static for simplicity,
+	// should be allocated per instance with MALLOC_CAP_DMA
 	static AdcRawOutput spi2adc;
 	static AdcRawOutput adc2spi;
-
-	static spi_transaction_t transDesc;
 };
 
 #if (CONFIG_MOCK_ADC == 1)
