@@ -39,6 +39,19 @@ static void IRAM_ATTR isrAdcDrdy(void *param) {
 	}
 }
 
+constexpr AdcFeedNetworkData adcToNetwork(const AdcClass::AdcRawOutput *adc) {
+	static_assert(AdcFeedNetworkData::AdcSample::SAMPLE_BYTE_ORDER ==
+	              AdcClass::AdcRawOutput::SAMPLE_BYTE_ORDER);
+	static_assert(AdcFeedNetworkData::AdcSample::BYTES_PER_SAMPLE == AdcClass::DATA_WORD_LENGTH);
+
+	AdcFeedNetworkData net;
+	memcpy(net.chan + 0, adc->data + AdcClass::DATA_WORD_LENGTH * 1,
+	       AdcFeedNetworkData::AdcSample::BYTES_PER_SAMPLE);
+	memcpy(net.chan + 1, adc->data + AdcClass::DATA_WORD_LENGTH * 2,
+	       AdcFeedNetworkData::AdcSample::BYTES_PER_SAMPLE);
+	return net;
+}
+
 // Read ADC values. If BLE device is connected, place them in the buffer.
 // When accumulated enough, notify the ble task
 static void adcReadAndBuffer() {
@@ -47,8 +60,7 @@ static void adcReadAndBuffer() {
 	if (!bleAccess.clientSubscribed)
 		return;
 
-	BleAdcFeedData toSend(adcReading->status, adcReading->data, adc.isCrcOk(adcReading));
-	static_assert(sizeof(toSend.data) == sizeof(adcReading->data));
+	AdcFeedNetworkData toSend = adcToNetwork(adcReading);
 	xStreamBufferSend(bleAccess.adcStreamBufferHandle, &toSend, sizeof(toSend), 0);
 	// When the buffer is sufficiently large, time to send data.
 	if (xStreamBufferBytesAvailable(bleAccess.adcStreamBufferHandle) >= ADC_FEED_CHUNK_SZ) {
@@ -58,7 +70,6 @@ static void adcReadAndBuffer() {
 
 // Task that handles calling the read adc function and placing the values in the buffer.
 static void taskAdcReadAndBuffer(void *) {
-
 	while (true) {
 		// Wait until ISR notifies this task. Normally numNotifications == 1,
 		// numNotifications > 1 in case we cannot keep up with adc and have some data lost.
@@ -95,7 +106,8 @@ static void taskSetupAdc(void *setupDone) {
 	adc.setPowerMode(ads131UserConfig.powerMode);
 	adc.setOsr(ads131UserConfig.osr);
 
-	ads131LogRegisterMap(adc);
+	adc.stashConfigAsText();
+	ESP_LOGI(TAG, "Config: %s", adc.getConfigAsText());
 
 	adc.attachISR(isrAdcDrdy);
 
@@ -117,35 +129,7 @@ void setupAdc(int core) {
 	                        &adcReadTaskHandle, core);
 }
 
-size_t readAdcRegBleForBle(uint8_t *data) {
-	// Read the ADC config data and pack it into the data array.
-	// Returns the length of data written.
-	// TODO this should be factored out into a place what deals with the API and such
+void startAdc() { adc.enableAdcInterrupt(); }
+void stopAdc() { adc.disableAdcInterrupt(); }
 
-	data[0] = 1; // Packing format version
-	// TODO: figure out if this is always going to be ADS131M0x::NUM_CHANNELS_ENABLED
-	// Or should there be another definition somewhere? If we have M04, but stream only 2
-	data[1] = 4; // Number of channels streaming over BLE
-
-	// Send the first 5 registers of the ADC configuration:
-	// ID, Status, Mode, Clock, PGA
-	// Transmit as little endian.
-	// Read register returns little endian, so no need to flip anything.
-	// TODO - figure out if a defensive host to network call is needed?
-	uint16_t data_id = adc.readID();
-	memcpy(&data[2], &data_id, 2);
-
-	uint16_t data_status = adc.readSTATUS();
-	memcpy(&data[4], &data_status, 2);
-
-	uint16_t data_mode = adc.readMODE();
-	memcpy(&data[6], &data_mode, 2);
-
-	uint16_t data_clock = adc.readCLOCK();
-	memcpy(&data[8], &data_clock, 2);
-
-	uint16_t data_pga = adc.readPGA();
-	memcpy(&data[10], &data_pga, 2);
-
-	return 12;
-}
+const char *getAdcConfigText() { return adc.getConfigAsText(); }

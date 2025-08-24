@@ -53,7 +53,6 @@ spi_transaction_t ADS131M0x::transDesc = {
 bool ADS131M0x::writeRegister(uint8_t address, uint16_t value) {
 	spi2adc.status            = htobe16(CMD_WRITE_REG | (address << 7));
 	*(uint16_t *)spi2adc.data = htobe16(value);
-
 	spi_device_polling_transmit(spiHandle, &transDesc);
 
 	spi2adc.status            = 0;
@@ -240,8 +239,64 @@ void ADS131M0x::attachISR(AdcISR isr) {
 	esp_err_t err = gpio_install_isr_service(0);
 	if ((err != ESP_OK) && (err != ESP_ERR_INVALID_STATE))
 		return;
-	gpio_set_intr_type(drdyPin, GPIO_INTR_NEGEDGE);
+	gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE);
 	gpio_isr_handler_add(drdyPin, isr, nullptr);
+}
+
+void ADS131M0x::enableAdcInterrupt() { gpio_set_intr_type(drdyPin, GPIO_INTR_NEGEDGE); }
+
+void ADS131M0x::disableAdcInterrupt() { gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE); }
+
+void uint16_to_hex(uint16_t value, char *buffer) {
+	static const char hex_chars[] = "0123456789ABCDEF";
+
+	// Process each nibble (4 bits) from most significant to least
+	for (int i = 0; i < 4; ++i) {
+		// Shift and mask to get the relevant nibble
+		uint8_t nibble = (value >> ((3 - i) * 4)) & 0xF;
+		buffer[i]      = hex_chars[nibble];
+	}
+
+	buffer[4] = '\0'; // Null-terminate the string
+}
+
+static char *addRegVal(char *to, const char *tag, uint16_t val) {
+	while (*tag) {
+		*to++ = *tag++;
+	}
+	static const char hexChar[] = "0123456789ABCDEF";
+	for (int i = 0; i < 4; ++i) {
+		to[3 - i] = hexChar[val & 0x0F];
+		val >>= 4;
+	}
+	return to + 4;
+}
+
+// Should not be called while ADC is running
+void ADS131M0x::stashConfigAsText() {
+	memset(configText, 0, sizeof(configText));
+	char *cp = configText;
+	cp       = addRegVal(cp, "id", readID());
+	cp       = addRegVal(cp, "st", readSTATUS());
+	cp       = addRegVal(cp, "mo", readMODE());
+	cp       = addRegVal(cp, "cl", readCLOCK());
+	cp       = addRegVal(cp, "pg", readPGA());
+
+	// ESP_LOGI(TAG, "REGISTER: ID 0x%X", adc.readID() >> 8);
+	// ESP_LOGI(TAG, "REGISTER: STATUS 0x%X", adc.readSTATUS());
+	// ESP_LOGI(TAG, "REGISTER: MODE 0x%X", adc.readMODE());
+	// const uint16_t clock = adc.readCLOCK();
+	// ESP_LOGI(TAG, "REGISTER: CLOCK");
+	// ESP_LOGI(TAG, "POWER MODE %u", clock & 0x03);
+	// ESP_LOGI(TAG, "OSR %u", 128 << ((clock >> 2) & 0x07));
+	// ESP_LOGI(TAG, "Turbo %c", (clock & 0x20) ? 'Y' : 'N');
+	// ESP_LOGI(TAG, "Ch enabled 0x%X", (clock >> 8) & 0x0F);
+	// uint16_t pga = adc.readPGA();
+	// ESP_LOGI(TAG, "REGISTER: GAIN");
+	// for (size_t i = 0; i < sizeof(pga) * 2; ++i) {
+	// 	ESP_LOGI(TAG, "GAIN ch %u = %u", i, 1 << (pga & 0x07));
+	// 	pga >>= 4;
+	// }
 }
 
 #if (CONFIG_MOCK_ADC == 1)
@@ -268,7 +323,6 @@ void MockAdc::attachISR(AdcISR isr) {
 	            .backup_before_sleep = 0,
 	        },
 	};
-	gptimer_handle_t gptimer = 0;
 	gptimer_new_timer(&timer_config, &gptimer);
 
 	static constexpr gptimer_alarm_config_t alarm_config = {
@@ -286,8 +340,11 @@ void MockAdc::attachISR(AdcISR isr) {
 	};
 	gptimer_register_event_callbacks(gptimer, &cbs, (void *)isr);
 	gptimer_enable(gptimer);
-	gptimer_start(gptimer);
 }
+
+void MockAdc::enableAdcInterrupt() { gptimer_start(gptimer); }
+
+void MockAdc::disableAdcInterrupt() { gptimer_stop(gptimer); }
 
 const MockAdc::AdcRawOutput *MockAdc::rawReadADC() {
 	static AdcRawOutput a{

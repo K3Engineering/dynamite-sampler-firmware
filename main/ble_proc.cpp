@@ -5,8 +5,8 @@
 
 #include <NimBLEDevice.h>
 
-#include "ADS131M0x_cfg.h"
 #include "adc_ble_interface.h"
+#include "adc_proc.h"
 #include "ble_ota_interface.h"
 #include "ble_proc.h"
 #include "dynamite_uuid.h"
@@ -16,13 +16,13 @@
 
 constexpr char TAG[] = "BLE";
 
-static NimBLEServer         *bleServer                = NULL;
-static NimBLECharacteristic *adcFeedBleCharacteristic = NULL;
+static NimBLEServer         *bleServer  = NULL;
+static NimBLECharacteristic *chrAdcFeed = NULL;
 static uint16_t              adcFeedConnectionHandle; // TODO: rename
 
-static NimBLECharacteristic *adcConfigCharacteristic = NULL;
+static NimBLECharacteristic *chrAdcConfig = NULL;
 
-static NimBLECharacteristic *devInfoTxPowerCharacteristic = NULL;
+static NimBLECharacteristic *chrDevInfoTxPower = NULL;
 
 BleAccess bleAccess{
     .adcStreamBufferHandle         = NULL,
@@ -56,8 +56,13 @@ class AdcFeedCallbacks : public NimBLECharacteristicCallbacks {
 	void onSubscribe(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo,
 	                 uint16_t subValue) override {
 		bleAccess.clientSubscribed = subValue & 1;
-		adcFeedConnectionHandle    = connInfo.getConnHandle();
-		//  TODO: stop reading the ADC and stop the interupt when disconnected
+		if (bleAccess.clientSubscribed) {
+			adcFeedConnectionHandle = connInfo.getConnHandle();
+			startAdc();
+		} else {
+			stopAdc();
+			adcFeedConnectionHandle = 0;
+		}
 	}
 };
 
@@ -67,29 +72,34 @@ static void updateDeviceInfoTXPower() {
 		ESP_LOGE(TAG, "Trying to getPower failed in updateDeviceInfoTXPower");
 		return;
 	}
-	devInfoTxPowerCharacteristic->setValue((uint8_t)power);
-	ESP_LOGD(TAG, "Updated TX power chr with value: x%x (getPower=x%x)", (uint8_t)power, power);
+	TxPowerNetworkData rPwr{
+	    .val = (int8_t)power,
+	};
+	chrDevInfoTxPower->setValue(rPwr);
+	ESP_LOGD(TAG, "Updated TX power chr with value: x%x (getPower=x%x)", rPwr.val, power);
 }
 
 class TxPowerCallbacks : public NimBLECharacteristicCallbacks {
 	void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
 		// Value written to characteristic by a client.
 		const NimBLEAttValue val = pCharacteristic->getValue();
-		if (val.length() == 0) {
-			ESP_LOGW(TAG, "TX power onWrite, recieved value of length 0");
+		if (val.length() != sizeof(TxPowerNetworkData)) {
+			ESP_LOGW(TAG, "TX power onWrite, recieved value of length %d", val.length());
 			return;
 		}
-		// Should be a single signed int8 that represents the TX dbm.
-		int8_t power = *(int8_t *)val.data();
-		bool   res   = NimBLEDevice::setPower(power);
-		ESP_LOGD(TAG, "Set TX power %d result: %d", power, res);
+		TxPowerNetworkData power = *(TxPowerNetworkData *)val.data();
+
+		bool res = NimBLEDevice::setPower(power.val);
+		if (!res) {
+			ESP_LOGE(TAG, "Set TX power failed");
+		}
 
 		updateDeviceInfoTXPower();
 	}
 };
 
 // Set the BLE standardized device info
-void setDeviceInfo(NimBLEServer *server) {
+void setupDeviceInfo(NimBLEServer *server) {
 	NimBLEService *srvDeviceInfo = server->createService(DEVICE_INFO_SVC_UUID16.value);
 
 	NimBLECharacteristic *chrDevName = srvDeviceInfo->createCharacteristic(
@@ -102,8 +112,8 @@ void setDeviceInfo(NimBLEServer *server) {
 	chrFirmwareVer->setValue(GIT_DESCRIBE);
 	ESP_LOGI(TAG, "Set Device Firmware version to: %s", GIT_DESCRIBE);
 
-	devInfoTxPowerCharacteristic = srvDeviceInfo->createCharacteristic(
-	    DEVICE_TX_POWER_CHR_UUID16.value, NIMBLE_PROPERTY::READ, 1);
+	chrDevInfoTxPower = srvDeviceInfo->createCharacteristic(DEVICE_TX_POWER_CHR_UUID16.value,
+	                                                        NIMBLE_PROPERTY::READ, 1);
 
 	updateDeviceInfoTXPower();
 
@@ -117,7 +127,7 @@ static void blePublishAdcBuffer() {
 		size_t  bytesRead =
 		    xStreamBufferReceive(bleAccess.adcStreamBufferHandle, batch, sizeof(batch), 0);
 		if (bytesRead == ADC_FEED_CHUNK_SZ) {
-			adcFeedBleCharacteristic->notify(batch, bytesRead, adcFeedConnectionHandle);
+			chrAdcFeed->notify(batch, bytesRead, adcFeedConnectionHandle);
 		}
 	}
 }
@@ -155,33 +165,30 @@ static void taskSetupBle(void *setupDone) {
 	bleServer->setCallbacks(&serverCb, false);
 
 	NimBLEService *srvAdcFeed = bleServer->createService(&DYNAMITE_SAMPLER_SVC_UUID128);
-	adcFeedBleCharacteristic =
-	    srvAdcFeed->createCharacteristic(&ADC_FEED_CHR_UUID128, NIMBLE_PROPERTY::NOTIFY);
+	chrAdcFeed = srvAdcFeed->createCharacteristic(&ADC_FEED_CHR_UUID128, NIMBLE_PROPERTY::NOTIFY);
 	static AdcFeedCallbacks feedCb;
-	adcFeedBleCharacteristic->setCallbacks(&feedCb);
+	chrAdcFeed->setCallbacks(&feedCb);
 
-	NimBLECharacteristic *calibrationCharacteristic =
+	NimBLECharacteristic *chrCalibration =
 	    srvAdcFeed->createCharacteristic(&LC_CALIB_CHR_UUID128, NIMBLE_PROPERTY::READ);
-	CalibrationData calibration;
+	CalibrationNetworkData calibration;
 	if (readLoadcellCalibration(&calibration)) {
-		calibrationCharacteristic->setValue(calibration.data, sizeof(calibration.data));
+		chrCalibration->setValue(calibration);
 	}
 
-	adcConfigCharacteristic =
-	    srvAdcFeed->createCharacteristic(&ADC_CONF_CHR_UUID128, NIMBLE_PROPERTY::READ);
-
+	chrAdcConfig = srvAdcFeed->createCharacteristic(&ADC_CONF_CHR_UUID128, NIMBLE_PROPERTY::READ);
+	chrAdcConfig->setValue(getAdcConfigText());
 	srvAdcFeed->start();
 
-	NimBLEService        *srvTxPowerSet = bleServer->createService(&TX_PWR_SVC_UUID128);
-	NimBLECharacteristic *chrTxPowerSet =
-	    srvTxPowerSet->createCharacteristic(&TX_PWR_CHR_UUID128, NIMBLE_PROPERTY::WRITE);
-	static TxPowerCallbacks txSetCb;
-	chrTxPowerSet->setCallbacks(&txSetCb);
+	setupDeviceInfo(bleServer);
 
-	setDeviceInfo(bleServer);
-	// Start it after the devinfo just in case, since the callback can access the dev info
-	// TX power characteristic.
-	srvTxPowerSet->start();
+	NimBLEService        *srvTxPowerManager = bleServer->createService(&TX_PWR_SVC_UUID128);
+	NimBLECharacteristic *chrTxPower =
+	    srvTxPowerManager->createCharacteristic(&TX_PWR_CHR_UUID128, NIMBLE_PROPERTY::WRITE);
+	static TxPowerCallbacks txSetCb;
+	chrTxPower->setCallbacks(&txSetCb);
+	srvTxPowerManager->start();
+
 	setupBleOta(bleServer);
 
 	// Start advertising
@@ -218,8 +225,4 @@ void setupBle(int core) {
 	                        &bleAccess.bleAdcFeedPublisherTaskHandle, core);
 
 	ESP_LOGI(TAG, "Waiting a client connection to notify...");
-}
-
-void setAdcConfigCharacteristic(const uint8_t *data, const size_t length) {
-	adcConfigCharacteristic->setValue(data, length);
 }

@@ -50,31 +50,39 @@ constexpr OtaReplyType SVR_CHR_OTA_CONTROL_DONE_NAK    = 6;
 
 //======================== </OTA Update>
 
-//======================== <ADC Data>
-// These structs are not used. Currently for documenting the format.
-// TODO: expose the format in a nicer way.
 #pragma pack(push, 1)
 
-struct DynamiteAdcSample {
-	static constexpr size_t SAMPLE_BITS  = 24;
-	static constexpr size_t SAMPLE_BYTES = (SAMPLE_BITS + 7) / 8;
+//======================== <ADC Data>
 
-	uint8_t sample[SAMPLE_BYTES];
+struct AdcFeedNetworkData {
+	struct AdcSample {
+		static constexpr size_t BYTES_PER_SAMPLE  = 3;
+		static constexpr size_t SAMPLE_BYTE_ORDER = __ORDER_BIG_ENDIAN__;
+
+		uint8_t sample[BYTES_PER_SAMPLE];
+	};
+	static constexpr size_t NUM_CHAN = 2;
+
+	AdcSample chan[NUM_CHAN];
 };
 
-struct DynamiteFeedData {
-	static constexpr size_t NUM_CHANELS = 4;
+//======================== </ADC Data>
 
-	uint16_t          status;
-	DynamiteAdcSample data[NUM_CHANELS];
-	uint8_t           crc;
+// A large arbirtary size of the partition to read. It will hold all the possible data.
+// Its made to be large enough so that the format can change without changing the firmware.
+// It can't be larger than the max BLE characteristic length of 512 (0x200)
+struct CalibrationNetworkData {
+	static constexpr size_t CALIB_PARTITION_LENGTH = 0xff;
+	static_assert(CALIB_PARTITION_LENGTH <= 512);
+
+	uint8_t data[CALIB_PARTITION_LENGTH];
 };
 
-struct DynamiteFeedChunk {
-	DynamiteFeedData data[16];
+// BLE Standard
+struct TxPowerNetworkData {
+	int8_t val;
 };
 
 #pragma pack(pop)
-//======================== </ADC Data>
 
 #endif // __dynamite_sampler_api_h__
