@@ -247,51 +247,16 @@ void ADS131M0x::enableAdcInterrupt() { gpio_set_intr_type(drdyPin, GPIO_INTR_NEG
 
 void ADS131M0x::disableAdcInterrupt() { gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE); }
 
-struct TagVal16 {
-	char txt[6];
-
-	TagVal16(const char *tag, uint16_t val) {
-		txt[0] = tag[0];
-		txt[1] = tag[1];
-
-		static const char hexChar[] = "0123456789ABCDEF";
-
-		txt[2] = hexChar[(val >> 12) & 0x0F];
-		txt[3] = hexChar[(val >> 8) & 0x0F];
-		txt[4] = hexChar[(val >> 4) & 0x0F];
-		txt[5] = hexChar[val & 0x0F];
-	}
-};
-
 // Should not be called while ADC is running
-void ADS131M0x::stashConfigAsText() {
-#pragma pack(push, 1)
-	TagVal16 configArr[] = {{"id", readID()},
-	                        {"st", readSTATUS()},
-	                        {"mo", readMODE()},
-	                        {"cl", readCLOCK()},
-	                        {"pg", readPGA()}};
-#pragma pack(pop)
-
-	static_assert(sizeof(configText) > sizeof(configArr));
-	memset(configText, 0, sizeof(configText));
-	memcpy(configText, configArr, sizeof(configArr));
-
-	// ESP_LOGI(TAG, "REGISTER: ID 0x%X", adc.readID() >> 8);
-	// ESP_LOGI(TAG, "REGISTER: STATUS 0x%X", adc.readSTATUS());
-	// ESP_LOGI(TAG, "REGISTER: MODE 0x%X", adc.readMODE());
-	// const uint16_t clock = adc.readCLOCK();
-	// ESP_LOGI(TAG, "REGISTER: CLOCK");
-	// ESP_LOGI(TAG, "POWER MODE %u", clock & 0x03);
-	// ESP_LOGI(TAG, "OSR %u", 128 << ((clock >> 2) & 0x07));
-	// ESP_LOGI(TAG, "Turbo %c", (clock & 0x20) ? 'Y' : 'N');
-	// ESP_LOGI(TAG, "Ch enabled 0x%X", (clock >> 8) & 0x0F);
-	// uint16_t pga = adc.readPGA();
-	// ESP_LOGI(TAG, "REGISTER: GAIN");
-	// for (size_t i = 0; i < sizeof(pga) * 2; ++i) {
-	// 	ESP_LOGI(TAG, "GAIN ch %u = %u", i, 1 << (pga & 0x07));
-	// 	pga >>= 4;
-	// }
+void ADS131M0x::stashConfig() {
+	savedConfig = {
+	    .version = 1,
+	    .id      = readID(),
+	    .status  = readSTATUS(),
+	    .mode    = readMODE(),
+	    .clock   = readCLOCK(),
+	    .pga     = readPGA(),
+	};
 }
 
 #if (CONFIG_MOCK_ADC == 1)

@@ -3,9 +3,10 @@
 
 #include "dynamite_sampler_api.h"
 
-void        setupAdc(int core);
-void        startAdc();
-void        stopAdc();
-const char *getAdcConfigText();
+void setupAdc(int core);
+void startAdc();
+void stopAdc();
+
+const AdcConfigNetworkData *getAdcConfig();
 
 #endif // _ADC_PROC_H

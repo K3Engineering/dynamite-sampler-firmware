@@ -7,6 +7,8 @@
 #include <driver/spi_master.h>
 #include <soc/gpio_num.h>
 
+#include "dynamite_sampler_api.h"
+
 #define DRDY_STATE_LOGIC_HIGH 0 // DEFAULS
 #define DRDY_STATE_HI_Z       1
 
@@ -207,8 +209,8 @@ class ADS131M0x {
 
 	const AdcRawOutput *rawReadADC();
 
-	void        stashConfigAsText();
-	const char *getConfigAsText() const { return configText; }
+	void                        stashConfig();
+	const AdcConfigNetworkData *getConfig() const { return &savedConfig; }
 
 	static bool isCrcOk(const AdcRawOutput *data);
 
@@ -231,7 +233,7 @@ class ADS131M0x {
 	gpio_num_t drdyPin;
 	gpio_num_t resetPin;
 
-	char configText[128];
+	AdcConfigNetworkData savedConfig;
 
 	// static for simplicity,
 	// should be allocated per instance with MALLOC_CAP_DMA

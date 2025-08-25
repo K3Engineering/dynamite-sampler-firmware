@@ -19,6 +19,24 @@ constexpr char TAG[] = "ADC";
 static AdcClass     adc;
 static TaskHandle_t adcReadTaskHandle = NULL;
 
+static void logAdcConfig(const AdcConfigNetworkData *cfg) {
+	ESP_LOGI(TAG, "<REGISTERS>");
+	ESP_LOGI(TAG, "ID 0x%X", cfg->id >> 8);
+	ESP_LOGI(TAG, "STATUS 0x%04X", cfg->status);
+	ESP_LOGI(TAG, "MODE 0x%04X", cfg->mode);
+	const uint16_t clock = cfg->clock;
+	ESP_LOGI(TAG, "CLOCK 0x%04X", cfg->clock);
+	ESP_LOGI(TAG, " POWER MODE %u", clock & 0x03);
+	ESP_LOGI(TAG, " OSR %u", 128 << ((clock >> 2) & 0x07));
+	ESP_LOGI(TAG, " Turbo %c", (clock & 0x20) ? 'Y' : 'N');
+	ESP_LOGI(TAG, "Ch enabled 0x%X", (clock >> 8) & 0xF);
+	uint16_t pga = cfg->pga;
+	for (size_t i = 0; i < sizeof(pga) * 2; ++i) {
+		ESP_LOGI(TAG, "GAIN ch %u = %u", i, 1 << (pga & 0x07));
+		pga >>= 4;
+	};
+}
+
 static inline void requestTaskSwitchFromISR(BaseType_t needSwitch, void *ptr) {
 #if (CONFIG_MOCK_ADC == 1)
 	*(bool *)ptr = (needSwitch == pdTRUE);
@@ -106,8 +124,8 @@ static void taskSetupAdc(void *setupDone) {
 	adc.setPowerMode(ads131UserConfig.powerMode);
 	adc.setOsr(ads131UserConfig.osr);
 
-	adc.stashConfigAsText();
-	ESP_LOGI(TAG, "Config: %s", adc.getConfigAsText());
+	adc.stashConfig();
+	logAdcConfig(adc.getConfig());
 
 	adc.attachISR(isrAdcDrdy);
 
@@ -132,4 +150,4 @@ void setupAdc(int core) {
 void startAdc() { adc.enableAdcInterrupt(); }
 void stopAdc() { adc.disableAdcInterrupt(); }
 
-const char *getAdcConfigText() { return adc.getConfigAsText(); }
+const AdcConfigNetworkData *getAdcConfig() { return adc.getConfig(); }

@@ -66,6 +66,17 @@ struct AdcFeedNetworkData {
 	AdcSample chan[NUM_CHAN];
 };
 
+struct AdcConfigNetworkData {
+	static constexpr size_t DATA_BYTE_ORDER = __ORDER_LITTLE_ENDIAN__;
+
+	uint8_t  version;
+	uint16_t id;
+	uint16_t status;
+	uint16_t mode;
+	uint16_t clock;
+	uint16_t pga;
+};
+
 //======================== </ADC Data>
 
 // A large arbirtary size of the partition to read. It will hold all the possible data.
