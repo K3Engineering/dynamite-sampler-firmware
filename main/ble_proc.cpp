@@ -96,57 +96,59 @@ class TxPowerPublisherCallbacks : public NimBLECharacteristicCallbacks {
 static void setupDeviceInfo(NimBLEServer *server) {
 	NimBLEService *srvDeviceInfo = server->createService(DEVICE_INFO_SVC_UUID16.value);
 	{
-		NimBLECharacteristic *chrDevName = srvDeviceInfo->createCharacteristic(
+		NimBLECharacteristic *chr = srvDeviceInfo->createCharacteristic(
 		    DEVICE_MAKE_NAME_CHR_UUID16.value, NIMBLE_PROPERTY::READ,
 		    sizeof(DEVICE_MANUFACTURER_NAME));
-		chrDevName->setValue(DEVICE_MANUFACTURER_NAME);
+		chr->setValue(DEVICE_MANUFACTURER_NAME);
 		ESP_LOGI(TAG, "Set Device manufacturer name to: %s", DEVICE_MANUFACTURER_NAME);
 	}
 	{
-		NimBLECharacteristic *chrFirmwareVer = srvDeviceInfo->createCharacteristic(
+		NimBLECharacteristic *chr = srvDeviceInfo->createCharacteristic(
 		    DEVICE_FIRMWARE_VER_CHR_UUID16.value, NIMBLE_PROPERTY::READ, sizeof(GIT_DESCRIBE));
-		chrFirmwareVer->setValue(GIT_DESCRIBE);
+		chr->setValue(GIT_DESCRIBE);
 		ESP_LOGI(TAG, "Set Device Firmware version to: %s", GIT_DESCRIBE);
 	}
 	{
-		NimBLECharacteristic *chrDevInfoTxPower = srvDeviceInfo->createCharacteristic(
+		NimBLECharacteristic *chr = srvDeviceInfo->createCharacteristic(
 		    DEVICE_TX_POWER_CHR_UUID16.value, NIMBLE_PROPERTY::READ, sizeof(TxPowerNetworkData));
-		chrDevInfoTxPower->setCallbacks(new TxPowerPublisherCallbacks);
+		static TxPowerPublisherCallbacks cb;
+		chr->setCallbacks(&cb);
 	}
 	srvDeviceInfo->start();
 }
 
 static void setupPowerManagerInterface(NimBLEServer *server) {
-	NimBLEService *srvTxPowerManager = bleServer->createService(&TX_PWR_SVC_UUID128);
-	{
-		NimBLECharacteristic *chrTxPower = srvTxPowerManager->createCharacteristic(
+	NimBLEService *srvc = bleServer->createService(&TX_PWR_SVC_UUID128);
+	{ // Power settings - write
+		NimBLECharacteristic *chr = srvc->createCharacteristic(
 		    &TX_PWR_CHR_UUID128, NIMBLE_PROPERTY::WRITE, sizeof(TxPowerNetworkData));
-		chrTxPower->setCallbacks(new TxPowerManagerCallbacks);
+		static TxPowerManagerCallbacks cb;
+		chr->setCallbacks(&cb);
 	}
-	srvTxPowerManager->start();
+	srvc->start();
 }
 
 static void setupAdcFeed(NimBLEServer *server) {
-	NimBLEService *srvAdcFeed = bleServer->createService(&DYNAMITE_SAMPLER_SVC_UUID128);
+	NimBLEService *srvc = bleServer->createService(&DYNAMITE_SAMPLER_SVC_UUID128);
 	{
-		chrAdcFeed =
-		    srvAdcFeed->createCharacteristic(&ADC_FEED_CHR_UUID128, NIMBLE_PROPERTY::NOTIFY);
-		chrAdcFeed->setCallbacks(new AdcFeedCallbacks);
+		chrAdcFeed = srvc->createCharacteristic(&ADC_FEED_CHR_UUID128, NIMBLE_PROPERTY::NOTIFY);
+		static AdcFeedCallbacks cb;
+		chrAdcFeed->setCallbacks(&cb);
 	}
 	{
-		NimBLECharacteristic *chrCalibration =
-		    srvAdcFeed->createCharacteristic(&LC_CALIB_CHR_UUID128, NIMBLE_PROPERTY::READ);
-		CalibrationNetworkData calibration;
-		if (readLoadcellCalibration(&calibration)) {
-			chrCalibration->setValue(calibration);
+		NimBLECharacteristic *chr =
+		    srvc->createCharacteristic(&LC_CALIB_CHR_UUID128, NIMBLE_PROPERTY::READ);
+		CalibrationNetworkData calibrData;
+		if (readLoadcellCalibration(&calibrData)) {
+			chr->setValue(calibrData);
 		}
 	}
 	{
-		NimBLECharacteristic *chrAdcConfig =
-		    srvAdcFeed->createCharacteristic(&ADC_CONF_CHR_UUID128, NIMBLE_PROPERTY::READ);
-		chrAdcConfig->setValue(getAdcConfigText());
+		NimBLECharacteristic *chr =
+		    srvc->createCharacteristic(&ADC_CONF_CHR_UUID128, NIMBLE_PROPERTY::READ);
+		chr->setValue(getAdcConfigText());
 	}
-	srvAdcFeed->start();
+	srvc->start();
 }
 
 static void setupAdvertising(const char *name) {
@@ -167,18 +169,18 @@ static void setupAdvertising(const char *name) {
 
 // Read the adc buffer and update the BLE characteristic
 static void blePublishAdcBuffer() {
-	if (xStreamBufferBytesAvailable(bleAccess.adcStreamBufferHandle) >= ADC_FEED_CHUNK_SZ) {
-		uint8_t batch[ADC_FEED_CHUNK_SZ];
-		size_t  bytesRead =
+	uint8_t batch[ADC_FEED_CHUNK_SZ];
+	if (xStreamBufferBytesAvailable(bleAccess.adcStreamBufferHandle) >= sizeof(batch)) {
+		size_t bytesRead =
 		    xStreamBufferReceive(bleAccess.adcStreamBufferHandle, batch, sizeof(batch), 0);
-		if (bytesRead == ADC_FEED_CHUNK_SZ) {
+		if (bytesRead == sizeof(batch)) {
 			chrAdcFeed->notify(batch, bytesRead, adcFeedConnectionHandle);
 		}
 	}
 }
 
 // Task that is notified when the ADC buffer is ready to be sent
-static void taksBlePublishAdcBuffer(void *) {
+static void taskBlePublishAdcBuffer(void *) {
 	while (true) {
 		// This task is unblocked when the adc buffer is full and the characteristic
 		// should be notified.
@@ -206,7 +208,8 @@ static void taskSetupBle(void *setupDone) {
 
 	// Create the BLE Server
 	bleServer = NimBLEDevice::createServer();
-	bleServer->setCallbacks(new MyServerCallbacks, false);
+	static MyServerCallbacks cb;
+	bleServer->setCallbacks(&cb, false);
 
 	setupAdcFeed(bleServer);
 	setupDeviceInfo(bleServer);
@@ -231,7 +234,7 @@ void setupBle(int core) {
 		vTaskDelay(10);
 
 	// TODO figure out priority for the BLE task
-	xTaskCreatePinnedToCore(taksBlePublishAdcBuffer, "task_BLE_publish", 1024 * 5, NULL, 3,
+	xTaskCreatePinnedToCore(taskBlePublishAdcBuffer, "task_BLE_publish", 1024 * 5, NULL, 3,
 	                        &bleAccess.bleAdcFeedPublisherTaskHandle, core);
 
 	ESP_LOGI(TAG, "Waiting a client connection to notify...");
