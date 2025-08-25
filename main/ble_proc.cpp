@@ -95,20 +95,20 @@ class TxPowerPublisherCallbacks : public NimBLECharacteristicCallbacks {
 // Set the BLE standardized device info
 static void setupDeviceInfo(NimBLEServer *server) {
 	NimBLEService *srvDeviceInfo = server->createService(DEVICE_INFO_SVC_UUID16.value);
-	{
+	{ // Manufacturer
 		NimBLECharacteristic *chr = srvDeviceInfo->createCharacteristic(
 		    DEVICE_MAKE_NAME_CHR_UUID16.value, NIMBLE_PROPERTY::READ,
 		    sizeof(DEVICE_MANUFACTURER_NAME));
 		chr->setValue(DEVICE_MANUFACTURER_NAME);
 		ESP_LOGI(TAG, "Set Device manufacturer name to: %s", DEVICE_MANUFACTURER_NAME);
 	}
-	{
+	{ // Firmware version
 		NimBLECharacteristic *chr = srvDeviceInfo->createCharacteristic(
 		    DEVICE_FIRMWARE_VER_CHR_UUID16.value, NIMBLE_PROPERTY::READ, sizeof(GIT_DESCRIBE));
 		chr->setValue(GIT_DESCRIBE);
 		ESP_LOGI(TAG, "Set Device Firmware version to: %s", GIT_DESCRIBE);
 	}
-	{
+	{ // Transmitter power
 		NimBLECharacteristic *chr = srvDeviceInfo->createCharacteristic(
 		    DEVICE_TX_POWER_CHR_UUID16.value, NIMBLE_PROPERTY::READ, sizeof(TxPowerNetworkData));
 		static TxPowerPublisherCallbacks cb;
@@ -119,7 +119,7 @@ static void setupDeviceInfo(NimBLEServer *server) {
 
 static void setupPowerManagerInterface(NimBLEServer *server) {
 	NimBLEService *srvc = bleServer->createService(&TX_PWR_SVC_UUID128);
-	{ // Power settings - write
+	{ // Set transmitter power - write
 		NimBLECharacteristic *chr = srvc->createCharacteristic(
 		    &TX_PWR_CHR_UUID128, NIMBLE_PROPERTY::WRITE, sizeof(TxPowerNetworkData));
 		static TxPowerManagerCallbacks cb;
@@ -130,12 +130,12 @@ static void setupPowerManagerInterface(NimBLEServer *server) {
 
 static void setupAdcFeed(NimBLEServer *server) {
 	NimBLEService *srvc = bleServer->createService(&DYNAMITE_SAMPLER_SVC_UUID128);
-	{
+	{ // ADC feed
 		chrAdcFeed = srvc->createCharacteristic(&ADC_FEED_CHR_UUID128, NIMBLE_PROPERTY::NOTIFY);
 		static AdcFeedCallbacks cb;
 		chrAdcFeed->setCallbacks(&cb);
 	}
-	{
+	{ // Calibration data
 		NimBLECharacteristic *chr =
 		    srvc->createCharacteristic(&LC_CALIB_CHR_UUID128, NIMBLE_PROPERTY::READ);
 		CalibrationNetworkData calibrData;
@@ -143,7 +143,7 @@ static void setupAdcFeed(NimBLEServer *server) {
 			chr->setValue(calibrData);
 		}
 	}
-	{
+	{ // ADC config
 		NimBLECharacteristic *chr =
 		    srvc->createCharacteristic(&ADC_CONF_CHR_UUID128, NIMBLE_PROPERTY::READ);
 		chr->setValue(getAdcConfigText());
@@ -182,8 +182,10 @@ static void blePublishAdcBuffer() {
 // Task that is notified when the ADC buffer is ready to be sent
 static void taskBlePublishAdcBuffer(void *) {
 	while (true) {
-		// This task is unblocked when the adc buffer is full and the characteristic
-		// should be notified.
+		// This task is unblocked every ADC tick, provided
+		// the buffer has at least ADC_FEED_CHUNK_SZ bytes
+		// so this end receives notifications more frequently when
+		// there is extra data in the queue
 		uint32_t numNotifications = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 		if (numNotifications > 0) [[likely]] {
 			blePublishAdcBuffer();
