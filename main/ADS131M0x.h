@@ -231,7 +231,7 @@ class ADS131M0x {
 	gpio_num_t drdyPin;
 	gpio_num_t resetPin;
 
-	char configText[256];
+	char configText[128];
 
 	// static for simplicity,
 	// should be allocated per instance with MALLOC_CAP_DMA

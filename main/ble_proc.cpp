@@ -16,13 +16,11 @@
 
 constexpr char TAG[] = "BLE";
 
-static NimBLEServer         *bleServer  = NULL;
+static NimBLEServer *bleServer = NULL;
+
 static NimBLECharacteristic *chrAdcFeed = NULL;
-static uint16_t              adcFeedConnectionHandle; // TODO: rename
 
-static NimBLECharacteristic *chrAdcConfig = NULL;
-
-static NimBLECharacteristic *chrDevInfoTxPower = NULL;
+static uint16_t adcFeedConnectionHandle = 0; // TODO: rename
 
 BleAccess bleAccess{
     .adcStreamBufferHandle         = NULL,
@@ -66,58 +64,105 @@ class AdcFeedCallbacks : public NimBLECharacteristicCallbacks {
 	}
 };
 
-static void updateDeviceInfoTXPower() {
-	int power = NimBLEDevice::getPower();
-	if (power == 0xff) {
-		ESP_LOGE(TAG, "Trying to getPower failed in updateDeviceInfoTXPower");
-		return;
-	}
-	TxPowerNetworkData rPwr{
-	    .val = (int8_t)power,
-	};
-	chrDevInfoTxPower->setValue(rPwr);
-	ESP_LOGD(TAG, "Updated TX power chr with value: x%x (getPower=x%x)", rPwr.val, power);
-}
-
-class TxPowerCallbacks : public NimBLECharacteristicCallbacks {
+class TxPowerManagerCallbacks : public NimBLECharacteristicCallbacks {
 	void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
-		// Value written to characteristic by a client.
+		// Value written to the characteristic by a client.
 		const NimBLEAttValue val = pCharacteristic->getValue();
 		if (val.length() != sizeof(TxPowerNetworkData)) {
 			ESP_LOGW(TAG, "TX power onWrite, recieved value of length %d", val.length());
 			return;
 		}
 		TxPowerNetworkData power = *(TxPowerNetworkData *)val.data();
-
-		bool res = NimBLEDevice::setPower(power.val);
-		if (!res) {
+		if (!NimBLEDevice::setPower(power.val)) {
 			ESP_LOGE(TAG, "Set TX power failed");
 		}
+	}
+};
 
-		updateDeviceInfoTXPower();
+class TxPowerPublisherCallbacks : public NimBLECharacteristicCallbacks {
+	void onRead(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
+		// Read by a client.
+		int power = NimBLEDevice::getPower();
+
+		TxPowerNetworkData rPwr{
+		    .val = (int8_t)power,
+		};
+		pCharacteristic->setValue(rPwr);
+		ESP_LOGD(TAG, "Updated TX power chr with value: x%x (getPower=x%x)", rPwr.val, power);
 	}
 };
 
 // Set the BLE standardized device info
-void setupDeviceInfo(NimBLEServer *server) {
+static void setupDeviceInfo(NimBLEServer *server) {
 	NimBLEService *srvDeviceInfo = server->createService(DEVICE_INFO_SVC_UUID16.value);
-
-	NimBLECharacteristic *chrDevName = srvDeviceInfo->createCharacteristic(
-	    DEVICE_MAKE_NAME_CHR_UUID16.value, NIMBLE_PROPERTY::READ, sizeof(DEVICE_MANUFACTURER_NAME));
-	chrDevName->setValue(DEVICE_MANUFACTURER_NAME);
-	ESP_LOGI(TAG, "Set Device manufacturer name to: %s", DEVICE_MANUFACTURER_NAME);
-
-	NimBLECharacteristic *chrFirmwareVer = srvDeviceInfo->createCharacteristic(
-	    DEVICE_FIRMWARE_VER_CHR_UUID16.value, NIMBLE_PROPERTY::READ, sizeof(GIT_DESCRIBE));
-	chrFirmwareVer->setValue(GIT_DESCRIBE);
-	ESP_LOGI(TAG, "Set Device Firmware version to: %s", GIT_DESCRIBE);
-
-	chrDevInfoTxPower = srvDeviceInfo->createCharacteristic(DEVICE_TX_POWER_CHR_UUID16.value,
-	                                                        NIMBLE_PROPERTY::READ, 1);
-
-	updateDeviceInfoTXPower();
-
+	{
+		NimBLECharacteristic *chrDevName = srvDeviceInfo->createCharacteristic(
+		    DEVICE_MAKE_NAME_CHR_UUID16.value, NIMBLE_PROPERTY::READ,
+		    sizeof(DEVICE_MANUFACTURER_NAME));
+		chrDevName->setValue(DEVICE_MANUFACTURER_NAME);
+		ESP_LOGI(TAG, "Set Device manufacturer name to: %s", DEVICE_MANUFACTURER_NAME);
+	}
+	{
+		NimBLECharacteristic *chrFirmwareVer = srvDeviceInfo->createCharacteristic(
+		    DEVICE_FIRMWARE_VER_CHR_UUID16.value, NIMBLE_PROPERTY::READ, sizeof(GIT_DESCRIBE));
+		chrFirmwareVer->setValue(GIT_DESCRIBE);
+		ESP_LOGI(TAG, "Set Device Firmware version to: %s", GIT_DESCRIBE);
+	}
+	{
+		NimBLECharacteristic *chrDevInfoTxPower = srvDeviceInfo->createCharacteristic(
+		    DEVICE_TX_POWER_CHR_UUID16.value, NIMBLE_PROPERTY::READ, sizeof(TxPowerNetworkData));
+		chrDevInfoTxPower->setCallbacks(new TxPowerPublisherCallbacks);
+	}
 	srvDeviceInfo->start();
+}
+
+static void setupPowerManagerInterface(NimBLEServer *server) {
+	NimBLEService *srvTxPowerManager = bleServer->createService(&TX_PWR_SVC_UUID128);
+	{
+		NimBLECharacteristic *chrTxPower = srvTxPowerManager->createCharacteristic(
+		    &TX_PWR_CHR_UUID128, NIMBLE_PROPERTY::WRITE, sizeof(TxPowerNetworkData));
+		chrTxPower->setCallbacks(new TxPowerManagerCallbacks);
+	}
+	srvTxPowerManager->start();
+}
+
+static void setupAdcFeed(NimBLEServer *server) {
+	NimBLEService *srvAdcFeed = bleServer->createService(&DYNAMITE_SAMPLER_SVC_UUID128);
+	{
+		chrAdcFeed =
+		    srvAdcFeed->createCharacteristic(&ADC_FEED_CHR_UUID128, NIMBLE_PROPERTY::NOTIFY);
+		chrAdcFeed->setCallbacks(new AdcFeedCallbacks);
+	}
+	{
+		NimBLECharacteristic *chrCalibration =
+		    srvAdcFeed->createCharacteristic(&LC_CALIB_CHR_UUID128, NIMBLE_PROPERTY::READ);
+		CalibrationNetworkData calibration;
+		if (readLoadcellCalibration(&calibration)) {
+			chrCalibration->setValue(calibration);
+		}
+	}
+	{
+		NimBLECharacteristic *chrAdcConfig =
+		    srvAdcFeed->createCharacteristic(&ADC_CONF_CHR_UUID128, NIMBLE_PROPERTY::READ);
+		chrAdcConfig->setValue(getAdcConfigText());
+	}
+	srvAdcFeed->start();
+}
+
+static void setupAdvertising(const char *name) {
+	// Start advertising
+	NimBLEAdvertising *pAdvertising = NimBLEDevice::getAdvertising();
+	//  Standard BLE advertisement packet is only 31 bytes, so long names don't always fit.
+	//  Scan response allows for devices to request more during the scan.
+	//  This will allow for more than the 31 bytes, like longer names.
+	// If your device is battery powered you may consider setting scan response *to false as
+	// it will extend battery life at the expense of less data sent.
+	pAdvertising->enableScanResponse(true);
+	pAdvertising->setName(name);
+	pAdvertising->addServiceUUID(&DYNAMITE_SAMPLER_SVC_UUID128);
+	// pAdvertising->addServiceUUID(srvDeviceInfo->getUUID());
+	// pAdvertising->addServiceUUID(srvOTA->getUUID());
+	NimBLEDevice::startAdvertising();
 }
 
 // Read the adc buffer and update the BLE characteristic
@@ -161,49 +206,14 @@ static void taskSetupBle(void *setupDone) {
 
 	// Create the BLE Server
 	bleServer = NimBLEDevice::createServer();
-	static MyServerCallbacks serverCb;
-	bleServer->setCallbacks(&serverCb, false);
+	bleServer->setCallbacks(new MyServerCallbacks, false);
 
-	NimBLEService *srvAdcFeed = bleServer->createService(&DYNAMITE_SAMPLER_SVC_UUID128);
-	chrAdcFeed = srvAdcFeed->createCharacteristic(&ADC_FEED_CHR_UUID128, NIMBLE_PROPERTY::NOTIFY);
-	static AdcFeedCallbacks feedCb;
-	chrAdcFeed->setCallbacks(&feedCb);
-
-	NimBLECharacteristic *chrCalibration =
-	    srvAdcFeed->createCharacteristic(&LC_CALIB_CHR_UUID128, NIMBLE_PROPERTY::READ);
-	CalibrationNetworkData calibration;
-	if (readLoadcellCalibration(&calibration)) {
-		chrCalibration->setValue(calibration);
-	}
-
-	chrAdcConfig = srvAdcFeed->createCharacteristic(&ADC_CONF_CHR_UUID128, NIMBLE_PROPERTY::READ);
-	chrAdcConfig->setValue(getAdcConfigText());
-	srvAdcFeed->start();
-
+	setupAdcFeed(bleServer);
 	setupDeviceInfo(bleServer);
-
-	NimBLEService        *srvTxPowerManager = bleServer->createService(&TX_PWR_SVC_UUID128);
-	NimBLECharacteristic *chrTxPower =
-	    srvTxPowerManager->createCharacteristic(&TX_PWR_CHR_UUID128, NIMBLE_PROPERTY::WRITE);
-	static TxPowerCallbacks txSetCb;
-	chrTxPower->setCallbacks(&txSetCb);
-	srvTxPowerManager->start();
-
+	setupPowerManagerInterface(bleServer);
 	setupBleOta(bleServer);
 
-	// Start advertising
-	NimBLEAdvertising *pAdvertising = NimBLEDevice::getAdvertising();
-	//  Standard BLE advertisement packet is only 31 bytes, so long names don't always fit.
-	//  Scan response allows for devices to request more during the scan.
-	//  This will allow for more than the 31 bytes, like longer names.
-	// If your device is battery powered you may consider setting scan response *to false as it
-	// will extend battery life at the expense of less data sent.
-	pAdvertising->enableScanResponse(true);
-	pAdvertising->setName(bleName);
-	pAdvertising->addServiceUUID(srvAdcFeed->getUUID());
-	// pAdvertising->addServiceUUID(srvDeviceInfo->getUUID());
-	// pAdvertising->addServiceUUID(srvOTA->getUUID());
-	NimBLEDevice::startAdvertising();
+	setupAdvertising(bleName);
 	ESP_LOGI(TAG, "BLE setup done, advertising started");
 
 	*(volatile bool *)setupDone = true;
