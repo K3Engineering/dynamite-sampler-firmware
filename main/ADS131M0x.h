@@ -265,8 +265,9 @@ class MockAdc {
 	bool setInputChannelSelection(uint8_t channel, uint8_t input) { return true; }
 	bool setOsr(uint16_t osr) { return true; }
 
-	void        stashConfigAsText() {}
-	const char *getConfigAsText() const { return "MockAdc"; }
+	AdcConfigNetworkData        savedConfig;
+	void                        stashConfig() { savedConfig.version = 0; }
+	const AdcConfigNetworkData *getConfig() const { return &savedConfig; }
 
 	uint16_t readID() { return 0; }
 	uint16_t readSTATUS() { return 0; }
