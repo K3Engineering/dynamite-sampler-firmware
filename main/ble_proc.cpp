@@ -50,42 +50,13 @@ class MyServerCallbacks : public NimBLEServerCallbacks {
 	}
 };
 
-class AdcFeedCallbacks : public NimBLECharacteristicCallbacks {
-	void onSubscribe(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo,
-	                 uint16_t subValue) override {
-		bleAccess.clientSubscribed = subValue & 1;
-		if (bleAccess.clientSubscribed) {
-			adcFeedConnectionHandle = connInfo.getConnHandle();
-			startAdc();
-		} else {
-			stopAdc();
-			adcFeedConnectionHandle = 0;
-		}
-	}
-};
-
-class TxPowerManagerCallbacks : public NimBLECharacteristicCallbacks {
-	void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
-		// Value written to the characteristic by a client.
-		const NimBLEAttValue val = pCharacteristic->getValue();
-		if (val.length() != sizeof(TxPowerNetworkData)) {
-			ESP_LOGW(TAG, "TX power onWrite, recieved value of length %d", val.length());
-			return;
-		}
-		TxPowerNetworkData power = *(TxPowerNetworkData *)val.data();
-		if (!NimBLEDevice::setPower(power.val)) {
-			ESP_LOGE(TAG, "Set TX power failed");
-		}
-	}
-};
-
 class TxPowerPublisherCallbacks : public NimBLECharacteristicCallbacks {
 	void onRead(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
 		// Read by a client.
 		int power = NimBLEDevice::getPower();
 
 		TxPowerNetworkData rPwr{
-		    .val = (int8_t)power,
+		    .val = static_cast<int8_t>(power),
 		};
 		pCharacteristic->setValue(rPwr);
 		ESP_LOGD(TAG, "Updated TX power chr with value: x%x (getPower=x%x)", rPwr.val, power);
@@ -117,6 +88,21 @@ static void setupDeviceInfo(NimBLEServer *server) {
 	srvDeviceInfo->start();
 }
 
+class TxPowerManagerCallbacks : public NimBLECharacteristicCallbacks {
+	void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
+		// Value written to the characteristic by a client.
+		const NimBLEAttValue val = pCharacteristic->getValue();
+		if (val.length() != sizeof(TxPowerNetworkData)) {
+			ESP_LOGW(TAG, "TX power onWrite, recieved value of length %u", val.length());
+			return;
+		}
+		TxPowerNetworkData power = *(TxPowerNetworkData *)val.data();
+		if (!NimBLEDevice::setPower(power.val)) {
+			ESP_LOGE(TAG, "Set TX power failed");
+		}
+	}
+};
+
 static void setupPowerManagerInterface(NimBLEServer *server) {
 	NimBLEService *srvc = bleServer->createService(&TX_PWR_SVC_UUID128);
 	{ // Set transmitter power - write
@@ -127,6 +113,20 @@ static void setupPowerManagerInterface(NimBLEServer *server) {
 	}
 	srvc->start();
 }
+
+class AdcFeedCallbacks : public NimBLECharacteristicCallbacks {
+	void onSubscribe(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo,
+	                 uint16_t subValue) override {
+		bleAccess.clientSubscribed = subValue & 1;
+		if (bleAccess.clientSubscribed) {
+			adcFeedConnectionHandle = connInfo.getConnHandle();
+			startAdc();
+		} else {
+			stopAdc();
+			adcFeedConnectionHandle = 0;
+		}
+	}
+};
 
 static void setupAdcFeed(NimBLEServer *server) {
 	NimBLEService *srvc = bleServer->createService(&DYNAMITE_SAMPLER_SVC_UUID128);
