@@ -61,7 +61,7 @@ struct AdcFeedNetworkData {
 
 		uint8_t sample[BYTES_PER_SAMPLE];
 	};
-	static constexpr size_t NUM_CHAN = 2;
+	static constexpr size_t NUM_CHAN = 4;
 
 	AdcSample chan[NUM_CHAN];
 };

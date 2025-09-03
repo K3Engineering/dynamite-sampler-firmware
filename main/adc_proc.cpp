@@ -29,7 +29,7 @@ static void logAdcConfig(const AdcConfigNetworkData *cfg) {
 	ESP_LOGI(TAG, " POWER MODE %u", clock & 0x03);
 	ESP_LOGI(TAG, " OSR %u", 128 << ((clock >> 2) & 0x07));
 	ESP_LOGI(TAG, " Turbo %c", (clock & 0x20) ? 'Y' : 'N');
-	ESP_LOGI(TAG, "Ch enabled 0x%X", (clock >> 8) & 0xF);
+	ESP_LOGI(TAG, " Ch enabled 0x%X", (clock >> 8) & 0xF);
 	uint16_t pga = cfg->pga;
 	for (size_t i = 0; i < sizeof(pga) * 2; ++i) {
 		ESP_LOGI(TAG, "GAIN ch %u = %u", i, 1 << (pga & 0x07));
@@ -57,15 +57,19 @@ static void IRAM_ATTR isrAdcDrdy(void *param) {
 	}
 }
 
-constexpr AdcFeedNetworkData adcToNetwork(const AdcClass::AdcRawOutput *adc) {
+static AdcFeedNetworkData adcToNetwork(const AdcClass::AdcRawOutput *adc) {
 	static_assert(AdcFeedNetworkData::AdcSample::SAMPLE_BYTE_ORDER ==
 	              AdcClass::AdcRawOutput::SAMPLE_BYTE_ORDER);
 	static_assert(AdcFeedNetworkData::AdcSample::BYTES_PER_SAMPLE == AdcClass::DATA_WORD_LENGTH);
 
 	AdcFeedNetworkData net;
-	memcpy(net.chan + 0, adc->data + AdcClass::DATA_WORD_LENGTH * 1,
+	memcpy(net.chan + 0, adc->data + AdcClass::DATA_WORD_LENGTH * 0,
 	       AdcFeedNetworkData::AdcSample::BYTES_PER_SAMPLE);
-	memcpy(net.chan + 1, adc->data + AdcClass::DATA_WORD_LENGTH * 2,
+	memcpy(net.chan + 1, adc->data + AdcClass::DATA_WORD_LENGTH * 1,
+	       AdcFeedNetworkData::AdcSample::BYTES_PER_SAMPLE);
+	memcpy(net.chan + 2, adc->data + AdcClass::DATA_WORD_LENGTH * 2,
+	       AdcFeedNetworkData::AdcSample::BYTES_PER_SAMPLE);
+	memcpy(net.chan + 3, adc->data + AdcClass::DATA_WORD_LENGTH * 3,
 	       AdcFeedNetworkData::AdcSample::BYTES_PER_SAMPLE);
 	return net;
 }
