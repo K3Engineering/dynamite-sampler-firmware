@@ -7,8 +7,6 @@
 #include <driver/spi_master.h>
 #include <soc/gpio_num.h>
 
-#include "dynamite_sampler_api.h"
-
 #define DRDY_STATE_LOGIC_HIGH 0 // DEFAULS
 #define DRDY_STATE_HI_Z       1
 
@@ -180,7 +178,7 @@ class ADS131M0x {
 	    (1 + NUM_CHANNELS_ENABLED + 1) * DATA_WORD_LENGTH; // status, channels, CRC
 
 #pragma pack(push, 1)
-	struct AdcRawOutput {
+	struct RawOutput {
 		static constexpr size_t SAMPLE_BYTE_ORDER = __ORDER_BIG_ENDIAN__;
 
 		uint16_t status;
@@ -189,8 +187,19 @@ class ADS131M0x {
 		uint16_t crc;
 		uint8_t  crc_unused;
 	};
+
+	struct ConfigData {
+		static constexpr size_t DATA_BYTE_ORDER = __ORDER_LITTLE_ENDIAN__;
+
+		uint16_t id;
+		uint16_t status;
+		uint16_t mode;
+		uint16_t clock;
+		uint16_t pga;
+	};
+
 #pragma pack(pop)
-	static_assert(sizeof(AdcRawOutput) == ADC_READ_DATA_SIZE);
+	static_assert(sizeof(RawOutput) == ADC_READ_DATA_SIZE);
 
 	void init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pin);
 	void setupAccess(spi_host_device_t spiDevice, int spi_clock_speed, gpio_num_t clk_pin,
@@ -207,12 +216,12 @@ class ADS131M0x {
 	void enableAdcInterrupt();
 	void disableAdcInterrupt();
 
-	const AdcRawOutput *rawReadADC();
+	const RawOutput *rawReadADC();
 
-	void                        stashConfig();
-	const AdcConfigNetworkData *getConfig() const { return &savedConfig; }
+	void              stashConfig();
+	const ConfigData *getConfig() const { return &savedConfig; }
 
-	static bool isCrcOk(const AdcRawOutput *data);
+	static bool isCrcOk(const RawOutput *data);
 
   private:
 	uint16_t readRegister(uint8_t address);
@@ -233,12 +242,12 @@ class ADS131M0x {
 	gpio_num_t drdyPin;
 	gpio_num_t resetPin;
 
-	AdcConfigNetworkData savedConfig;
+	ConfigData savedConfig;
 
 	// static for simplicity,
 	// should be allocated per instance with MALLOC_CAP_DMA
-	static AdcRawOutput spi2adc;
-	static AdcRawOutput adc2spi;
+	static RawOutput spi2adc;
+	static RawOutput adc2spi;
 };
 
 #if (CONFIG_MOCK_ADC == 1)

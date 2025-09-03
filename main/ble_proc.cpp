@@ -146,7 +146,7 @@ static void setupAdcFeed(NimBLEServer *server) {
 	{ // ADC config
 		NimBLECharacteristic *chr =
 		    srvc->createCharacteristic(&ADC_CONF_CHR_UUID128, NIMBLE_PROPERTY::READ);
-		chr->setValue(*getAdcConfig());
+		chr->setValue(getAdcConfig());
 	}
 	srvc->start();
 }

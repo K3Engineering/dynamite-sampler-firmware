@@ -35,8 +35,8 @@ static constexpr uint16_t crc16ccitt(const void *data, size_t count) {
 	return crc;
 }
 
-DMA_ATTR ADS131M0x::AdcRawOutput ADS131M0x::spi2adc;
-DMA_ATTR ADS131M0x::AdcRawOutput ADS131M0x::adc2spi;
+DMA_ATTR ADS131M0x::RawOutput ADS131M0x::spi2adc;
+DMA_ATTR ADS131M0x::RawOutput ADS131M0x::adc2spi;
 
 bool ADS131M0x::writeRegister(uint8_t address, uint16_t value) {
 	spi2adc.status            = htobe16(CMD_WRITE_REG | (address << 7));
@@ -126,7 +126,7 @@ void ADS131M0x::setupAccess(spi_host_device_t spiDevice, int spi_clock_speed, gp
 	    .data6_io_num          = -1,
 	    .data7_io_num          = -1,
 	    .data_io_default_level = 0,
-	    .max_transfer_sz       = sizeof(AdcRawOutput),
+	    .max_transfer_sz       = sizeof(RawOutput),
 	    .flags                 = SPICOMMON_BUSFLAG_MASTER,
 	    .isr_cpu_id            = ESP_INTR_CPU_AFFINITY_AUTO,
 	    .intr_flags            = 0,
@@ -215,7 +215,7 @@ bool ADS131M0x::setInputChannelSelection(uint8_t channel, uint8_t input) {
 	return true;
 }
 
-const ADS131M0x::AdcRawOutput *ADS131M0x::rawReadADC() {
+const ADS131M0x::RawOutput *ADS131M0x::rawReadADC() {
 	if (ESP_OK == spi_device_polling_start(spiHandle, &transDesc, portMAX_DELAY)) {
 		spi_device_polling_end(spiHandle, portMAX_DELAY);
 	}
@@ -228,7 +228,7 @@ uint16_t ADS131M0x::readMODE() { return readRegister(REG_MODE); }
 uint16_t ADS131M0x::readCLOCK() { return readRegister(REG_CLOCK); }
 uint16_t ADS131M0x::readPGA() { return readRegister(REG_GAIN); }
 
-bool ADS131M0x::isCrcOk(const AdcRawOutput *data) {
+bool ADS131M0x::isCrcOk(const RawOutput *data) {
 	uint16_t crc           = be16toh(data->crc);
 	uint16_t calculatedCrc = crc16ccitt(data, sizeof(*data) - DATA_WORD_LENGTH);
 
@@ -250,13 +250,11 @@ void ADS131M0x::disableAdcInterrupt() { gpio_set_intr_type(drdyPin, GPIO_INTR_DI
 // Should not be called while ADC is running
 void ADS131M0x::stashConfig() {
 	savedConfig = {
-	    .version = 1,
-	    .numChan = ADS131M0x::NUM_CHANNELS_ENABLED,
-	    .id      = readID(),
-	    .status  = readSTATUS(),
-	    .mode    = readMODE(),
-	    .clock   = readCLOCK(),
-	    .pga     = readPGA(),
+	    .id     = readID(),
+	    .status = readSTATUS(),
+	    .mode   = readMODE(),
+	    .clock  = readCLOCK(),
+	    .pga    = readPGA(),
 	};
 }
 

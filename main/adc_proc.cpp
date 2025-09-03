@@ -19,7 +19,7 @@ constexpr char TAG[] = "ADC";
 static AdcClass     adc;
 static TaskHandle_t adcReadTaskHandle = NULL;
 
-static void logAdcConfig(const AdcConfigNetworkData *cfg) {
+static void logADS131M0xConfig(const ADS131M0x::ConfigData *cfg) {
 	ESP_LOGI(TAG, "<REGISTERS>");
 	ESP_LOGI(TAG, "ID 0x%X", cfg->id >> 8);
 	ESP_LOGI(TAG, "STATUS 0x%04X", cfg->status);
@@ -36,6 +36,24 @@ static void logAdcConfig(const AdcConfigNetworkData *cfg) {
 		pga >>= 4;
 	};
 }
+
+const AdcConfigNetworkData getAdcConfig() {
+	const ADS131M0x::ConfigData *p = adc.getConfig();
+
+	AdcConfigNetworkData net{
+	    .version = 1,
+	    .numChan = 4,
+	    .id      = p->id,
+	    .status  = p->status,
+	    .mode    = p->mode,
+	    .clock   = p->clock,
+	    .pga     = p->pga,
+	};
+	return net;
+}
+
+void startAdc() { adc.enableAdcInterrupt(); }
+void stopAdc() { adc.disableAdcInterrupt(); }
 
 static inline void requestTaskSwitchFromISR(BaseType_t needSwitch, void *ptr) {
 #if (CONFIG_MOCK_ADC == 1)
@@ -57,9 +75,9 @@ static void IRAM_ATTR isrAdcDrdy(void *param) {
 	}
 }
 
-static AdcFeedNetworkData adcToNetwork(const AdcClass::AdcRawOutput *adc) {
+static AdcFeedNetworkData adcToNetwork(const AdcClass::RawOutput *adc) {
 	static_assert(AdcFeedNetworkData::AdcSample::SAMPLE_BYTE_ORDER ==
-	              AdcClass::AdcRawOutput::SAMPLE_BYTE_ORDER);
+	              AdcClass::RawOutput::SAMPLE_BYTE_ORDER);
 	static_assert(AdcFeedNetworkData::AdcSample::BYTES_PER_SAMPLE == AdcClass::DATA_WORD_LENGTH);
 
 	AdcFeedNetworkData net;
@@ -75,11 +93,10 @@ static AdcFeedNetworkData adcToNetwork(const AdcClass::AdcRawOutput *adc) {
 	net.crcOk = 1;
 	return net;
 }
-
 // Read ADC values. If BLE device is connected, place them in the buffer.
 // When accumulated enough, notify the ble task
 static void adcReadAndBuffer() {
-	const AdcClass::AdcRawOutput *adcReading = adc.rawReadADC();
+	const AdcClass::RawOutput *adcReading = adc.rawReadADC();
 
 	if (!bleAccess.clientSubscribed)
 		return;
@@ -131,7 +148,7 @@ static void taskSetupAdc(void *setupDone) {
 	adc.setOsr(ads131UserConfig.osr);
 
 	adc.stashConfig();
-	logAdcConfig(adc.getConfig());
+	logADS131M0xConfig(adc.getConfig());
 
 	adc.attachISR(isrAdcDrdy);
 
@@ -152,8 +169,3 @@ void setupAdc(int core) {
 	xTaskCreatePinnedToCore(taskAdcReadAndBuffer, "task_ADC_read", 1024 * 5, NULL, priority,
 	                        &adcReadTaskHandle, core);
 }
-
-void startAdc() { adc.enableAdcInterrupt(); }
-void stopAdc() { adc.disableAdcInterrupt(); }
-
-const AdcConfigNetworkData *getAdcConfig() { return adc.getConfig(); }

@@ -1,10 +1,7 @@
 #ifndef ADS131M0x_CFG_h
 #define ADS131M0x_CFG_h
 
-#include <esp_log.h>
-
 #include "ADS131M0x.h"
-#include "sdkconfig.h"
 
 struct ADS131Cfg {
 	uint8_t pga[4];
