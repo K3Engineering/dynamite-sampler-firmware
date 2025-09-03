@@ -63,6 +63,7 @@ static AdcFeedNetworkData adcToNetwork(const AdcClass::AdcRawOutput *adc) {
 	static_assert(AdcFeedNetworkData::AdcSample::BYTES_PER_SAMPLE == AdcClass::DATA_WORD_LENGTH);
 
 	AdcFeedNetworkData net;
+	net.status = 0;
 	memcpy(net.chan + 0, adc->data + AdcClass::DATA_WORD_LENGTH * 0,
 	       AdcFeedNetworkData::AdcSample::BYTES_PER_SAMPLE);
 	memcpy(net.chan + 1, adc->data + AdcClass::DATA_WORD_LENGTH * 1,
@@ -71,6 +72,7 @@ static AdcFeedNetworkData adcToNetwork(const AdcClass::AdcRawOutput *adc) {
 	       AdcFeedNetworkData::AdcSample::BYTES_PER_SAMPLE);
 	memcpy(net.chan + 3, adc->data + AdcClass::DATA_WORD_LENGTH * 3,
 	       AdcFeedNetworkData::AdcSample::BYTES_PER_SAMPLE);
+	net.crcOk = 1;
 	return net;
 }
 
