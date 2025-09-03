@@ -70,6 +70,7 @@ struct AdcConfigNetworkData {
 	static constexpr size_t DATA_BYTE_ORDER = __ORDER_LITTLE_ENDIAN__;
 
 	uint8_t  version;
+	uint8_t  numChan;
 	uint16_t id;
 	uint16_t status;
 	uint16_t mode;

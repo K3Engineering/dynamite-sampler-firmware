@@ -251,6 +251,7 @@ void ADS131M0x::disableAdcInterrupt() { gpio_set_intr_type(drdyPin, GPIO_INTR_DI
 void ADS131M0x::stashConfig() {
 	savedConfig = {
 	    .version = 1,
+	    .numChan = ADS131M0x::NUM_CHANNELS_ENABLED,
 	    .id      = readID(),
 	    .status  = readSTATUS(),
 	    .mode    = readMODE(),
