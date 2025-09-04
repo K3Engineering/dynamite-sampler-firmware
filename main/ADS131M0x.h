@@ -189,7 +189,7 @@ class ADS131M0x {
 	};
 
 	struct ConfigData {
-		static constexpr size_t DATA_BYTE_ORDER = __ORDER_LITTLE_ENDIAN__;
+		static constexpr size_t DATA_BYTE_ORDER = __BYTE_ORDER__;
 
 		uint16_t id;
 		uint16_t status;

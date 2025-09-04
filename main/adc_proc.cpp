@@ -40,6 +40,7 @@ static void logADS131M0xConfig(const ADS131M0x::ConfigData *cfg) {
 const AdcConfigNetworkData getAdcConfig() {
 	const ADS131M0x::ConfigData *p = adc.getConfig();
 
+	static_assert(ADS131M0x::ConfigData::DATA_BYTE_ORDER == AdcConfigNetworkData::DATA_BYTE_ORDER);
 	AdcConfigNetworkData net{
 	    .version = 1,
 	    .numChan = 4,
