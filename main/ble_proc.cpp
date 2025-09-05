@@ -128,6 +128,12 @@ class AdcFeedCallbacks : public NimBLECharacteristicCallbacks {
 	}
 };
 
+class AdcConfigCallbacks : public NimBLECharacteristicCallbacks {
+	void onRead(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
+		pCharacteristic->setValue(getAdcConfig());
+	}
+};
+
 static void setupAdcFeed(NimBLEServer *server) {
 	NimBLEService *srvc = bleServer->createService(&DYNAMITE_SAMPLER_SVC_UUID128);
 	{ // ADC feed
@@ -146,7 +152,8 @@ static void setupAdcFeed(NimBLEServer *server) {
 	{ // ADC config
 		NimBLECharacteristic *chr =
 		    srvc->createCharacteristic(&ADC_CONF_CHR_UUID128, NIMBLE_PROPERTY::READ);
-		chr->setValue(getAdcConfig());
+		static AdcConfigCallbacks cb;
+		chr->setCallbacks(&cb);
 	}
 	srvc->start();
 }
