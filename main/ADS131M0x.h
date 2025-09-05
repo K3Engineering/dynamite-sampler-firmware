@@ -210,7 +210,7 @@ class ADS131M0x {
 
 	typedef void (*AdcISR)(void *);
 	void attachISR(AdcISR isr);
-	void srartAdc();
+	void startAdc();
 	void stopAdc();
 
 	const RawOutput *rawReadADC();
@@ -285,7 +285,7 @@ class MockAdc {
 	typedef ADS131M0x::AdcRawOutput AdcRawOutput;
 
 	void attachISR(AdcISR isr);
-	void srartAdc();
+	void startAdc();
 	void stopAdc();
 
 	const AdcRawOutput *rawReadADC();

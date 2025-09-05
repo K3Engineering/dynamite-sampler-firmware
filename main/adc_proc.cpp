@@ -53,7 +53,7 @@ const AdcConfigNetworkData getAdcConfig() {
 	return net;
 }
 
-void startAdc() { adc.srartAdc(); }
+void startAdc() { adc.startAdc(); }
 void stopAdc() { adc.stopAdc(); }
 
 static inline void requestTaskSwitchFromISR(BaseType_t needSwitch, void *ptr) {

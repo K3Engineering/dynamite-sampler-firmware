@@ -243,7 +243,7 @@ void ADS131M0x::attachISR(AdcISR isr) {
 	gpio_isr_handler_add(drdyPin, isr, nullptr);
 }
 
-void ADS131M0x::srartAdc() { gpio_set_intr_type(drdyPin, GPIO_INTR_NEGEDGE); }
+void ADS131M0x::startAdc() { gpio_set_intr_type(drdyPin, GPIO_INTR_NEGEDGE); }
 
 void ADS131M0x::stopAdc() { gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE); }
 
@@ -301,7 +301,7 @@ void MockAdc::attachISR(AdcISR isr) {
 	gptimer_enable(gptimer);
 }
 
-void MockAdc::srartAdc() { gptimer_start(gptimer); }
+void MockAdc::startAdc() { gptimer_start(gptimer); }
 
 void MockAdc::stopAdc() { gptimer_stop(gptimer); }
 
