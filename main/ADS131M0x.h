@@ -187,19 +187,16 @@ class ADS131M0x {
 		uint16_t crc;
 		uint8_t  crc_unused;
 	};
+#pragma pack(pop)
+	static_assert(sizeof(RawOutput) == ADC_READ_DATA_SIZE);
 
 	struct ConfigData {
-		static constexpr size_t DATA_BYTE_ORDER = __BYTE_ORDER__;
-
 		uint16_t id;
 		uint16_t status;
 		uint16_t mode;
 		uint16_t clock;
 		uint16_t pga;
 	};
-
-#pragma pack(pop)
-	static_assert(sizeof(RawOutput) == ADC_READ_DATA_SIZE);
 
 	void init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pin);
 	void setupAccess(spi_host_device_t spiDevice, int spi_clock_speed, gpio_num_t clk_pin,

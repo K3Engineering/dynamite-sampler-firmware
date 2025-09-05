@@ -6,6 +6,7 @@
 #include <esp_log.h>
 #include <esp_timer.h>
 
+#include <endian.h>
 #include <string.h>
 
 #include "adc_ble_interface.h"
@@ -39,16 +40,15 @@ static void logADS131M0xConfig(const ADS131M0x::ConfigData *cfg) {
 
 const AdcConfigNetworkData getAdcConfig() {
 	const ADS131M0x::ConfigData *p = adc.getConfig();
-
-	static_assert(ADS131M0x::ConfigData::DATA_BYTE_ORDER == AdcConfigNetworkData::DATA_BYTE_ORDER);
+	static_assert(__ORDER_LITTLE_ENDIAN__ == AdcConfigNetworkData::DATA_BYTE_ORDER);
 	AdcConfigNetworkData net{
 	    .version = 1,
 	    .numChan = 4,
-	    .id      = p->id,
-	    .status  = p->status,
-	    .mode    = p->mode,
-	    .clock   = p->clock,
-	    .pga     = p->pga,
+	    .id      = htole16(p->id),
+	    .status  = htole16(p->status),
+	    .mode    = htole16(p->mode),
+	    .clock   = htole16(p->clock),
+	    .pga     = htole16(p->pga),
 	};
 	return net;
 }
