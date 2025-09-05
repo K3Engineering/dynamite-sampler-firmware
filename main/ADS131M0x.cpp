@@ -243,9 +243,9 @@ void ADS131M0x::attachISR(AdcISR isr) {
 	gpio_isr_handler_add(drdyPin, isr, nullptr);
 }
 
-void ADS131M0x::enableAdcInterrupt() { gpio_set_intr_type(drdyPin, GPIO_INTR_NEGEDGE); }
+void ADS131M0x::srartAdc() { gpio_set_intr_type(drdyPin, GPIO_INTR_NEGEDGE); }
 
-void ADS131M0x::disableAdcInterrupt() { gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE); }
+void ADS131M0x::stopAdc() { gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE); }
 
 // Should not be called while ADC is running
 void ADS131M0x::stashConfig() {
@@ -301,9 +301,9 @@ void MockAdc::attachISR(AdcISR isr) {
 	gptimer_enable(gptimer);
 }
 
-void MockAdc::enableAdcInterrupt() { gptimer_start(gptimer); }
+void MockAdc::srartAdc() { gptimer_start(gptimer); }
 
-void MockAdc::disableAdcInterrupt() { gptimer_stop(gptimer); }
+void MockAdc::stopAdc() { gptimer_stop(gptimer); }
 
 const MockAdc::AdcRawOutput *MockAdc::rawReadADC() {
 	static AdcRawOutput a{

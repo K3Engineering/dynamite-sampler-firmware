@@ -53,8 +53,8 @@ const AdcConfigNetworkData getAdcConfig() {
 	return net;
 }
 
-void startAdc() { adc.enableAdcInterrupt(); }
-void stopAdc() { adc.disableAdcInterrupt(); }
+void startAdc() { adc.srartAdc(); }
+void stopAdc() { adc.stopAdc(); }
 
 static inline void requestTaskSwitchFromISR(BaseType_t needSwitch, void *ptr) {
 #if (CONFIG_MOCK_ADC == 1)
