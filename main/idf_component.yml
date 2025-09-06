@@ -2,6 +2,6 @@
 dependencies:
   esp-nimble-cpp:
     git: https://github.com/h2zero/esp-nimble-cpp
-    ## slightly newer than 2.3.1
-    version: 8cefc0a5625021ccc138d2356ebed803cc6f5bb7
+    ## slightly newer than 2.3.2
+    version: 6ee2a951f5c5249eaa9c9f4efc1976d5d0782350
     

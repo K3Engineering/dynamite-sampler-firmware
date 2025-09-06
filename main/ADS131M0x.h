@@ -171,14 +171,16 @@
 #define REGMASK_CHX_GCAL0_LSB 0xFF00
 
 class ADS131M0x {
+  public:
 	static constexpr size_t NUM_CHANNELS_ENABLED = 4;
 	static constexpr size_t DATA_WORD_LENGTH     = 3; // in bytes
 	static constexpr size_t ADC_READ_DATA_SIZE =
 	    (1 + NUM_CHANNELS_ENABLED + 1) * DATA_WORD_LENGTH; // status, channels, CRC
 
-  public:
 #pragma pack(push, 1)
-	struct AdcRawOutput {
+	struct RawOutput {
+		static constexpr size_t SAMPLE_BYTE_ORDER = __ORDER_BIG_ENDIAN__;
+
 		uint16_t status;
 		uint8_t  status_unused;
 		uint8_t  data[DATA_WORD_LENGTH * NUM_CHANNELS_ENABLED];
@@ -186,7 +188,15 @@ class ADS131M0x {
 		uint8_t  crc_unused;
 	};
 #pragma pack(pop)
-	static_assert(sizeof(AdcRawOutput) == ADC_READ_DATA_SIZE);
+	static_assert(sizeof(RawOutput) == ADC_READ_DATA_SIZE);
+
+	struct ConfigData {
+		uint16_t id;
+		uint16_t status;
+		uint16_t mode;
+		uint16_t clock;
+		uint16_t pga;
+	};
 
 	void init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pin);
 	void setupAccess(spi_host_device_t spiDevice, int spi_clock_speed, gpio_num_t clk_pin,
@@ -200,16 +210,15 @@ class ADS131M0x {
 
 	typedef void (*AdcISR)(void *);
 	void attachISR(AdcISR isr);
+	void startAdc();
+	void stopAdc();
 
-	const AdcRawOutput *rawReadADC();
+	const RawOutput *rawReadADC();
 
-	uint16_t readID();
-	uint16_t readSTATUS();
-	uint16_t readMODE();
-	uint16_t readCLOCK();
-	uint16_t readPGA();
+	void              stashConfig();
+	const ConfigData *getConfig() const { return &savedConfig; }
 
-	static bool isCrcOk(const AdcRawOutput *data);
+	static bool isCrcOk(const RawOutput *data);
 
   private:
 	uint16_t readRegister(uint8_t address);
@@ -217,21 +226,39 @@ class ADS131M0x {
 	bool writeRegister(uint8_t address, uint16_t value);
 	bool writeRegisterMasked(uint8_t address, uint16_t value, uint16_t mask);
 
+	uint16_t readID();
+	uint16_t readSTATUS();
+	uint16_t readMODE();
+	uint16_t readCLOCK();
+	uint16_t readPGA();
+
 	spi_device_handle_t spiHandle;
+	spi_transaction_t   transDesc;
 
 	gpio_num_t csPin;
 	gpio_num_t drdyPin;
 	gpio_num_t resetPin;
 
-	static AdcRawOutput spi2adc;
-	static AdcRawOutput adc2spi;
+	ConfigData savedConfig;
 
-	static spi_transaction_t transDesc;
+	// static for simplicity,
+	// should be allocated per instance with MALLOC_CAP_DMA
+	static RawOutput spi2adc;
+	static RawOutput adc2spi;
 };
 
 #if (CONFIG_MOCK_ADC == 1)
+
+#include <driver/gptimer.h>
+
 class MockAdc {
+	gptimer_handle_t gptimer;
+
   public:
+	static constexpr size_t NUM_CHANNELS_ENABLED = ADS131M0x::NUM_CHANNELS_ENABLED;
+	static constexpr size_t DATA_WORD_LENGTH     = ADS131M0x::DATA_WORD_LENGTH; // in bytes
+	static constexpr size_t ADC_READ_DATA_SIZE   = ADS131M0x::ADC_READ_DATA_SIZE;
+
 	void init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pin) {}
 	void setupAccess(spi_host_device_t spiDevice, uint32_t spi_clock_speed, gpio_num_t clk_pin,
 	                 gpio_num_t miso_pin, gpio_num_t mosi_pin) {}
@@ -244,6 +271,10 @@ class MockAdc {
 	bool setInputChannelSelection(uint8_t channel, uint8_t input) { return true; }
 	bool setOsr(uint16_t osr) { return true; }
 
+	AdcConfigNetworkData        savedConfig;
+	void                        stashConfig() { savedConfig.version = 0; }
+	const AdcConfigNetworkData *getConfig() const { return &savedConfig; }
+
 	uint16_t readID() { return 0; }
 	uint16_t readSTATUS() { return 0; }
 	uint16_t readMODE() { return 0; }
@@ -254,6 +285,8 @@ class MockAdc {
 	typedef ADS131M0x::AdcRawOutput AdcRawOutput;
 
 	void attachISR(AdcISR isr);
+	void startAdc();
+	void stopAdc();
 
 	const AdcRawOutput *rawReadADC();
 

@@ -43,6 +43,7 @@
       "sdkconfigFilePath": "${workspaceFolder}/build/sdkconfig.debug-mockadc"
     },
     "env": {},
+    "idfTarget": "esp32s3",
     "flashBaudRate": "",
     "monitorBaudRate": "",
     "openOCD": {
@@ -59,7 +60,9 @@
   },
   "release": {
     "build": {
-      "compileArgs": [],
+      "compileArgs": [
+        "-DIDF_TARGET=esp32s3"
+      ],
       "ninjaArgs": [],
       "buildDirectoryPath": "${workspaceFolder}/build/release",
       "sdkconfigDefaults": [
@@ -69,6 +72,7 @@
       "sdkconfigFilePath": "${workspaceFolder}/build/sdkconfig.release"
     },
     "env": {},
+    "idfTarget": "esp32s3",
     "flashBaudRate": "",
     "monitorBaudRate": "",
     "openOCD": {

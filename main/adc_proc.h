@@ -1,8 +1,12 @@
 #ifndef _ADC_PROC_H
 #define _ADC_PROC_H
 
-void setupAdc(int core);
+#include "dynamite_sampler_api.h"
 
-size_t readAdcRegBleForBle(uint8_t *data);
+void setupAdc(int core);
+void startAdc();
+void stopAdc();
+
+const AdcConfigNetworkData getAdcConfig();
 
 #endif // _ADC_PROC_H

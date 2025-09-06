@@ -221,18 +221,19 @@ void otaConditionalRollback() {
 	}
 }
 
-void setupBleOta(NimBLEServer *server) { // Create the BLE Services
-	NimBLEService *srvOTA = server->createService(&OTA_SVC_UUID128);
-
-	NimBLECharacteristic *chrOtaControl = srvOTA->createCharacteristic(
-	    &OTA_CONTROL_CHR_UUID128, NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::NOTIFY, 16);
-	static OtaControlChrCallbacks otaControlCb(&otaControlData);
-	chrOtaControl->setCallbacks(&otaControlCb);
-
-	NimBLECharacteristic *chrOtaData =
-	    srvOTA->createCharacteristic(&OTA_DATA_CHR_UUID128, NIMBLE_PROPERTY::WRITE, 512 + 128);
-	static OtaDataChrCallbacks otaDataCb(&otaControlData);
-	chrOtaData->setCallbacks(&otaDataCb);
-
-	srvOTA->start();
+void setupBleOta(NimBLEServer *server) {
+	NimBLEService *srvc = server->createService(&OTA_SVC_UUID128);
+	{ // Control interface
+		NimBLECharacteristic *chr = srvc->createCharacteristic(
+		    &OTA_CONTROL_CHR_UUID128, NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::NOTIFY, 16);
+		static OtaControlChrCallbacks cb(&otaControlData);
+		chr->setCallbacks(&cb);
+	}
+	{ // Data interface
+		NimBLECharacteristic *chr =
+		    srvc->createCharacteristic(&OTA_DATA_CHR_UUID128, NIMBLE_PROPERTY::WRITE, 512 + 128);
+		static OtaDataChrCallbacks cb(&otaControlData);
+		chr->setCallbacks(&cb);
+	}
+	srvc->start();
 }

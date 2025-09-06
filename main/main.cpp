@@ -26,16 +26,10 @@ extern "C" void app_main(void) {
 	ESP_LOGI(TAG, "MAC address: %02x%02x%02x%02x%02x%02x", mac[5], mac[4], mac[3], mac[2], mac[1],
 	         mac[0]);
 
-	setupBle(CORE_BLE);
 	setupAdc(CORE_APP);
+	setupBle(CORE_BLE);
 
 	otaConditionalRollback();
-
-	// TODO this is here because its the only place with access to both adc and ble
-	// maybe it should be somewhere else?
-	uint8_t data[255];
-	uint8_t data_len = readAdcRegBleForBle(data);
-	setAdcConfigCharacteristic(data, data_len);
 
 	constexpr esp_pm_config_t pmConfig = {
 	    .max_freq_mhz       = 80,
