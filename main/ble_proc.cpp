@@ -176,12 +176,18 @@ static void setupAdvertising(const char *name) {
 
 // Read the adc buffer and update the BLE characteristic
 static void blePublishAdcBuffer() {
-	uint8_t batch[ADC_FEED_CHUNK_SZ];
-	if (xStreamBufferBytesAvailable(bleAccess.adcStreamBufferHandle) >= sizeof(batch)) {
-		size_t bytesRead =
-		    xStreamBufferReceive(bleAccess.adcStreamBufferHandle, batch, sizeof(batch), 0);
-		if (bytesRead == sizeof(batch)) {
-			chrAdcFeed->notify(batch, bytesRead, adcFeedConnectionHandle);
+	AdcFeedNetworkPacket packet;
+	static_assert(sizeof(packet) <= BLE_PUBL_DATA_ATT_PAYLOAD);
+	if (xStreamBufferBytesAvailable(bleAccess.adcStreamBufferHandle) >= sizeof(packet.adc)) {
+		size_t bytesRead = xStreamBufferReceive(bleAccess.adcStreamBufferHandle, &packet.adc,
+		                                        sizeof(packet.adc), 0);
+		if (bytesRead == sizeof(packet.adc)) {
+			static uint16_t count = 0;
+
+			packet.hrd.sz    = bytesRead;
+			packet.hrd.order = count;
+			chrAdcFeed->notify(packet, adcFeedConnectionHandle);
+			count += sizeof(packet.adc) / sizeof(*packet.adc);
 		}
 	}
 }

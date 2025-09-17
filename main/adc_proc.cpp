@@ -43,7 +43,6 @@ const AdcConfigNetworkData getAdcConfig() {
 	static_assert(__ORDER_LITTLE_ENDIAN__ == AdcConfigNetworkData::DATA_BYTE_ORDER);
 	AdcConfigNetworkData net{
 	    .version = 1,
-	    .numChan = 4,
 	    .id      = htole16(p->id),
 	    .status  = htole16(p->status),
 	    .mode    = htole16(p->mode),
@@ -82,7 +81,6 @@ static AdcFeedNetworkData adcToNetwork(const AdcClass::RawOutput *adc) {
 	static_assert(AdcFeedNetworkData::AdcSample::BYTES_PER_SAMPLE == AdcClass::DATA_WORD_LENGTH);
 
 	AdcFeedNetworkData net;
-	net.status = 0;
 	memcpy(net.chan + 0, adc->data + AdcClass::DATA_WORD_LENGTH * 0,
 	       AdcFeedNetworkData::AdcSample::BYTES_PER_SAMPLE);
 	memcpy(net.chan + 1, adc->data + AdcClass::DATA_WORD_LENGTH * 1,
@@ -91,7 +89,6 @@ static AdcFeedNetworkData adcToNetwork(const AdcClass::RawOutput *adc) {
 	       AdcFeedNetworkData::AdcSample::BYTES_PER_SAMPLE);
 	memcpy(net.chan + 3, adc->data + AdcClass::DATA_WORD_LENGTH * 3,
 	       AdcFeedNetworkData::AdcSample::BYTES_PER_SAMPLE);
-	net.crcOk = 1;
 	return net;
 }
 // Read ADC values. If BLE device is connected, place them in the buffer.

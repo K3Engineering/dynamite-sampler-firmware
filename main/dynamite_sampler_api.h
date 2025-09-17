@@ -63,16 +63,22 @@ struct AdcFeedNetworkData {
 	};
 	static constexpr size_t NUM_CHAN = 4;
 
-	uint16_t  status;
 	AdcSample chan[NUM_CHAN];
-	uint8_t   crcOk;
+};
+
+struct AdcFeedNetworkPacket {
+	struct Header {
+		uint8_t  sz;
+		uint16_t order;
+	};
+	Header             hrd;
+	AdcFeedNetworkData adc[(244 - sizeof(Header)) / sizeof(AdcFeedNetworkData)];
 };
 
 struct AdcConfigNetworkData {
 	static constexpr size_t DATA_BYTE_ORDER = __ORDER_LITTLE_ENDIAN__;
 
 	uint8_t  version;
-	uint8_t  numChan;
 	uint16_t id;
 	uint16_t status;
 	uint16_t mode;
