@@ -61,18 +61,21 @@ struct AdcFeedNetworkData {
 
 		uint8_t sample[BYTES_PER_SAMPLE];
 	};
+
 	static constexpr size_t NUM_CHAN = 4;
 
 	AdcSample chan[NUM_CHAN];
 };
 
 struct AdcFeedNetworkPacket {
+	static constexpr size_t BLE_PAYLOAD_SZ = 244;
+
 	struct Header {
 		uint8_t  sz;
 		uint16_t order;
 	};
 	Header             hrd;
-	AdcFeedNetworkData adc[(244 - sizeof(Header)) / sizeof(AdcFeedNetworkData)];
+	AdcFeedNetworkData adc[(BLE_PAYLOAD_SZ - sizeof(Header)) / sizeof(AdcFeedNetworkData)];
 };
 
 struct AdcConfigNetworkData {
