@@ -41,7 +41,7 @@ static void logADS131M0xConfig(const ADS131M0x::ConfigData *cfg) {
 const AdcConfigNetworkData getAdcConfig() {
 	const ADS131M0x::ConfigData *p = adc.getConfig();
 	static_assert(__ORDER_LITTLE_ENDIAN__ == AdcConfigNetworkData::DATA_BYTE_ORDER);
-	AdcConfigNetworkData net{
+	return AdcConfigNetworkData{
 	    .version = 1,
 	    .id      = htole16(p->id),
 	    .status  = htole16(p->status),
@@ -49,7 +49,6 @@ const AdcConfigNetworkData getAdcConfig() {
 	    .clock   = htole16(p->clock),
 	    .pga     = htole16(p->pga),
 	};
-	return net;
 }
 
 void startAdc() { adc.startAdc(); }
