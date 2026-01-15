@@ -41,16 +41,14 @@ static void logADS131M0xConfig(const ADS131M0x::ConfigData *cfg) {
 const AdcConfigNetworkData getAdcConfig() {
 	const ADS131M0x::ConfigData *p = adc.getConfig();
 	static_assert(__ORDER_LITTLE_ENDIAN__ == AdcConfigNetworkData::DATA_BYTE_ORDER);
-	AdcConfigNetworkData net{
+	return AdcConfigNetworkData{
 	    .version = 1,
-	    .numChan = 4,
 	    .id      = htole16(p->id),
 	    .status  = htole16(p->status),
 	    .mode    = htole16(p->mode),
 	    .clock   = htole16(p->clock),
 	    .pga     = htole16(p->pga),
 	};
-	return net;
 }
 
 void startAdc() { adc.startAdc(); }
@@ -82,7 +80,6 @@ static AdcFeedNetworkData adcToNetwork(const AdcClass::RawOutput *adc) {
 	static_assert(AdcFeedNetworkData::AdcSample::BYTES_PER_SAMPLE == AdcClass::DATA_WORD_LENGTH);
 
 	AdcFeedNetworkData net;
-	net.status = 0;
 	memcpy(net.chan + 0, adc->data + AdcClass::DATA_WORD_LENGTH * 0,
 	       AdcFeedNetworkData::AdcSample::BYTES_PER_SAMPLE);
 	memcpy(net.chan + 1, adc->data + AdcClass::DATA_WORD_LENGTH * 1,
@@ -91,7 +88,6 @@ static AdcFeedNetworkData adcToNetwork(const AdcClass::RawOutput *adc) {
 	       AdcFeedNetworkData::AdcSample::BYTES_PER_SAMPLE);
 	memcpy(net.chan + 3, adc->data + AdcClass::DATA_WORD_LENGTH * 3,
 	       AdcFeedNetworkData::AdcSample::BYTES_PER_SAMPLE);
-	net.crcOk = 1;
 	return net;
 }
 // Read ADC values. If BLE device is connected, place them in the buffer.
