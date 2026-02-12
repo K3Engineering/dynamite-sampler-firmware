@@ -80,7 +80,7 @@ struct AdcFeedNetworkPacket {
 	static constexpr size_t BLE_PAYLOAD_SZ = 244;
 
 	struct Header {
-		uint16_t sample_sequence_num;
+		uint16_t sample_sequence_number;
 	};
 	Header                  hrd;
 	static constexpr size_t NUM_SAMPLES =
