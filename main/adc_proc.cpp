@@ -40,7 +40,7 @@ static void logADS131M0xConfig(const ADS131M0x::ConfigData *cfg) {
 
 const AdcConfigNetworkData getAdcConfig() {
 	const ADS131M0x::ConfigData *p = adc.getConfig();
-	static_assert(__ORDER_LITTLE_ENDIAN__ == AdcConfigNetworkData::DATA_BYTE_ORDER);
+	static_assert(__ORDER_LITTLE_ENDIAN__ == DYNAMITE_NET_BYTE_ORDER);
 	return AdcConfigNetworkData{
 	    .version = 1,
 	    .id      = htole16(p->id),
@@ -75,8 +75,7 @@ static void IRAM_ATTR isrAdcDrdy(void *param) {
 }
 
 static AdcFeedNetworkData adcToNetwork(const AdcClass::RawOutput *adc) {
-	static_assert(AdcFeedNetworkData::AdcSample::SAMPLE_BYTE_ORDER ==
-	              AdcClass::RawOutput::SAMPLE_BYTE_ORDER);
+	static_assert(AdcFeedNetworkData::DATA_BYTE_ORDER == AdcClass::RawOutput::SAMPLE_BYTE_ORDER);
 	static_assert(AdcFeedNetworkData::AdcSample::BYTES_PER_SAMPLE == AdcClass::DATA_WORD_LENGTH);
 
 	AdcFeedNetworkData net;
