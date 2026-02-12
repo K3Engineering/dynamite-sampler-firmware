@@ -186,8 +186,6 @@ static void blePublishAdcBuffer() {
 			packet.hrd.sample_sequence_num = htole16(count);
 			chrAdcFeed->notify(packet, adcFeedConnectionHandle);
 			count += sizeof(packet.adc) / sizeof(*packet.adc);
-		} else {
-			ESP_LOGE(TAG, "Discarded %u ADC bytes");
 		}
 	}
 }
