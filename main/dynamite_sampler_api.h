@@ -40,6 +40,7 @@ constexpr char TX_PWR_CHR_UUID[] = "7478c418-35d3-4c3d-99d9-2de090159664";
 
 //======================== </UUIDs>
 
+// LITTLE_ENDIAN is not mandatory for custom data, though highly recommended
 constexpr size_t DYNAMITE_NET_BYTE_ORDER = __ORDER_LITTLE_ENDIAN__;
 
 //======================== <OTA Update>
@@ -64,7 +65,6 @@ constexpr OtaReplyType SVR_CHR_OTA_CONTROL_DONE_NAK    = 6;
 //======================== <ADC Data>
 
 struct AdcFeedNetworkData {
-	static constexpr size_t DATA_BYTE_ORDER = __ORDER_BIG_ENDIAN__;
 	struct AdcSample {
 		static constexpr size_t BYTES_PER_SAMPLE = 3;
 
