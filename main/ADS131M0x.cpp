@@ -17,7 +17,7 @@ static constexpr uint16_t crc16ccitt(const void *data, size_t count) {
 	static constexpr uint16_t CRC_POLYNOM  = 0x1021;
 
 	const uint8_t *ptr = (const uint8_t *)data;
-	uint16_t       crc = CRC_INIT_VAL;
+	uint16_t crc       = CRC_INIT_VAL;
 	while (count > 0) {
 		--count;
 		static_assert(sizeof(*ptr << 8) >= sizeof(crc));
@@ -161,7 +161,6 @@ void ADS131M0x::setupAccess(spi_host_device_t spiDevice, int spi_clock_speed, gp
 		ESP_LOGE(TAG, "spi_bus_add_device %d", ret);
 		return;
 	}
-
 	ret = spi_device_acquire_bus(handle, portMAX_DELAY);
 	if (ESP_OK != ret) {
 		ESP_LOGE(TAG, "spi_device_acquire_bus %d", ret);
@@ -194,8 +193,9 @@ bool ADS131M0x::setChannelPGA(uint8_t channel, uint16_t pga) {
 	static_assert(REGMASK_GAIN_PGAGAIN2 == (REGMASK_GAIN_PGAGAIN0 << 8));
 	static_assert(REGMASK_GAIN_PGAGAIN3 == (REGMASK_GAIN_PGAGAIN0 << 12));
 
-	if (channel >= NUM_CHANNELS_ENABLED)
+	if (channel >= NUM_CHANNELS_ENABLED) {
 		return false;
+	}
 	writeRegisterMasked(REG_GAIN, pga << (channel * 4), REGMASK_GAIN_PGAGAIN0 << (channel * 4));
 	return true;
 }
@@ -209,8 +209,9 @@ bool ADS131M0x::setInputChannelSelection(uint8_t channel, uint8_t input) {
 	static_assert(REG_CH2_CFG == REG_CH0_CFG + 5 * 2);
 	static_assert(REG_CH3_CFG == REG_CH0_CFG + 5 * 3);
 
-	if (channel >= NUM_CHANNELS_ENABLED)
+	if (channel >= NUM_CHANNELS_ENABLED) {
 		return false;
+	}
 	writeRegisterMasked(REG_CH0_CFG + channel * 5, input, REGMASK_CHX_CFG_MUX);
 	return true;
 }
@@ -237,8 +238,9 @@ bool ADS131M0x::isCrcOk(const RawOutput *data) {
 
 void ADS131M0x::attachISR(AdcISR isr) {
 	esp_err_t err = gpio_install_isr_service(0);
-	if ((err != ESP_OK) && (err != ESP_ERR_INVALID_STATE))
+	if ((err != ESP_OK) && (err != ESP_ERR_INVALID_STATE)) {
 		return;
+	}
 	gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE);
 	gpio_isr_handler_add(drdyPin, isr, nullptr);
 }

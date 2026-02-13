@@ -45,8 +45,8 @@ constexpr size_t DYNAMITE_NET_BYTE_ORDER = __ORDER_LITTLE_ENDIAN__;
 
 //======================== <OTA Update>
 
-typedef uint8_t  OtaRequestType;
-typedef uint8_t  OtaReplyType;
+typedef uint8_t OtaRequestType;
+typedef uint8_t OtaReplyType;
 typedef uint32_t OtaFileSizeType;
 
 constexpr OtaRequestType SVR_CHR_OTA_CONTROL_REQUEST = 1;
@@ -82,14 +82,14 @@ struct AdcFeedNetworkPacket {
 	struct Header {
 		uint16_t sample_sequence_number;
 	};
-	Header                  hdr;
+	Header hdr;
 	static constexpr size_t NUM_SAMPLES =
 	    (BLE_PAYLOAD_SZ - sizeof(Header)) / sizeof(AdcFeedNetworkData);
 	AdcFeedNetworkData adc[NUM_SAMPLES];
 };
 
 struct AdcConfigNetworkData {
-	uint8_t  version;
+	uint8_t version;
 	uint16_t id;
 	uint16_t status;
 	uint16_t mode;
