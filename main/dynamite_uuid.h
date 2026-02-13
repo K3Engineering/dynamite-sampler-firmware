@@ -7,18 +7,21 @@
 #include "dynamite_sampler_api.h"
 
 constexpr uint8_t fromHex(char x) {
-	if (x >= '0' && x <= '9')
+	if (x >= '0' && x <= '9') {
 		return x - '0';
-	if (x >= 'A' && x <= 'F')
+	}
+	if (x >= 'A' && x <= 'F') {
 		return x - 'A' + 10;
-	if (x >= 'a' && x <= 'f')
+	}
+	if (x >= 'a' && x <= 'f') {
 		return x - 'a' + 10;
+	}
 	return 0;
 }
 
 consteval ble_uuid128_t UUID128_FROM_STRING(const char (&uuid_s)[BLE_UUID_STR_LEN]) {
 	const size_t sz = sizeof(ble_uuid128_t::value);
-	char         noDash[sz * 2]{};
+	char noDash[sz * 2]{};
 	for (size_t i = 0, j = 0; i < sizeof(uuid_s) - 1; ++i) {
 		if (uuid_s[i] != '-') {
 			noDash[j] = uuid_s[i];

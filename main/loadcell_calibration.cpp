@@ -8,9 +8,9 @@ constexpr char TAG[] = "CALIBR";
 
 bool readLoadcellCalibration(CalibrationNetworkData *calibration) {
 	// This uniquely identifies the partition. This is duplicated in partitions.csv
-	static constexpr esp_partition_type_t    CALIB_PARTITION_TYPE    = esp_partition_type_t(0x40);
+	static constexpr esp_partition_type_t CALIB_PARTITION_TYPE       = esp_partition_type_t(0x40);
 	static constexpr esp_partition_subtype_t CALIB_PARTITION_SUBTYPE = esp_partition_subtype_t(6);
-	static constexpr char                    CALIB_PARTITION_LABEL[] = "loadcell_calib";
+	static constexpr char CALIB_PARTITION_LABEL[]                    = "loadcell_calib";
 
 	const esp_partition_t *ptr = esp_partition_find_first(
 	    CALIB_PARTITION_TYPE, CALIB_PARTITION_SUBTYPE, CALIB_PARTITION_LABEL);
