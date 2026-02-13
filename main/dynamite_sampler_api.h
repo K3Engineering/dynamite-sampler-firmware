@@ -3,6 +3,13 @@
 
 #include <stdint.h>
 
+#ifndef __ORDER_BIG_ENDIAN__
+#define __ORDER_BIG_ENDIAN__ 4321
+#endif
+#ifndef __ORDER_LITTLE_ENDIAN__
+#define __ORDER_LITTLE_ENDIAN__ 1234
+#endif
+
 constexpr char DEVICE_MANUFACTURER_NAME[] = "K3 Engineering";
 
 //======================== <UUIDs>
@@ -33,6 +40,9 @@ constexpr char TX_PWR_CHR_UUID[] = "7478c418-35d3-4c3d-99d9-2de090159664";
 
 //======================== </UUIDs>
 
+// LITTLE_ENDIAN is not mandatory for custom data, though highly recommended
+constexpr size_t DYNAMITE_NET_BYTE_ORDER = __ORDER_LITTLE_ENDIAN__;
+
 //======================== <OTA Update>
 
 typedef uint8_t  OtaRequestType;
@@ -56,8 +66,7 @@ constexpr OtaReplyType SVR_CHR_OTA_CONTROL_DONE_NAK    = 6;
 
 struct AdcFeedNetworkData {
 	struct AdcSample {
-		static constexpr size_t BYTES_PER_SAMPLE  = 3;
-		static constexpr size_t SAMPLE_BYTE_ORDER = __ORDER_BIG_ENDIAN__;
+		static constexpr size_t BYTES_PER_SAMPLE = 3;
 
 		uint8_t sample[BYTES_PER_SAMPLE];
 	};
@@ -71,16 +80,15 @@ struct AdcFeedNetworkPacket {
 	static constexpr size_t BLE_PAYLOAD_SZ = 244;
 
 	struct Header {
-		uint8_t  sz;
-		uint16_t order;
+		uint16_t sample_sequence_number;
 	};
-	Header             hrd;
-	AdcFeedNetworkData adc[(BLE_PAYLOAD_SZ - sizeof(Header)) / sizeof(AdcFeedNetworkData)];
+	Header                  hdr;
+	static constexpr size_t NUM_SAMPLES =
+	    (BLE_PAYLOAD_SZ - sizeof(Header)) / sizeof(AdcFeedNetworkData);
+	AdcFeedNetworkData adc[NUM_SAMPLES];
 };
 
 struct AdcConfigNetworkData {
-	static constexpr size_t DATA_BYTE_ORDER = __ORDER_LITTLE_ENDIAN__;
-
 	uint8_t  version;
 	uint16_t id;
 	uint16_t status;

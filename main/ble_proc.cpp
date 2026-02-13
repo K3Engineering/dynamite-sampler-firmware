@@ -182,10 +182,8 @@ static void blePublishAdcBuffer() {
 		size_t bytesRead = xStreamBufferReceive(bleAccess.adcStreamBufferHandle, &packet.adc,
 		                                        sizeof(packet.adc), 0);
 		if (bytesRead == sizeof(packet.adc)) {
-			static uint16_t count = 0;
-
-			packet.hrd.sz    = bytesRead;
-			packet.hrd.order = count;
+			static uint16_t count             = 0;
+			packet.hdr.sample_sequence_number = htole16(count);
 			chrAdcFeed->notify(packet, adcFeedConnectionHandle);
 			count += sizeof(packet.adc) / sizeof(*packet.adc);
 		}

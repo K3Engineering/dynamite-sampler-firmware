@@ -114,11 +114,10 @@ static void conditionalRestart(const OtaControlData *control) {
 	}
 }
 
-static bool processOtaFileSize(OtaControlData *control, OtaFileSizeType netData) {
+static bool processOtaFileSize(OtaControlData *control, OtaFileSizeType sz) {
 	if (control->updating)
 		return false;
-
-	control->fileSize         = le32toh(netData);
+	control->fileSize         = sz;
 	control->numBytesReceived = 0;
 	control->otaStatus        = SVR_CHR_OTA_CONTROL_NOP;
 	ESP_LOGI(TAG, "File size: %u", control->fileSize);
@@ -139,7 +138,9 @@ class OtaControlChrCallbacks : public NimBLECharacteristicCallbacks {
 				res = processOtaDone(control);
 			}
 		} else if (sizeof(OtaFileSizeType) == omLen) {
-			res = processOtaFileSize(control, pCharacteristic->getValue<OtaFileSizeType>());
+			static_assert(sizeof(sizeof(OtaFileSizeType)) == sizeof(uint32_t));
+			OtaFileSizeType val = le32toh(pCharacteristic->getValue<OtaFileSizeType>());
+			res                 = processOtaFileSize(control, val);
 		}
 
 		if (res) {

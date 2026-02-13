@@ -40,7 +40,6 @@ static void logADS131M0xConfig(const ADS131M0x::ConfigData *cfg) {
 
 const AdcConfigNetworkData getAdcConfig() {
 	const ADS131M0x::ConfigData *p = adc.getConfig();
-	static_assert(__ORDER_LITTLE_ENDIAN__ == AdcConfigNetworkData::DATA_BYTE_ORDER);
 	return AdcConfigNetworkData{
 	    .version = 1,
 	    .id      = htole16(p->id),
@@ -74,20 +73,20 @@ static void IRAM_ATTR isrAdcDrdy(void *param) {
 	}
 }
 
-static AdcFeedNetworkData adcToNetwork(const AdcClass::RawOutput *adc) {
-	static_assert(AdcFeedNetworkData::AdcSample::SAMPLE_BYTE_ORDER ==
-	              AdcClass::RawOutput::SAMPLE_BYTE_ORDER);
+static inline void copy_adc_tole24(void *dst, const void *src) {
+	static_assert(DYNAMITE_NET_BYTE_ORDER != AdcClass::RawOutput::SAMPLE_BYTE_ORDER);
 	static_assert(AdcFeedNetworkData::AdcSample::BYTES_PER_SAMPLE == AdcClass::DATA_WORD_LENGTH);
 
+	for (size_t i = 0; i < AdcClass::DATA_WORD_LENGTH; ++i) {
+		((uint8_t *)dst)[i] = ((uint8_t *)src)[AdcClass::DATA_WORD_LENGTH - i];
+	}
+}
+
+static AdcFeedNetworkData adcToNetwork(const AdcClass::RawOutput *adc) {
 	AdcFeedNetworkData net;
-	memcpy(net.chan + 0, adc->data + AdcClass::DATA_WORD_LENGTH * 0,
-	       AdcFeedNetworkData::AdcSample::BYTES_PER_SAMPLE);
-	memcpy(net.chan + 1, adc->data + AdcClass::DATA_WORD_LENGTH * 1,
-	       AdcFeedNetworkData::AdcSample::BYTES_PER_SAMPLE);
-	memcpy(net.chan + 2, adc->data + AdcClass::DATA_WORD_LENGTH * 2,
-	       AdcFeedNetworkData::AdcSample::BYTES_PER_SAMPLE);
-	memcpy(net.chan + 3, adc->data + AdcClass::DATA_WORD_LENGTH * 3,
-	       AdcFeedNetworkData::AdcSample::BYTES_PER_SAMPLE);
+	for (size_t i = 0; i < AdcFeedNetworkData::NUM_CHAN; ++i) {
+		copy_adc_tole24(net.chan + i, adc->data + AdcClass::DATA_WORD_LENGTH * i);
+	}
 	return net;
 }
 // Read ADC values. If BLE device is connected, place them in the buffer.
