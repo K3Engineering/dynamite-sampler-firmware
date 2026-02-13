@@ -117,7 +117,7 @@ static void conditionalRestart(const OtaControlData *control) {
 static bool processOtaFileSize(OtaControlData *control, OtaFileSizeType netData) {
 	if (control->updating)
 		return false;
-
+	static_assert(sizeof(netData) == 4);
 	control->fileSize         = le32toh(netData);
 	control->numBytesReceived = 0;
 	control->otaStatus        = SVR_CHR_OTA_CONTROL_NOP;

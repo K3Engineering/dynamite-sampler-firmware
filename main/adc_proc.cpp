@@ -40,7 +40,6 @@ static void logADS131M0xConfig(const ADS131M0x::ConfigData *cfg) {
 
 const AdcConfigNetworkData getAdcConfig() {
 	const ADS131M0x::ConfigData *p = adc.getConfig();
-	static_assert(__ORDER_LITTLE_ENDIAN__ == DYNAMITE_NET_BYTE_ORDER);
 	return AdcConfigNetworkData{
 	    .version = 1,
 	    .id      = htole16(p->id),
@@ -74,20 +73,19 @@ static void IRAM_ATTR isrAdcDrdy(void *param) {
 	}
 }
 
-static inline void copy_invert3(void *dst, const void *src) {
-	for (size_t i = 0; i < 3; ++i) {
-		((uint8_t *)dst)[i] = ((uint8_t *)src)[3 - i];
+static inline void copy_adc_tole24(void *dst, const void *src) {
+	static_assert(DYNAMITE_NET_BYTE_ORDER != AdcClass::RawOutput::SAMPLE_BYTE_ORDER);
+	static_assert(AdcFeedNetworkData::AdcSample::BYTES_PER_SAMPLE == AdcClass::DATA_WORD_LENGTH);
+
+	for (size_t i = 0; i < AdcClass::DATA_WORD_LENGTH; ++i) {
+		((uint8_t *)dst)[i] = ((uint8_t *)src)[AdcClass::DATA_WORD_LENGTH - i];
 	}
 }
 
 static AdcFeedNetworkData adcToNetwork(const AdcClass::RawOutput *adc) {
-	static_assert(DYNAMITE_NET_BYTE_ORDER != AdcClass::RawOutput::SAMPLE_BYTE_ORDER);
-	static_assert(AdcFeedNetworkData::AdcSample::BYTES_PER_SAMPLE == AdcClass::DATA_WORD_LENGTH);
-	static_assert(AdcFeedNetworkData::AdcSample::BYTES_PER_SAMPLE == 3);
-
 	AdcFeedNetworkData net;
-	for (size_t i = 0; i < 4; ++i) {
-		copy_invert3(net.chan + i, adc->data + AdcClass::DATA_WORD_LENGTH * i);
+	for (size_t i = 0; i < AdcFeedNetworkData::NUM_CHAN; ++i) {
+		copy_adc_tole24(net.chan + i, adc->data + AdcClass::DATA_WORD_LENGTH * i);
 	}
 	return net;
 }
