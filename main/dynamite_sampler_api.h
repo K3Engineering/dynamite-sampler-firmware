@@ -82,7 +82,7 @@ struct AdcFeedNetworkPacket {
 	struct Header {
 		uint16_t sample_sequence_number;
 	};
-	Header                  hrd;
+	Header                  hdr;
 	static constexpr size_t NUM_SAMPLES =
 	    (BLE_PAYLOAD_SZ - sizeof(Header)) / sizeof(AdcFeedNetworkData);
 	AdcFeedNetworkData adc[NUM_SAMPLES];
