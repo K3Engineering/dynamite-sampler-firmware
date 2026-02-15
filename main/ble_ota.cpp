@@ -138,7 +138,7 @@ class OtaControlChrCallbacks : public NimBLECharacteristicCallbacks {
 				res = processOtaDone(control);
 			}
 		} else if (sizeof(OtaFileSizeType) == omLen) {
-			static_assert(sizeof(sizeof(OtaFileSizeType)) == sizeof(uint32_t));
+			static_assert(sizeof(OtaFileSizeType) == sizeof(uint32_t));
 			OtaFileSizeType val = le32toh(pCharacteristic->getValue<OtaFileSizeType>());
 			res                 = processOtaFileSize(control, val);
 		}
