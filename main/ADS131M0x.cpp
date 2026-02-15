@@ -2,7 +2,9 @@
 
 #include <driver/gpio.h>
 #include <driver/spi_master.h>
+#include <esp_attr.h>
 #include <esp_log.h>
+#include <freertos/FreeRTOS.h>
 
 #include <endian.h>
 
@@ -35,29 +37,26 @@ static constexpr uint16_t crc16ccitt(const void *data, size_t count) {
 	return crc;
 }
 
-DMA_ATTR ADS131M0x::RawOutput ADS131M0x::spi2adc;
-DMA_ATTR ADS131M0x::RawOutput ADS131M0x::adc2spi;
-
 bool ADS131M0x::writeRegister(uint8_t address, uint16_t value) {
-	spi2adc.status            = htobe16(CMD_WRITE_REG | (address << 7));
-	*(uint16_t *)spi2adc.data = htobe16(value);
+	spi2adc->status            = htobe16(CMD_WRITE_REG | (address << 7));
+	*(uint16_t *)spi2adc->data = htobe16(value);
 	spi_device_polling_transmit(spiHandle, &transDesc);
 
-	spi2adc.status            = 0;
-	*(uint16_t *)spi2adc.data = 0;
+	spi2adc->status            = 0;
+	*(uint16_t *)spi2adc->data = 0;
 	spi_device_polling_transmit(spiHandle, &transDesc);
 
-	return be16toh(adc2spi.status) == (RSP_WRITE_REG | (address << 7));
+	return be16toh(adc2spi->status) == (RSP_WRITE_REG | (address << 7));
 }
 
 uint16_t ADS131M0x::readRegister(uint8_t address) {
-	spi2adc.status = htobe16(CMD_READ_REG | (address << 7));
+	spi2adc->status = htobe16(CMD_READ_REG | (address << 7));
 	spi_device_polling_transmit(spiHandle, &transDesc);
 
-	spi2adc.status = 0;
+	spi2adc->status = 0;
 	spi_device_polling_transmit(spiHandle, &transDesc);
 
-	return be16toh(adc2spi.status);
+	return be16toh(adc2spi->status);
 }
 
 /**
@@ -93,16 +92,20 @@ void ADS131M0x::init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pi
 	drdyPin  = drdy_pin;
 	resetPin = reset_pin;
 
+	const size_t sz = (sizeof(RawOutput) + 3) & ~3;
+	spi2adc         = (RawOutput *)heap_caps_malloc(sz, MALLOC_CAP_DMA);
+	adc2spi         = (RawOutput *)heap_caps_malloc(sz, MALLOC_CAP_DMA);
+
 	transDesc = {
 	    .flags            = SPI_TRANS_DMA_BUFFER_ALIGN_MANUAL,
 	    .cmd              = 0,
 	    .addr             = 0,
-	    .length           = sizeof(spi2adc) * 8, // in bits.
-	    .rxlength         = 0,                   // 0 makes it rxlength set to the value of .length
+	    .length           = sizeof(RawOutput) * 8, // in bits.
+	    .rxlength         = 0, // 0 makes it rxlength set to the value of .length
 	    .override_freq_hz = 0,
 	    .user             = nullptr,
-	    .tx_buffer        = &spi2adc,
-	    .rx_buffer        = &adc2spi,
+	    .tx_buffer        = spi2adc,
+	    .rx_buffer        = adc2spi,
 	};
 
 	gpio_set_level(resetPin, 1);
@@ -220,7 +223,7 @@ const ADS131M0x::RawOutput *ADS131M0x::rawReadADC() {
 	if (ESP_OK == spi_device_polling_start(spiHandle, &transDesc, portMAX_DELAY)) {
 		spi_device_polling_end(spiHandle, portMAX_DELAY);
 	}
-	return &adc2spi;
+	return adc2spi;
 }
 
 uint16_t ADS131M0x::readID() { return readRegister(REG_ID); }

@@ -241,10 +241,8 @@ class ADS131M0x {
 
 	ConfigData savedConfig;
 
-	// static for simplicity,
-	// should be allocated per instance with MALLOC_CAP_DMA
-	static RawOutput spi2adc;
-	static RawOutput adc2spi;
+	RawOutput *spi2adc;
+	RawOutput *adc2spi;
 };
 
 #if (CONFIG_MOCK_ADC == 1)
