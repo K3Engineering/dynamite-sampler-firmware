@@ -12,10 +12,10 @@ struct ADS131Cfg {
 constexpr ADS131Cfg ads131UserConfig = {
     .pga =
         {
-            CHANNEL_PGA_1,
+            CHANNEL_PGA_32,
             CHANNEL_PGA_4,
+            CHANNEL_PGA_32,
             CHANNEL_PGA_4,
-            CHANNEL_PGA_1,
         },
     .powerMode = POWER_MODE_HIGH_RESOLUTION,
     .osr       = OSR_4096,
