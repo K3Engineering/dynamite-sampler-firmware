@@ -92,7 +92,7 @@ void ADS131M0x::init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pi
 	drdyPin  = drdy_pin;
 	resetPin = reset_pin;
 
-	const size_t sz = (sizeof(RawOutput) + 3) & ~3;
+	const size_t sz = (sizeof(RawOutput) + 3) & ~3; // Round up to multiple of 4
 	spi2adc         = (RawOutput *)heap_caps_malloc(sz, MALLOC_CAP_DMA);
 	adc2spi         = (RawOutput *)heap_caps_malloc(sz, MALLOC_CAP_DMA);
 
