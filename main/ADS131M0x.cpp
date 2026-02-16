@@ -2,7 +2,7 @@
 
 #include <driver/gpio.h>
 #include <driver/spi_master.h>
-#include <esp_attr.h>
+#include <esp_heap_caps.h>
 #include <esp_log.h>
 #include <freertos/FreeRTOS.h>
 
@@ -114,6 +114,17 @@ void ADS131M0x::init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pi
 	gpio_set_direction(resetPin, GPIO_MODE_OUTPUT);
 	gpio_set_direction(csPin, GPIO_MODE_OUTPUT);
 	gpio_set_direction(drdyPin, GPIO_MODE_INPUT);
+}
+
+void ADS131M0x::deinit() {
+	if (spi2adc) {
+		heap_caps_free(spi2adc);
+		spi2adc = nullptr;
+	}
+	if (adc2spi) {
+		heap_caps_free(adc2spi);
+		adc2spi = nullptr;
+	}
 }
 
 void ADS131M0x::setupAccess(spi_host_device_t spiDevice, int spi_clock_speed, gpio_num_t clk_pin,
