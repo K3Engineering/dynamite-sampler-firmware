@@ -17,7 +17,7 @@
 
 constexpr char TAG[] = "ADC";
 
-static AdcClass     adc;
+static AdcClass adc;
 static TaskHandle_t adcReadTaskHandle = NULL;
 
 static void logADS131M0xConfig(const ADS131M0x::ConfigData *cfg) {
@@ -95,9 +95,9 @@ static AdcFeedNetworkData adcToNetwork(const AdcClass::RawOutput *adc) {
 static void adcReadAndBuffer() {
 	const AdcClass::RawOutput *adcReading = adc.rawReadADC();
 
-	if (!bleAccess.clientSubscribed)
+	if (!bleAccess.clientSubscribed) {
 		return;
-
+	}
 	AdcFeedNetworkData toSend = adcToNetwork(adcReading);
 	xStreamBufferSend(bleAccess.adcStreamBufferHandle, &toSend, sizeof(toSend), 0);
 	// When the buffer is sufficiently large, time to send data.

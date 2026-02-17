@@ -182,10 +182,10 @@ class ADS131M0x {
 		static constexpr size_t SAMPLE_BYTE_ORDER = __ORDER_BIG_ENDIAN__;
 
 		uint16_t status;
-		uint8_t  status_unused;
-		uint8_t  data[DATA_WORD_LENGTH * NUM_CHANNELS_ENABLED];
+		uint8_t status_unused;
+		uint8_t data[DATA_WORD_LENGTH * NUM_CHANNELS_ENABLED];
 		uint16_t crc;
-		uint8_t  crc_unused;
+		uint8_t crc_unused;
 	};
 #pragma pack(pop)
 	static_assert(sizeof(RawOutput) == ADC_READ_DATA_SIZE);
@@ -199,6 +199,7 @@ class ADS131M0x {
 	};
 
 	void init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pin);
+	void deinit();
 	void setupAccess(spi_host_device_t spiDevice, int spi_clock_speed, gpio_num_t clk_pin,
 	                 gpio_num_t miso_pin, gpio_num_t mosi_pin);
 	void reset();
@@ -215,7 +216,7 @@ class ADS131M0x {
 
 	const RawOutput *rawReadADC();
 
-	void              stashConfig();
+	void stashConfig();
 	const ConfigData *getConfig() const { return &savedConfig; }
 
 	static bool isCrcOk(const RawOutput *data);
@@ -233,7 +234,7 @@ class ADS131M0x {
 	uint16_t readPGA();
 
 	spi_device_handle_t spiHandle;
-	spi_transaction_t   transDesc;
+	spi_transaction_t transDesc;
 
 	gpio_num_t csPin;
 	gpio_num_t drdyPin;
@@ -241,10 +242,8 @@ class ADS131M0x {
 
 	ConfigData savedConfig;
 
-	// static for simplicity,
-	// should be allocated per instance with MALLOC_CAP_DMA
-	static RawOutput spi2adc;
-	static RawOutput adc2spi;
+	RawOutput *spi2adc;
+	RawOutput *adc2spi;
 };
 
 #if (CONFIG_MOCK_ADC == 1)
@@ -260,6 +259,7 @@ class MockAdc {
 	static constexpr size_t ADC_READ_DATA_SIZE   = ADS131M0x::ADC_READ_DATA_SIZE;
 
 	void init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pin) {}
+	void deinit() {}
 	void setupAccess(spi_host_device_t spiDevice, uint32_t spi_clock_speed, gpio_num_t clk_pin,
 	                 gpio_num_t miso_pin, gpio_num_t mosi_pin) {}
 	void reset() {}
@@ -271,8 +271,8 @@ class MockAdc {
 	bool setInputChannelSelection(uint8_t channel, uint8_t input) { return true; }
 	bool setOsr(uint16_t osr) { return true; }
 
-	AdcConfigNetworkData        savedConfig;
-	void                        stashConfig() { savedConfig.version = 0; }
+	AdcConfigNetworkData savedConfig;
+	void stashConfig() { savedConfig.version = 0; }
 	const AdcConfigNetworkData *getConfig() const { return &savedConfig; }
 
 	uint16_t readID() { return 0; }
@@ -281,7 +281,7 @@ class MockAdc {
 	uint16_t readCLOCK() { return 0; }
 	uint16_t readPGA() { return 0; }
 
-	typedef ADS131M0x::AdcISR       AdcISR;
+	typedef ADS131M0x::AdcISR AdcISR;
 	typedef ADS131M0x::AdcRawOutput AdcRawOutput;
 
 	void attachISR(AdcISR isr);

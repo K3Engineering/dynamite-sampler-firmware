@@ -16,10 +16,8 @@
 
 constexpr char TAG[] = "BLE";
 
-static NimBLEServer *bleServer = NULL;
-
+static NimBLEServer *bleServer          = NULL;
 static NimBLECharacteristic *chrAdcFeed = NULL;
-
 static uint16_t adcFeedConnectionHandle = 0; // TODO: rename
 
 BleAccess bleAccess{

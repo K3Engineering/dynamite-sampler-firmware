@@ -13,13 +13,13 @@ constexpr char TAG[] = "OTA";
 
 typedef struct {
 	const esp_partition_t *updatePartition;
-	esp_ota_handle_t       updateHandle;
+	esp_ota_handle_t updateHandle;
 
 	size_t numBytesReceived;
 	size_t fileSize;
 
 	OtaReplyType otaStatus;
-	bool         updating;
+	bool updating;
 } OtaControlData;
 
 static OtaControlData otaControlData{
@@ -32,19 +32,20 @@ static OtaControlData otaControlData{
 };
 
 static bool processOtaBegin(OtaControlData *control) {
-	if (control->updating)
+	if (control->updating) {
 		return false;
-	if (control->otaStatus != SVR_CHR_OTA_CONTROL_NOP)
+	}
+	if (control->otaStatus != SVR_CHR_OTA_CONTROL_NOP) {
 		return false;
-
+	}
 	control->otaStatus = SVR_CHR_OTA_CONTROL_REQUEST_NAK;
-	if (!control->fileSize)
+	if (!control->fileSize) {
 		return true;
-
+	}
 	control->updatePartition = esp_ota_get_next_update_partition(NULL);
-	if ((!control->updatePartition) || (control->updatePartition->size < control->fileSize))
+	if ((!control->updatePartition) || (control->updatePartition->size < control->fileSize)) {
 		return true;
-
+	}
 	// Erasing the Partition takes some time. Pass in the image size to erase it now.
 	// If it erased as the parition is written OTA_WITH_SEQUENTIAL_WRITES,
 	// esp_ota_write() can block up to ~70ms, which causes write commands to be dropped.
@@ -87,9 +88,9 @@ static bool setBootPartition(const esp_partition_t *updatePartition) {
 }
 
 static bool processOtaDone(OtaControlData *control) {
-	if (!control->updating)
+	if (!control->updating) {
 		return false;
-
+	}
 	ESP_LOGI(TAG, "processOtaDone");
 	control->otaStatus = SVR_CHR_OTA_CONTROL_DONE_NAK;
 	if (!checkDataSize(control)) {
@@ -115,8 +116,9 @@ static void conditionalRestart(const OtaControlData *control) {
 }
 
 static bool processOtaFileSize(OtaControlData *control, OtaFileSizeType sz) {
-	if (control->updating)
+	if (control->updating) {
 		return false;
+	}
 	control->fileSize         = sz;
 	control->numBytesReceived = 0;
 	control->otaStatus        = SVR_CHR_OTA_CONTROL_NOP;
@@ -127,7 +129,7 @@ static bool processOtaFileSize(OtaControlData *control, OtaFileSizeType sz) {
 // Implements OTA control flow, while OtaDataChrCallbacks implements binary download.
 class OtaControlChrCallbacks : public NimBLECharacteristicCallbacks {
 	void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
-		bool         res   = false;
+		bool res           = false;
 		const size_t omLen = pCharacteristic->getLength();
 		if (sizeof(OtaRequestType) == omLen) {
 			OtaRequestType code = pCharacteristic->getValue<OtaRequestType>();
@@ -183,11 +185,11 @@ static inline const void *getChrValuePtr(const NimBLECharacteristic *pCharacteri
 
 class OtaDataChrCallbacks : public NimBLECharacteristicCallbacks {
 	void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
-		if (!control->updating)
+		if (!control->updating) {
 			return;
-
+		}
 		const size_t omLen = pCharacteristic->getLength();
-		const void  *val   = getChrValuePtr(pCharacteristic);
+		const void *val    = getChrValuePtr(pCharacteristic);
 		control->numBytesReceived += omLen;
 
 		if (control->numBytesReceived <= control->fileSize) {
@@ -207,7 +209,7 @@ class OtaDataChrCallbacks : public NimBLECharacteristicCallbacks {
 
 void otaConditionalRollback() {
 	const esp_partition_t *running = esp_ota_get_running_partition();
-	esp_ota_img_states_t   ota_state;
+	esp_ota_img_states_t ota_state;
 	if (esp_ota_get_state_partition(running, &ota_state) == ESP_OK) {
 		if (ota_state == ESP_OTA_IMG_PENDING_VERIFY) {
 			bool diagnostic_is_ok = true; // TODO: run diagnostic function

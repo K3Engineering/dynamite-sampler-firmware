@@ -9,7 +9,7 @@
 
 struct BleAccess {
 	StreamBufferHandle_t adcStreamBufferHandle;
-	TaskHandle_t         bleAdcFeedPublisherTaskHandle;
+	TaskHandle_t bleAdcFeedPublisherTaskHandle;
 
 	bool clientSubscribed;
 };
