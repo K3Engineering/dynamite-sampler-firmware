@@ -9,10 +9,10 @@ struct ADS131Cfg {
 	uint8_t osr;
 };
 
+// V3.0.0 hardware
 constexpr ADS131Cfg ads131UserConfig_boardv300 = {
     .pga =
         {
-            // comments are valid for v4.0.0 hardware
             CHANNEL_PGA_1, // DIRECT, bottom connector
             CHANNEL_PGA_4, // OP AMP, bottom connector
             CHANNEL_PGA_4, // OP AMP, top connector
@@ -22,10 +22,10 @@ constexpr ADS131Cfg ads131UserConfig_boardv300 = {
     .osr       = OSR_4096,
 };
 
+// V4.0.0 hardware
 constexpr ADS131Cfg ads131UserConfig_boardv400 = {
     .pga =
         {
-            // comments are valid for v4.0.0 hardware
             CHANNEL_PGA_32, // DIRECT, bottom connector
             CHANNEL_PGA_4,  // OP AMP, bottom connector
             CHANNEL_PGA_32, // DIRECT, top connector
