@@ -9,16 +9,32 @@ struct ADS131Cfg {
 	uint8_t osr;
 };
 
-constexpr ADS131Cfg ads131UserConfig = {
+// V3.0.0 hardware
+constexpr ADS131Cfg ads131UserConfig_boardv300 = {
     .pga =
         {
-            CHANNEL_PGA_1,
-            CHANNEL_PGA_4,
-            CHANNEL_PGA_4,
-            CHANNEL_PGA_1,
+            CHANNEL_PGA_1, // DIRECT, bottom connector
+            CHANNEL_PGA_4, // OP AMP, bottom connector
+            CHANNEL_PGA_4, // OP AMP, top connector
+            CHANNEL_PGA_1, // DIRECT, top connector
         },
     .powerMode = POWER_MODE_HIGH_RESOLUTION,
     .osr       = OSR_4096,
 };
+
+// V4.0.0 hardware
+constexpr ADS131Cfg ads131UserConfig_boardv400 = {
+    .pga =
+        {
+            CHANNEL_PGA_32, // DIRECT, bottom connector
+            CHANNEL_PGA_4,  // OP AMP, bottom connector
+            CHANNEL_PGA_32, // DIRECT, top connector
+            CHANNEL_PGA_4,  // OP AMP, top connector
+        },
+    .powerMode = POWER_MODE_HIGH_RESOLUTION,
+    .osr       = OSR_4096,
+};
+
+constexpr ADS131Cfg ads131UserConfig = ads131UserConfig_boardv400;
 
 #endif // ADS131M0x_CFG_h
