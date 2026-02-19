@@ -26,10 +26,12 @@ constexpr ADS131Cfg ads131UserConfig_boardv300 = {
 constexpr ADS131Cfg ads131UserConfig_boardv400 = {
     .pga =
         {
-            CHANNEL_PGA_32, // DIRECT, bottom connector
-            CHANNEL_PGA_4,  // OP AMP, bottom connector
-            CHANNEL_PGA_32, // DIRECT, top connector
-            CHANNEL_PGA_4,  // OP AMP, top connector
+            // NOTE - on this hardware revision, DIRECT gain
+            // should be within 1x-4x to be within datasheet max allowed V requirements
+            CHANNEL_PGA_4, // DIRECT, bottom connector
+            CHANNEL_PGA_4, // OP AMP, bottom connector
+            CHANNEL_PGA_4, // DIRECT, top connector
+            CHANNEL_PGA_4, // OP AMP, top connector
         },
     .powerMode = POWER_MODE_HIGH_RESOLUTION,
     .osr       = OSR_4096,
