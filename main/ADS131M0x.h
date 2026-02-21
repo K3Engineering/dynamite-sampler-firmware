@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 #include <driver/spi_master.h>
+#include <hal/spi_ll.h>
 #include <soc/gpio_num.h>
 
 #define DRDY_STATE_LOGIC_HIGH 0 // DEFAULS
@@ -176,6 +177,8 @@ class ADS131M0x {
 	static constexpr size_t DATA_WORD_LENGTH     = 3; // in bytes
 	static constexpr size_t ADC_READ_DATA_SIZE =
 	    (1 + NUM_CHANNELS_ENABLED + 1) * DATA_WORD_LENGTH; // status, channels, CRC
+	static constexpr size_t BIG_BUFF_SZ       = 40;
+	static constexpr size_t ADC_READ_DMA_SIZE = (ADC_READ_DATA_SIZE + 3) & ~3; // multiple of 4
 
 #pragma pack(push, 1)
 	struct RawOutput {
@@ -244,6 +247,16 @@ class ADS131M0x {
 
 	RawOutput *spi2adc;
 	RawOutput *adc2spi;
+
+  public:
+	struct SpiDmaControl {
+		uint8_t *rx_buffer;
+		lldesc_t *rx_desc_array;
+		int rx_chan;
+		size_t head_index;
+		spi_dev_t *spi_hw;
+	};
+	SpiDmaControl dma;
 };
 
 #if (CONFIG_MOCK_ADC == 1)

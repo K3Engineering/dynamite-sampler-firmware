@@ -5,6 +5,7 @@
 #include <driver/gpio.h>
 #include <esp_log.h>
 #include <esp_timer.h>
+#include <soc/gdma_struct.h>
 
 #include <endian.h>
 #include <string.h>
@@ -50,7 +51,10 @@ const AdcConfigNetworkData getAdcConfig() {
 	};
 }
 
-void startAdc() { adc.startAdc(); }
+void startAdc() {
+	xStreamBufferReset(bleAccess.adcStreamBufferHandle);
+	adc.startAdc();
+}
 void stopAdc() { adc.stopAdc(); }
 
 static inline void requestTaskSwitchFromISR(BaseType_t needSwitch, void *ptr) {
@@ -65,8 +69,23 @@ static inline void requestTaskSwitchFromISR(BaseType_t needSwitch, void *ptr) {
 // is placed in the ESP32’s Internal RAM (IRAM). Otherwise the code is kept in
 // Flash. And Flash on ESP32 is much slower than internal RAM.
 static void IRAM_ATTR isrAdcDrdy(void *param) {
-	// unblock the task that will read the ADC & handle putting in the buffer
-	if (adcReadTaskHandle != NULL) {
+	ADS131M0x::SpiDmaControl *ctrl = (ADS131M0x::SpiDmaControl *)param;
+
+	GDMA.channel[ctrl->rx_chan].in.link.addr  = (uint32_t)&ctrl->rx_desc_array[ctrl->head_index];
+	GDMA.channel[ctrl->rx_chan].in.link.start = 1;
+	ctrl->spi_hw->cmd.update                  = 1;
+
+	++ctrl->head_index;
+	if (ctrl->head_index >= 40) {
+		ctrl->head_index = 0;
+	}
+
+	while (ctrl->spi_hw->cmd.update)
+		; // Takes a few nanoseconds
+	ctrl->spi_hw->cmd.usr = 1;
+
+	if (0 == ctrl->head_index % 20) [[unlikely]] {
+		// unblock the task that will read the ADC & handle putting in the buffer
 		BaseType_t taskWoken = pdFALSE;
 		vTaskNotifyGiveFromISR(adcReadTaskHandle, &taskWoken);
 		requestTaskSwitchFromISR(taskWoken, param);
@@ -93,13 +112,17 @@ static AdcFeedNetworkData adcToNetwork(const AdcClass::RawOutput *adc) {
 // Read ADC values. If BLE device is connected, place them in the buffer.
 // When accumulated enough, notify the ble task
 static void adcReadAndBuffer() {
-	const AdcClass::RawOutput *adcReading = adc.rawReadADC();
+	// const AdcClass::RawOutput *adcReading = adc.rawReadADC();
 
 	if (!bleAccess.clientSubscribed) {
 		return;
 	}
-	AdcFeedNetworkData toSend = adcToNetwork(adcReading);
-	xStreamBufferSend(bleAccess.adcStreamBufferHandle, &toSend, sizeof(toSend), 0);
+	const size_t base_idx = adc.dma.head_index >= 20 ? 0 : 20;
+	for (size_t i = 0; i < 20; ++i) {
+		AdcFeedNetworkData toSend =
+		    adcToNetwork((ADS131M0x::RawOutput *)(adc.dma.rx_buffer + (base_idx + i) * 20));
+		xStreamBufferSend(bleAccess.adcStreamBufferHandle, &toSend, sizeof(toSend), 0);
+	}
 	// When the buffer is sufficiently large, time to send data.
 	if (xStreamBufferBytesAvailable(bleAccess.adcStreamBufferHandle) >= ADC_FEED_CHUNK_SZ) {
 		xTaskNotifyGive(bleAccess.bleAdcFeedPublisherTaskHandle);
@@ -165,4 +188,5 @@ void setupAdc(int core) {
 	const UBaseType_t priority = 24; // Highest priority possible
 	xTaskCreatePinnedToCore(taskAdcReadAndBuffer, "task_ADC_read", 1024 * 5, NULL, priority,
 	                        &adcReadTaskHandle, core);
+	assert(adcReadTaskHandle);
 }

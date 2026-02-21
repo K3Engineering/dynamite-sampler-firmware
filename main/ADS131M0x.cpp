@@ -5,6 +5,7 @@
 #include <esp_heap_caps.h>
 #include <esp_log.h>
 #include <freertos/FreeRTOS.h>
+#include <soc/gdma_struct.h>
 
 #include <endian.h>
 
@@ -92,9 +93,24 @@ void ADS131M0x::init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pi
 	drdyPin  = drdy_pin;
 	resetPin = reset_pin;
 
-	const size_t sz = (sizeof(RawOutput) + 3) & ~3; // Round up to multiple of 4
-	spi2adc         = (RawOutput *)heap_caps_malloc(sz, MALLOC_CAP_DMA);
-	adc2spi         = (RawOutput *)heap_caps_malloc(sz, MALLOC_CAP_DMA);
+	spi2adc = (RawOutput *)heap_caps_malloc(ADC_READ_DMA_SIZE, MALLOC_CAP_DMA);
+	adc2spi = (RawOutput *)heap_caps_malloc(ADC_READ_DMA_SIZE, MALLOC_CAP_DMA);
+
+	dma.rx_buffer = (uint8_t *)heap_caps_malloc(ADC_READ_DMA_SIZE * BIG_BUFF_SZ, MALLOC_CAP_DMA);
+	dma.rx_desc_array =
+	    (lldesc_t *)heap_caps_malloc(sizeof(lldesc_t) * BIG_BUFF_SZ, MALLOC_CAP_DMA);
+	for (size_t i = 0; i < BIG_BUFF_SZ; i++) {
+		dma.rx_desc_array[i] = {
+		    .size   = ADC_READ_DMA_SIZE, // Buffer capacity
+		    .length = sizeof(RawOutput), // Expected bytes
+		    .offset = 0,
+		    .sosf   = 0, // Start of sub-frame (unused)
+		    .eof    = 1, // End of Frame: DMA stops after this descriptor
+		    .owner  = 1, // 1 = Hardware (DMA) owns this
+		    .buf    = dma.rx_buffer + ADC_READ_DMA_SIZE * i, // Point to data buff
+		    .empty  = 0,
+		};
+	}
 
 	transDesc = {
 	    .flags            = SPI_TRANS_DMA_BUFFER_ALIGN_MANUAL,
@@ -146,10 +162,7 @@ void ADS131M0x::setupAccess(spi_host_device_t spiDevice, int spi_clock_speed, gp
 	    .intr_flags            = 0,
 	};
 	esp_err_t ret = spi_bus_initialize(spiDevice, &buscfg, SPI_DMA_CH_AUTO);
-	if (ESP_OK != ret) {
-		ESP_LOGE(TAG, "spi_bus_initialize %d", ret);
-		return;
-	}
+	assert(ESP_OK == ret);
 
 	const spi_device_interface_config_t devcfg = {
 	    .command_bits     = 0,
@@ -171,16 +184,12 @@ void ADS131M0x::setupAccess(spi_host_device_t spiDevice, int spi_clock_speed, gp
 	};
 	spi_device_handle_t handle;
 	ret = spi_bus_add_device(spiDevice, &devcfg, &handle);
-	if (ESP_OK != ret) {
-		ESP_LOGE(TAG, "spi_bus_add_device %d", ret);
-		return;
-	}
+	assert(ESP_OK == ret);
 	ret = spi_device_acquire_bus(handle, portMAX_DELAY);
-	if (ESP_OK != ret) {
-		ESP_LOGE(TAG, "spi_device_acquire_bus %d", ret);
-		return;
-	}
-	spiHandle = handle;
+	assert(ESP_OK == ret);
+
+	spiHandle  = handle;
+	dma.spi_hw = SPI_LL_GET_HW(spiDevice);
 }
 
 bool ADS131M0x::setPowerMode(uint8_t powerMode) {
@@ -256,10 +265,49 @@ void ADS131M0x::attachISR(AdcISR isr) {
 		return;
 	}
 	gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE);
-	gpio_isr_handler_add(drdyPin, isr, nullptr);
+	gpio_isr_handler_add(drdyPin, isr, &dma);
 }
 
-void ADS131M0x::startAdc() { gpio_set_intr_type(drdyPin, GPIO_INTR_NEGEDGE); }
+static int find_dma_rx_chan(spi_dev_t *hw) {
+	int gdma_peri_id = -1;
+	if (hw == &GPSPI2) {
+		gdma_peri_id = 0;
+	} else if (hw == &GPSPI3) {
+		gdma_peri_id = 1;
+	} else {
+		return -1;
+	}
+	int chan = -1;
+	// Search the available GDMA channels to find which one standard driver allocated to us
+	for (size_t i = 0; i < sizeof(GDMA.channel) / sizeof(*GDMA.channel); i++) {
+		if (GDMA.channel[i].in.peri_sel.sel == gdma_peri_id) {
+			chan = i;
+			break;
+		}
+	}
+	return chan;
+}
+
+void ADS131M0x::startAdc() {
+	spi2adc->status = 0;
+	rawReadADC();
+	dma.rx_chan = find_dma_rx_chan(dma.spi_hw);
+	assert(dma.rx_chan >= 0);
+
+	// Clear data buff for tx (rx uses DMA - no buff)
+	for (int i = 0; i < sizeof(dma.spi_hw->data_buf) / sizeof(*dma.spi_hw->data_buf); i++) {
+		dma.spi_hw->data_buf[i] = 0;
+	}
+	dma.head_index = 0;
+	// Reset DMA FIFOs
+	dma.spi_hw->dma_conf.rx_afifo_rst = 1;
+	dma.spi_hw->dma_conf.rx_afifo_rst = 0;
+
+	dma.spi_hw->dma_conf.dma_rx_ena = 1; // Enable DMA Receive
+	dma.spi_hw->dma_conf.dma_tx_ena = 0; // Disable DMA Transmit
+
+	gpio_set_intr_type(drdyPin, GPIO_INTR_NEGEDGE);
+}
 
 void ADS131M0x::stopAdc() { gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE); }
 
