@@ -175,10 +175,10 @@ class ADS131M0x {
   public:
 	static constexpr size_t NUM_CHANNELS_ENABLED = 4;
 	static constexpr size_t DATA_WORD_LENGTH     = 3; // in bytes
-	static constexpr size_t ADC_READ_DATA_SIZE =
+	static constexpr size_t DATA_FRAME_SIZE =
 	    (1 + NUM_CHANNELS_ENABLED + 1) * DATA_WORD_LENGTH; // status, channels, CRC
-	static constexpr size_t BIG_BUFF_SZ       = 40;
-	static constexpr size_t ADC_READ_DMA_SIZE = (ADC_READ_DATA_SIZE + 3) & ~3; // multiple of 4
+	static constexpr size_t RING_BUFF_SZ   = 40;
+	static constexpr size_t DMA_FRAME_SIZE = (DATA_FRAME_SIZE + 3) & ~3; // multiple of 4
 
 #pragma pack(push, 1)
 	struct RawOutput {
@@ -191,7 +191,7 @@ class ADS131M0x {
 		uint8_t crc_unused;
 	};
 #pragma pack(pop)
-	static_assert(sizeof(RawOutput) == ADC_READ_DATA_SIZE);
+	static_assert(sizeof(RawOutput) == DATA_FRAME_SIZE);
 
 	struct ConfigData {
 		uint16_t id;
@@ -237,7 +237,8 @@ class ADS131M0x {
 	uint16_t readPGA();
 
 	spi_device_handle_t spiHandle;
-	spi_transaction_t transDesc;
+	spi_transaction_t data_trans_descr;
+	spi_transaction_t command_trans_descr;
 
 	gpio_num_t csPin;
 	gpio_num_t drdyPin;
@@ -269,7 +270,7 @@ class MockAdc {
   public:
 	static constexpr size_t NUM_CHANNELS_ENABLED = ADS131M0x::NUM_CHANNELS_ENABLED;
 	static constexpr size_t DATA_WORD_LENGTH     = ADS131M0x::DATA_WORD_LENGTH; // in bytes
-	static constexpr size_t ADC_READ_DATA_SIZE   = ADS131M0x::ADC_READ_DATA_SIZE;
+	static constexpr size_t DATA_FRAME_SIZE      = ADS131M0x::DATA_FRAME_SIZE;
 
 	void init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pin) {}
 	void deinit() {}

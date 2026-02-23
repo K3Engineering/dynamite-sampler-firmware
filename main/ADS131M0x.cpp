@@ -39,25 +39,18 @@ static constexpr uint16_t crc16ccitt(const void *data, size_t count) {
 }
 
 bool ADS131M0x::writeRegister(uint8_t address, uint16_t value) {
-	spi2adc->status            = htobe16(CMD_WRITE_REG | (address << 7));
-	*(uint16_t *)spi2adc->data = htobe16(value);
-	spi_device_polling_transmit(spiHandle, &transDesc);
-
-	spi2adc->status            = 0;
-	*(uint16_t *)spi2adc->data = 0;
-	spi_device_polling_transmit(spiHandle, &transDesc);
-
-	return be16toh(adc2spi->status) == (RSP_WRITE_REG | (address << 7));
+	spi2adc[0].status              = htobe16(CMD_WRITE_REG | (address << 7));
+	*(uint16_t *)(spi2adc[0].data) = htobe16(value);
+	spi2adc[1].status              = 0;
+	spi_device_polling_transmit(spiHandle, &command_trans_descr);
+	return be16toh(adc2spi[1].status) == (RSP_WRITE_REG | (address << 7));
 }
 
 uint16_t ADS131M0x::readRegister(uint8_t address) {
-	spi2adc->status = htobe16(CMD_READ_REG | (address << 7));
-	spi_device_polling_transmit(spiHandle, &transDesc);
-
-	spi2adc->status = 0;
-	spi_device_polling_transmit(spiHandle, &transDesc);
-
-	return be16toh(adc2spi->status);
+	spi2adc[0].status = htobe16(CMD_READ_REG | (address << 7));
+	spi2adc[1].status = 0;
+	spi_device_polling_transmit(spiHandle, &command_trans_descr);
+	return be16toh(adc2spi[1].status);
 }
 
 /**
@@ -93,37 +86,46 @@ void ADS131M0x::init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pi
 	drdyPin  = drdy_pin;
 	resetPin = reset_pin;
 
-	spi2adc = (RawOutput *)heap_caps_malloc(ADC_READ_DMA_SIZE, MALLOC_CAP_DMA);
-	adc2spi = (RawOutput *)heap_caps_malloc(ADC_READ_DMA_SIZE, MALLOC_CAP_DMA);
+	spi2adc = (RawOutput *)heap_caps_malloc(DATA_FRAME_SIZE * 2, MALLOC_CAP_DMA);
+	adc2spi = (RawOutput *)heap_caps_malloc(DATA_FRAME_SIZE * 2, MALLOC_CAP_DMA);
 
-	dma.rx_buffer = (uint8_t *)heap_caps_malloc(ADC_READ_DMA_SIZE * BIG_BUFF_SZ, MALLOC_CAP_DMA);
+	dma.rx_buffer = (uint8_t *)heap_caps_malloc(DMA_FRAME_SIZE * RING_BUFF_SZ, MALLOC_CAP_DMA);
 	dma.rx_desc_array =
-	    (lldesc_t *)heap_caps_malloc(sizeof(lldesc_t) * BIG_BUFF_SZ, MALLOC_CAP_DMA);
-	for (size_t i = 0; i < BIG_BUFF_SZ; i++) {
+	    (lldesc_t *)heap_caps_malloc(sizeof(lldesc_t) * RING_BUFF_SZ, MALLOC_CAP_DMA);
+	for (size_t i = 0; i < RING_BUFF_SZ; i++) {
 		dma.rx_desc_array[i] = {
-		    .size   = ADC_READ_DMA_SIZE, // Buffer capacity
-		    .length = sizeof(RawOutput), // Expected bytes
+		    .size   = DMA_FRAME_SIZE, // Buffer capacity
+		    .length = 0,              // to be updated by the hw
 		    .offset = 0,
 		    .sosf   = 0, // Start of sub-frame (unused)
 		    .eof    = 1, // End of Frame: DMA stops after this descriptor
 		    .owner  = 1, // 1 = Hardware (DMA) owns this
-		    .buf    = dma.rx_buffer + ADC_READ_DMA_SIZE * i, // Point to data buff
+		    .buf    = dma.rx_buffer + DMA_FRAME_SIZE * i, // Point to data buff
 		    .empty  = 0,
 		};
 	}
-
-	transDesc = {
-	    .flags            = SPI_TRANS_DMA_BUFFER_ALIGN_MANUAL,
+	data_trans_descr = {
+	    .flags            = 0,
 	    .cmd              = 0,
 	    .addr             = 0,
-	    .length           = sizeof(RawOutput) * 8, // in bits.
-	    .rxlength         = 0, // 0 makes it rxlength set to the value of .length
+	    .length           = DATA_FRAME_SIZE * 8, // in bits.
+	    .rxlength         = DATA_FRAME_SIZE * 8, // in bits.
 	    .override_freq_hz = 0,
 	    .user             = nullptr,
 	    .tx_buffer        = spi2adc,
 	    .rx_buffer        = adc2spi,
 	};
-
+	command_trans_descr = {
+	    .flags            = SPI_TRANS_DMA_BUFFER_ALIGN_MANUAL,
+	    .cmd              = 0,
+	    .addr             = 0,
+	    .length           = DATA_FRAME_SIZE * 2 * 8, // in bits.
+	    .rxlength         = DATA_FRAME_SIZE * 2 * 8, // in bits.
+	    .override_freq_hz = 0,
+	    .user             = nullptr,
+	    .tx_buffer        = spi2adc,
+	    .rx_buffer        = adc2spi,
+	};
 	gpio_set_level(resetPin, 1);
 	gpio_set_level(csPin, 0);
 
@@ -156,7 +158,7 @@ void ADS131M0x::setupAccess(spi_host_device_t spiDevice, int spi_clock_speed, gp
 	    .data6_io_num          = -1,
 	    .data7_io_num          = -1,
 	    .data_io_default_level = 0,
-	    .max_transfer_sz       = sizeof(RawOutput),
+	    .max_transfer_sz       = 0,
 	    .flags                 = SPICOMMON_BUSFLAG_MASTER,
 	    .isr_cpu_id            = ESP_INTR_CPU_AFFINITY_AUTO,
 	    .intr_flags            = 0,
@@ -190,14 +192,14 @@ void ADS131M0x::setupAccess(spi_host_device_t spiDevice, int spi_clock_speed, gp
 
 	spiHandle  = handle;
 	dma.spi_hw = SPI_LL_GET_HW(spiDevice);
+	assert(dma.spi_hw);
 }
 
 bool ADS131M0x::setPowerMode(uint8_t powerMode) {
 	if (powerMode > 3) {
 		return false;
 	}
-	writeRegisterMasked(REG_CLOCK, powerMode, REGMASK_CLOCK_PWR);
-	return true;
+	return writeRegisterMasked(REG_CLOCK, powerMode, REGMASK_CLOCK_PWR);
 }
 
 /**
@@ -207,8 +209,7 @@ bool ADS131M0x::setOsr(uint16_t osr) {
 	if (osr > 7) {
 		return false;
 	}
-	writeRegisterMasked(REG_CLOCK, osr << 2, REGMASK_CLOCK_OSR);
-	return true;
+	return writeRegisterMasked(REG_CLOCK, osr << 2, REGMASK_CLOCK_OSR);
 }
 
 bool ADS131M0x::setChannelPGA(uint8_t channel, uint16_t pga) {
@@ -219,8 +220,8 @@ bool ADS131M0x::setChannelPGA(uint8_t channel, uint16_t pga) {
 	if (channel >= NUM_CHANNELS_ENABLED) {
 		return false;
 	}
-	writeRegisterMasked(REG_GAIN, pga << (channel * 4), REGMASK_GAIN_PGAGAIN0 << (channel * 4));
-	return true;
+	return writeRegisterMasked(REG_GAIN, pga << (channel * 4),
+	                           REGMASK_GAIN_PGAGAIN0 << (channel * 4));
 }
 
 bool ADS131M0x::setPGA(uint8_t pgaChan0, uint8_t pgaChan1, uint8_t pgaChan2, uint8_t pgaChan3) {
@@ -235,12 +236,11 @@ bool ADS131M0x::setInputChannelSelection(uint8_t channel, uint8_t input) {
 	if (channel >= NUM_CHANNELS_ENABLED) {
 		return false;
 	}
-	writeRegisterMasked(REG_CH0_CFG + channel * 5, input, REGMASK_CHX_CFG_MUX);
-	return true;
+	return writeRegisterMasked(REG_CH0_CFG + channel * 5, input, REGMASK_CHX_CFG_MUX);
 }
 
 const ADS131M0x::RawOutput *ADS131M0x::rawReadADC() {
-	if (ESP_OK == spi_device_polling_start(spiHandle, &transDesc, portMAX_DELAY)) {
+	if (ESP_OK == spi_device_polling_start(spiHandle, &data_trans_descr, portMAX_DELAY)) {
 		spi_device_polling_end(spiHandle, portMAX_DELAY);
 	}
 	return adc2spi;
@@ -288,12 +288,18 @@ static int find_dma_rx_chan(spi_dev_t *hw) {
 	return chan;
 }
 
+#include <hal/spi_ll.h>
+
 void ADS131M0x::startAdc() {
-	spi2adc->status = 0;
-	rawReadADC();
+	spi2adc[0].status = 0;
+	if (ESP_OK == spi_device_polling_start(spiHandle, &data_trans_descr, portMAX_DELAY)) {
+		// spi_device_polling_end(spiHandle, portMAX_DELAY);
+		while (!spi_ll_usr_is_done(dma.spi_hw))
+			;
+	}
+
 	dma.rx_chan = find_dma_rx_chan(dma.spi_hw);
 	assert(dma.rx_chan >= 0);
-
 	// Clear data buff for tx (rx uses DMA - no buff)
 	for (int i = 0; i < sizeof(dma.spi_hw->data_buf) / sizeof(*dma.spi_hw->data_buf); i++) {
 		dma.spi_hw->data_buf[i] = 0;
@@ -309,7 +315,10 @@ void ADS131M0x::startAdc() {
 	gpio_set_intr_type(drdyPin, GPIO_INTR_NEGEDGE);
 }
 
-void ADS131M0x::stopAdc() { gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE); }
+void ADS131M0x::stopAdc() {
+	gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE);
+	spi_device_polling_end(spiHandle, portMAX_DELAY);
+}
 
 // Should not be called while ADC is running
 void ADS131M0x::stashConfig() {
