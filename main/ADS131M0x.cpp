@@ -39,18 +39,24 @@ static constexpr uint16_t crc16ccitt(const void *data, size_t count) {
 }
 
 bool ADS131M0x::writeRegister(uint8_t address, uint16_t value) {
-	spi2adc[0].status              = htobe16(CMD_WRITE_REG | (address << 7));
-	*(uint16_t *)(spi2adc[0].data) = htobe16(value);
-	spi2adc[1].status              = 0;
-	spi_device_polling_transmit(spiHandle, &command_trans_descr);
-	return be16toh(adc2spi[1].status) == (RSP_WRITE_REG | (address << 7));
+	spi2adc->status            = htobe16(CMD_WRITE_REG | (address << 7));
+	*(uint16_t *)spi2adc->data = htobe16(value);
+	spi_device_polling_transmit(spiHandle, &trans_descr);
+
+	spi2adc->status = 0;
+	spi_device_polling_transmit(spiHandle, &trans_descr);
+
+	return be16toh(adc2spi->status) == (RSP_WRITE_REG | (address << 7));
 }
 
 uint16_t ADS131M0x::readRegister(uint8_t address) {
-	spi2adc[0].status = htobe16(CMD_READ_REG | (address << 7));
-	spi2adc[1].status = 0;
-	spi_device_polling_transmit(spiHandle, &command_trans_descr);
-	return be16toh(adc2spi[1].status);
+	spi2adc->status = htobe16(CMD_READ_REG | (address << 7));
+	spi_device_polling_transmit(spiHandle, &trans_descr);
+
+	spi2adc->status = 0;
+	spi_device_polling_transmit(spiHandle, &trans_descr);
+
+	return be16toh(adc2spi->status);
 }
 
 /**
@@ -86,8 +92,8 @@ void ADS131M0x::init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pi
 	drdyPin  = drdy_pin;
 	resetPin = reset_pin;
 
-	spi2adc = (RawOutput *)heap_caps_malloc(DATA_FRAME_SIZE * 2, MALLOC_CAP_DMA);
-	adc2spi = (RawOutput *)heap_caps_malloc(DATA_FRAME_SIZE * 2, MALLOC_CAP_DMA);
+	spi2adc = (RawOutput *)heap_caps_malloc(DMA_FRAME_SIZE, MALLOC_CAP_DMA);
+	adc2spi = (RawOutput *)heap_caps_malloc(DMA_FRAME_SIZE, MALLOC_CAP_DMA);
 
 	dma.rx_buffer = (uint8_t *)heap_caps_malloc(DMA_FRAME_SIZE * RING_BUFF_SZ, MALLOC_CAP_DMA);
 	dma.rx_desc_array =
@@ -104,23 +110,12 @@ void ADS131M0x::init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pi
 		    .empty  = 0,
 		};
 	}
-	data_trans_descr = {
+	trans_descr = {
 	    .flags            = 0,
 	    .cmd              = 0,
 	    .addr             = 0,
 	    .length           = DATA_FRAME_SIZE * 8, // in bits.
-	    .rxlength         = DATA_FRAME_SIZE * 8, // in bits.
-	    .override_freq_hz = 0,
-	    .user             = nullptr,
-	    .tx_buffer        = spi2adc,
-	    .rx_buffer        = adc2spi,
-	};
-	command_trans_descr = {
-	    .flags            = SPI_TRANS_DMA_BUFFER_ALIGN_MANUAL,
-	    .cmd              = 0,
-	    .addr             = 0,
-	    .length           = DATA_FRAME_SIZE * 2 * 8, // in bits.
-	    .rxlength         = DATA_FRAME_SIZE * 2 * 8, // in bits.
+	    .rxlength         = DATA_FRAME_SIZE * 8,
 	    .override_freq_hz = 0,
 	    .user             = nullptr,
 	    .tx_buffer        = spi2adc,
@@ -240,7 +235,7 @@ bool ADS131M0x::setInputChannelSelection(uint8_t channel, uint8_t input) {
 }
 
 const ADS131M0x::RawOutput *ADS131M0x::rawReadADC() {
-	if (ESP_OK == spi_device_polling_start(spiHandle, &data_trans_descr, portMAX_DELAY)) {
+	if (ESP_OK == spi_device_polling_start(spiHandle, &trans_descr, portMAX_DELAY)) {
 		spi_device_polling_end(spiHandle, portMAX_DELAY);
 	}
 	return adc2spi;
@@ -292,7 +287,7 @@ static int find_dma_rx_chan(spi_dev_t *hw) {
 
 void ADS131M0x::startAdc() {
 	spi2adc[0].status = 0;
-	if (ESP_OK == spi_device_polling_start(spiHandle, &data_trans_descr, portMAX_DELAY)) {
+	if (ESP_OK == spi_device_polling_start(spiHandle, &trans_descr, portMAX_DELAY)) {
 		// spi_device_polling_end(spiHandle, portMAX_DELAY);
 		while (!spi_ll_usr_is_done(dma.spi_hw))
 			;

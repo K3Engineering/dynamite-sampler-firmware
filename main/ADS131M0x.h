@@ -237,8 +237,7 @@ class ADS131M0x {
 	uint16_t readPGA();
 
 	spi_device_handle_t spiHandle;
-	spi_transaction_t data_trans_descr;
-	spi_transaction_t command_trans_descr;
+	spi_transaction_t trans_descr;
 
 	gpio_num_t csPin;
 	gpio_num_t drdyPin;
