@@ -287,15 +287,16 @@ static int find_dma_rx_chan(spi_dev_t *hw) {
 
 void ADS131M0x::startAdc() {
 	spi2adc[0].status = 0;
+	spi_device_polling_transmit(spiHandle, &trans_descr); // Empty ADC FIFO
 	if (ESP_OK == spi_device_polling_start(spiHandle, &trans_descr, portMAX_DELAY)) {
-		// spi_device_polling_end(spiHandle, portMAX_DELAY);
-		while (!spi_ll_usr_is_done(dma.spi_hw))
+		while (!spi_ll_usr_is_done(dma.spi_hw)) // wait for transfer to finish
 			;
+		// We do not call spi_device_polling_end() here, see stopAdc()
 	}
-
+	// Hijacking DMA hardware
 	dma.rx_chan = find_dma_rx_chan(dma.spi_hw);
 	assert(dma.rx_chan >= 0);
-	// Clear data buff for tx (rx uses DMA - no buff)
+	// Clear data buffer for tx (rx uses DMA - no buff)
 	for (int i = 0; i < sizeof(dma.spi_hw->data_buf) / sizeof(*dma.spi_hw->data_buf); i++) {
 		dma.spi_hw->data_buf[i] = 0;
 	}
