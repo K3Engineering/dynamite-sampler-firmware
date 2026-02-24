@@ -15,6 +15,20 @@ constexpr uint32_t CORE_BLE = CONFIG_BT_NIMBLE_PINNED_TO_CORE;
 constexpr uint32_t CORE_APP = 1;
 static_assert(CORE_BLE != CORE_APP);
 
+#if CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS
+#include <freertos/FreeRTOS.h>
+
+static void taskPrintRuntimeStats(void *) {
+	// Buffer for vTaskGetRunTimeStats. Each task uses ~40 chars, 20 tasks should be plenty.
+	static char statsBuf[20 * 40];
+	while (true) {
+		vTaskDelay(pdMS_TO_TICKS(10000));
+		vTaskGetRunTimeStats(statsBuf);
+		ESP_LOGI(TAG, "Runtime Stats:\nTask            Abs Ticks       %%\n%s", statsBuf);
+	}
+}
+#endif
+
 extern "C" void app_main(void) {
 	ESP_LOGI(TAG, "Running on Core: %u", esp_cpu_get_core_id());
 
@@ -40,5 +54,10 @@ extern "C" void app_main(void) {
 		ESP_LOGE(TAG, "pm err %d", err);
 	}
 	// ESP_ERROR_CHECK(esp_pm_configure(&pm_config));
+
+#if CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS
+	xTaskCreatePinnedToCore(taskPrintRuntimeStats, "task_stats", 1024 * 4, NULL, 0, NULL, CORE_BLE);
+#endif
+
 	ESP_LOGI(TAG, "Started!");
 }
