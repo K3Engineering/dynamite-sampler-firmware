@@ -54,7 +54,6 @@ void print_task_runtime_stats_delta() {
 }
 
 static void taskPrintRuntimeStats(void *) {
-	// Buffer for vTaskGetRunTimeStats. Each task uses ~40 chars, 20 tasks should be plenty.
 	while (true) {
 		vTaskDelay(pdMS_TO_TICKS(10000));
 		print_task_runtime_stats_delta();
