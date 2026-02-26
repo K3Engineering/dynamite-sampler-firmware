@@ -5,6 +5,7 @@
 
 #include "adc_proc.h"
 #include "ble_proc.h"
+#include "runtime_stats.h"
 
 constexpr char TAG[] = "DYNA";
 
@@ -14,52 +15,6 @@ constexpr char TAG[] = "DYNA";
 constexpr uint32_t CORE_BLE = CONFIG_BT_NIMBLE_PINNED_TO_CORE;
 constexpr uint32_t CORE_APP = 1;
 static_assert(CORE_BLE != CORE_APP);
-
-#if CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS
-#include <freertos/FreeRTOS.h>
-
-void print_task_runtime_stats_delta() {
-	static TaskStatus_t *prev_snapshot    = nullptr;
-	static UBaseType_t prev_snapshot_size = 0;
-	static uint32_t prev_total_runtime    = 0;
-
-	size_t current_size            = uxTaskGetNumberOfTasks();
-	auto current_snapshot          = (TaskStatus_t *)malloc(current_size * sizeof(TaskStatus_t));
-	uint32_t current_total_runtime = 0;
-	uxTaskGetSystemState(current_snapshot, current_size, &current_total_runtime);
-	if (prev_snapshot) {
-		uint32_t delta_total = current_total_runtime - prev_total_runtime;
-		if (delta_total > 0) {
-			ESP_LOGI(TAG, "--------------------------------------------------");
-			ESP_LOGI(TAG, "Task Name       Delta Abs Time     %% Time");
-			for (size_t i = 0; i < current_size; i++) {
-				for (size_t j = 0; j < prev_snapshot_size; j++) {
-					if (prev_snapshot[j].xHandle == current_snapshot[i].xHandle) {
-						uint32_t delta_task = current_snapshot[i].ulRunTimeCounter -
-						                      prev_snapshot[j].ulRunTimeCounter;
-						float percent = delta_task * 100.0f / delta_total;
-						ESP_LOGI(TAG, "%-16s  %12u  %7.2f%%", current_snapshot[i].pcTaskName,
-						         delta_task, percent);
-						break;
-					}
-				}
-			}
-			ESP_LOGI(TAG, "--------------------------------------------------");
-		}
-	}
-	free(prev_snapshot);
-	prev_snapshot      = current_snapshot;
-	prev_snapshot_size = current_size;
-	prev_total_runtime = current_total_runtime;
-}
-
-static void taskPrintRuntimeStats(void *) {
-	while (true) {
-		vTaskDelay(pdMS_TO_TICKS(10000));
-		print_task_runtime_stats_delta();
-	}
-}
-#endif
 
 extern "C" void app_main(void) {
 	ESP_LOGI(TAG, "Running on Core: %u", esp_cpu_get_core_id());
@@ -74,6 +29,7 @@ extern "C" void app_main(void) {
 
 	setupAdc(CORE_APP);
 	setupBle(CORE_BLE);
+	setupStats(CORE_BLE);
 
 	otaConditionalRollback();
 
@@ -86,10 +42,6 @@ extern "C" void app_main(void) {
 		ESP_LOGE(TAG, "pm err %d", err);
 	}
 	// ESP_ERROR_CHECK(esp_pm_configure(&pm_config));
-
-#if CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS
-	xTaskCreatePinnedToCore(taskPrintRuntimeStats, "task_stats", 1024 * 4, NULL, 0, NULL, CORE_BLE);
-#endif
 
 	ESP_LOGI(TAG, "Started!");
 }
