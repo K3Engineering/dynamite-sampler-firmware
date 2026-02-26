@@ -118,11 +118,11 @@ static void adcReadAndBuffer() {
 		return;
 	}
 	const size_t base_idx = adc.dma.head_index >= 20 ? 0 : 20;
+	AdcFeedNetworkData toSend[20];
 	for (size_t i = 0; i < 20; ++i) {
-		AdcFeedNetworkData toSend =
-		    adcToNetwork((ADS131M0x::RawOutput *)(adc.dma.rx_buffer + (base_idx + i) * 20));
-		xStreamBufferSend(bleAccess.adcStreamBufferHandle, &toSend, sizeof(toSend), 0);
+		toSend[i] = adcToNetwork((ADS131M0x::RawOutput *)(adc.dma.rx_buffer + (base_idx + i) * 20));
 	}
+	xStreamBufferSend(bleAccess.adcStreamBufferHandle, toSend, sizeof(toSend), 0);
 	// When the buffer is sufficiently large, time to send data.
 	if (xStreamBufferBytesAvailable(bleAccess.adcStreamBufferHandle) >= ADC_FEED_CHUNK_SZ) {
 		xTaskNotifyGive(bleAccess.bleAdcFeedPublisherTaskHandle);
@@ -155,7 +155,7 @@ static void taskSetupAdc(void *setupDone) {
 	gpio_set_direction(PIN_DEBUG_BOT, GPIO_MODE_OUTPUT);
 
 	adc.init(PIN_CS_ADC, PIN_DRDY, PIN_ADC_RESET);
-	adc.setupAccess(SPI3_HOST, SPI_MASTER_FREQ_20M, PIN_NUM_CLK, PIN_NUM_MISO, PIN_NUM_MOSI);
+	adc.setupAccess(SPI3_HOST, SPI_MASTER_FREQ_13M, PIN_NUM_CLK, PIN_NUM_MISO, PIN_NUM_MOSI);
 
 	adc.reset();
 
