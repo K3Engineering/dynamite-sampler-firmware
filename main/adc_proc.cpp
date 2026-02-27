@@ -70,21 +70,23 @@ static inline void requestTaskSwitchFromISR(BaseType_t needSwitch, void *ptr) {
 // Flash. And Flash on ESP32 is much slower than internal RAM.
 static void IRAM_ATTR isrAdcDrdy(void *param) {
 	ADS131M0x::SpiDmaControl *ctrl = (ADS131M0x::SpiDmaControl *)param;
+	size_t idx                     = ctrl->head_index;
 
-	GDMA.channel[ctrl->rx_chan].in.link.addr  = (uint32_t)&ctrl->rx_desc_array[ctrl->head_index];
+	GDMA.channel[ctrl->rx_chan].in.link.addr  = (uint32_t)&ctrl->rx_desc_array[idx];
 	GDMA.channel[ctrl->rx_chan].in.link.start = 1;
 	ctrl->spi_hw->cmd.update                  = 1;
 
-	++ctrl->head_index;
-	if (ctrl->head_index >= 40) {
-		ctrl->head_index = 0;
+	++idx;
+	if (idx >= 40) [[unlikely]] {
+		idx = 0;
 	}
+	ctrl->head_index = idx;
 
 	while (ctrl->spi_hw->cmd.update)
 		; // Takes a few nanoseconds
 	ctrl->spi_hw->cmd.usr = 1;
 
-	if (0 == ctrl->head_index % 20) [[unlikely]] {
+	if (1 == idx % 20) [[unlikely]] {
 		// unblock the task that will read the ADC & handle putting in the buffer
 		BaseType_t taskWoken = pdFALSE;
 		vTaskNotifyGiveFromISR(adcReadTaskHandle, &taskWoken);

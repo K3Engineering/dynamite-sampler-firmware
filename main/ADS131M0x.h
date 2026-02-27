@@ -253,7 +253,7 @@ class ADS131M0x {
 		uint8_t *rx_buffer;
 		lldesc_t *rx_desc_array;
 		int rx_chan;
-		size_t head_index;
+		volatile size_t head_index;
 		spi_dev_t *spi_hw;
 	};
 	SpiDmaControl dma;
