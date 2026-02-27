@@ -14,7 +14,8 @@ static bool print_one(const TaskStatus_t *prev, const TaskStatus_t *current, uin
 	}
 	uint32_t delta_task = current->ulRunTimeCounter - prev->ulRunTimeCounter;
 	float percent       = delta_task * 100.0f / total;
-	ESP_LOGI(TAG, "%-16s  %12u  %7.2f%%", current->pcTaskName, delta_task, percent);
+	ESP_LOGI(TAG, "%-16s %12u %7.2f%% %8u", current->pcTaskName, delta_task, percent,
+	         current->usStackHighWaterMark);
 	return true;
 }
 
@@ -31,7 +32,7 @@ static void print_task_runtime_stats_delta() {
 		uint32_t delta_total = current_total_runtime - prev_total_runtime;
 		if (delta_total > 0) {
 			ESP_LOGI(TAG, "--------------------------------------------------");
-			ESP_LOGI(TAG, "Task Name       Abs Time        %% Time");
+			ESP_LOGI(TAG, "Task Name       Abs Time        %% Time    Stack");
 			for (size_t i = 0; i < current_snapshot_size; i++) {
 				for (size_t j = 0; j < prev_snapshot_size; j++) {
 					if (print_one(&prev_snapshot[j], &current_snapshot[i], delta_total)) {
@@ -57,7 +58,7 @@ static void taskPrintRuntimeStats(void *) {
 }
 
 void setupStats(int core) {
-	xTaskCreatePinnedToCore(taskPrintRuntimeStats, "task_stats", 1024 * 4, NULL, 0, NULL, core);
+	xTaskCreatePinnedToCore(taskPrintRuntimeStats, "task_stats", 1024 * 3, NULL, 0, NULL, core);
 }
 
 #else
