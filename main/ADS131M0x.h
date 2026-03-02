@@ -177,8 +177,6 @@ class ADS131M0x {
 	static constexpr size_t DATA_WORD_LENGTH     = 3; // in bytes
 	static constexpr size_t DATA_FRAME_SIZE =
 	    (1 + NUM_CHANNELS_ENABLED + 1) * DATA_WORD_LENGTH; // status, channels, CRC
-	static constexpr size_t RING_BUFF_SZ   = 40;
-	static constexpr size_t DMA_FRAME_SIZE = (DATA_FRAME_SIZE + 3) & ~3; // multiple of 4
 
 #pragma pack(push, 1)
 	struct RawOutput {
@@ -212,8 +210,12 @@ class ADS131M0x {
 	bool setInputChannelSelection(uint8_t channel, uint8_t input);
 	bool setOsr(uint16_t osr);
 
-	typedef void (*AdcISR)(void *);
-	void attachISR(AdcISR isr);
+	static IRAM_ATTR void isrAdcDrdy(void *param);
+	void attachISR();
+	void setWakeupTask(TaskHandle_t h, size_t interval) {
+		dma.taskToWake    = h;
+		dma.wake_interval = interval;
+	};
 	void startAdc();
 	void stopAdc();
 
@@ -248,15 +250,17 @@ class ADS131M0x {
 	RawOutput *spi2adc;
 	RawOutput *adc2spi;
 
-  public:
-	struct SpiDmaControl {
+	struct IsrData {
 		uint8_t *rx_buffer;
 		lldesc_t *rx_desc_array;
 		int rx_chan;
 		volatile size_t head_index;
+		size_t tail_index;
 		spi_dev_t *spi_hw;
+		TaskHandle_t taskToWake;
+		size_t wake_interval;
 	};
-	SpiDmaControl dma;
+	IsrData dma;
 };
 
 #if (CONFIG_MOCK_ADC == 1)
@@ -295,15 +299,15 @@ class MockAdc {
 	uint16_t readPGA() { return 0; }
 
 	typedef ADS131M0x::AdcISR AdcISR;
-	typedef ADS131M0x::AdcRawOutput AdcRawOutput;
+	typedef ADS131M0x::RawOutput RawOutput;
 
 	void attachISR(AdcISR isr);
 	void startAdc();
 	void stopAdc();
 
-	const AdcRawOutput *rawReadADC();
+	const RawOutput *rawReadADC();
 
-	static bool isCrcOk(const AdcRawOutput *data) { return true; };
+	static bool isCrcOk(const RawOutput *data) { return true; };
 };
 
 typedef MockAdc AdcClass;

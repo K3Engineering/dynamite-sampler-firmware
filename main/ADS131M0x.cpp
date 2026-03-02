@@ -5,6 +5,7 @@
 #include <esp_heap_caps.h>
 #include <esp_log.h>
 #include <freertos/FreeRTOS.h>
+#include <hal/spi_ll.h>
 #include <soc/gdma_struct.h>
 
 #include <endian.h>
@@ -12,6 +13,9 @@
 #include "debug_pin.h"
 
 constexpr char TAG[] = "ADS131";
+
+static constexpr size_t RING_BUFF_SZ   = 64;                                    // power of 2
+static constexpr size_t DMA_FRAME_SIZE = (ADS131M0x::DATA_FRAME_SIZE + 3) & ~3; // multiple of 4
 
 static inline void delayMSec(uint32_t ms) { vTaskDelay(ms / portTICK_PERIOD_MS); }
 
@@ -130,14 +134,10 @@ void ADS131M0x::init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pi
 }
 
 void ADS131M0x::deinit() {
-	if (spi2adc) {
-		heap_caps_free(spi2adc);
-		spi2adc = nullptr;
-	}
-	if (adc2spi) {
-		heap_caps_free(adc2spi);
-		adc2spi = nullptr;
-	}
+	heap_caps_free(spi2adc);
+	spi2adc = nullptr;
+	heap_caps_free(adc2spi);
+	adc2spi = nullptr;
 }
 
 void ADS131M0x::setupAccess(spi_host_device_t spiDevice, int spi_clock_speed, gpio_num_t clk_pin,
@@ -233,12 +233,19 @@ bool ADS131M0x::setInputChannelSelection(uint8_t channel, uint8_t input) {
 	}
 	return writeRegisterMasked(REG_CH0_CFG + channel * 5, input, REGMASK_CHX_CFG_MUX);
 }
-
+/*
 const ADS131M0x::RawOutput *ADS131M0x::rawReadADC() {
-	if (ESP_OK == spi_device_polling_start(spiHandle, &trans_descr, portMAX_DELAY)) {
-		spi_device_polling_end(spiHandle, portMAX_DELAY);
-	}
-	return adc2spi;
+    if (ESP_OK == spi_device_polling_start(spiHandle, &trans_descr, portMAX_DELAY)) {
+        spi_device_polling_end(spiHandle, portMAX_DELAY);
+    }
+    return adc2spi;
+}
+*/
+const ADS131M0x::RawOutput *IRAM_ATTR ADS131M0x::rawReadADC() {
+
+	if (dma.head_index - dma.tail_index <= 1) // one extra!!!
+		return nullptr;
+	return (const RawOutput *)(dma.rx_buffer + (dma.tail_index++ % RING_BUFF_SZ) * DMA_FRAME_SIZE);
 }
 
 uint16_t ADS131M0x::readID() { return readRegister(REG_ID); }
@@ -254,13 +261,47 @@ bool ADS131M0x::isCrcOk(const RawOutput *data) {
 	return crc == calculatedCrc;
 }
 
-void ADS131M0x::attachISR(AdcISR isr) {
+static inline void requestTaskSwitchFromISR(BaseType_t needSwitch, void *ptr) {
+#if (CONFIG_MOCK_ADC == 1)
+	*(bool *)ptr = (needSwitch == pdTRUE);
+#else
+	portYIELD_FROM_ISR(needSwitch);
+#endif
+}
+
+// When we flag a piece of code with the IRAM_ATTR attribute, the compiled code
+// is placed in the ESP32’s Internal RAM (IRAM). Otherwise the code is kept in
+// Flash. And Flash on ESP32 is much slower than internal RAM.
+void IRAM_ATTR ADS131M0x::isrAdcDrdy(void *param) {
+	ADS131M0x::IsrData *ctrl = (ADS131M0x::IsrData *)param;
+
+	size_t idx = ctrl->head_index;
+
+	GDMA.channel[ctrl->rx_chan].in.link.addr  = (uint32_t)&ctrl->rx_desc_array[idx % RING_BUFF_SZ];
+	GDMA.channel[ctrl->rx_chan].in.link.start = 1;
+	ctrl->spi_hw->cmd.update                  = 1;
+
+	ctrl->head_index = idx + 1;
+
+	while (ctrl->spi_hw->cmd.update)
+		; // Takes a few nanoseconds
+	ctrl->spi_hw->cmd.usr = 1;
+
+	if ((idx - ctrl->tail_index) > ctrl->wake_interval) [[unlikely]] {
+		// unblock the task that will read the ADC & handle putting in the buffer
+		BaseType_t taskWoken = pdFALSE;
+		vTaskNotifyGiveFromISR(ctrl->taskToWake, &taskWoken);
+		requestTaskSwitchFromISR(taskWoken, param);
+	}
+}
+
+void ADS131M0x::attachISR() {
 	esp_err_t err = gpio_install_isr_service(0);
 	if ((err != ESP_OK) && (err != ESP_ERR_INVALID_STATE)) {
 		return;
 	}
 	gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE);
-	gpio_isr_handler_add(drdyPin, isr, &dma);
+	gpio_isr_handler_add(drdyPin, isrAdcDrdy, &dma);
 }
 
 static int find_dma_rx_chan(spi_dev_t *hw) {
@@ -283,8 +324,6 @@ static int find_dma_rx_chan(spi_dev_t *hw) {
 	return chan;
 }
 
-#include <hal/spi_ll.h>
-
 void ADS131M0x::startAdc() {
 	spi2adc[0].status = 0;
 	spi_device_polling_transmit(spiHandle, &trans_descr); // Empty ADC FIFO
@@ -301,6 +340,7 @@ void ADS131M0x::startAdc() {
 		dma.spi_hw->data_buf[i] = 0;
 	}
 	dma.head_index = 0;
+	dma.tail_index = 0;
 	// Reset DMA FIFOs
 	dma.spi_hw->dma_conf.rx_afifo_rst = 1;
 	dma.spi_hw->dma_conf.rx_afifo_rst = 0;
@@ -374,8 +414,8 @@ void MockAdc::startAdc() { gptimer_start(gptimer); }
 
 void MockAdc::stopAdc() { gptimer_stop(gptimer); }
 
-const MockAdc::AdcRawOutput *MockAdc::rawReadADC() {
-	static AdcRawOutput a{
+const MockAdc::RawOutput *MockAdc::rawReadADC() {
+	static RawOutput a{
 	    .status        = 0x1234,
 	    .status_unused = 0,
 	    .data          = {},
