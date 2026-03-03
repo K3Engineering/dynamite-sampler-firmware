@@ -140,8 +140,8 @@ void ADS131M0x::deinit() {
 	adc2spi = nullptr;
 }
 
-void ADS131M0x::setupAccess(spi_host_device_t spiDevice, int spi_clock_speed, gpio_num_t clk_pin,
-                            gpio_num_t miso_pin, gpio_num_t mosi_pin) {
+void ADS131M0x::setupAccess(spi_host_device_t spiDevice, gpio_num_t clk_pin, gpio_num_t miso_pin,
+                            gpio_num_t mosi_pin) {
 	const spi_bus_config_t buscfg = {
 	    .mosi_io_num           = mosi_pin,
 	    .miso_io_num           = miso_pin,
@@ -170,7 +170,7 @@ void ADS131M0x::setupAccess(spi_host_device_t spiDevice, int spi_clock_speed, gp
 	    .duty_cycle_pos   = 0,
 	    .cs_ena_pretrans  = 0,
 	    .cs_ena_posttrans = 0,
-	    .clock_speed_hz   = spi_clock_speed,
+	    .clock_speed_hz   = SPI_MASTER_FREQ_13M,
 	    .input_delay_ns   = 0,
 	    .sample_point     = SPI_SAMPLING_POINT_PHASE_0,
 	    .spics_io_num     = -1,
@@ -242,7 +242,6 @@ const ADS131M0x::RawOutput *ADS131M0x::rawReadADC() {
 }
 */
 const ADS131M0x::RawOutput *IRAM_ATTR ADS131M0x::rawReadADC() {
-
 	if (dma.head_index - dma.tail_index <= 1) // one extra!!!
 		return nullptr;
 	return (const RawOutput *)(dma.rx_buffer + (dma.tail_index++ % RING_BUFF_SZ) * DMA_FRAME_SIZE);

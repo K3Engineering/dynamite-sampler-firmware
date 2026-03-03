@@ -201,8 +201,8 @@ class ADS131M0x {
 
 	void init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pin);
 	void deinit();
-	void setupAccess(spi_host_device_t spiDevice, int spi_clock_speed, gpio_num_t clk_pin,
-	                 gpio_num_t miso_pin, gpio_num_t mosi_pin);
+	void setupAccess(spi_host_device_t spiDevice, gpio_num_t clk_pin, gpio_num_t miso_pin,
+	                 gpio_num_t mosi_pin);
 	void reset();
 	bool setPowerMode(uint8_t powerMode);
 	bool setChannelPGA(uint8_t channel, uint16_t pga);
