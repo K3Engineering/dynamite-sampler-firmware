@@ -122,6 +122,8 @@
 #define REGMASK_STATUS_DRDY2   0x0004
 #define REGMASK_STATUS_DRDY1   0x0002
 #define REGMASK_STATUS_DRDY0   0x0001
+#define REGMASK_STATUS_DRDYX                                                                       \
+	(REGMASK_STATUS_DRDY0 | REGMASK_STATUS_DRDY1 | REGMASK_STATUS_DRDY2 | REGMASK_STATUS_DRDY3)
 
 // Mask Register MODE
 #define REGMASK_MODE_REG_CRC_EN 0x2000
@@ -171,12 +173,19 @@
 // Mask Register CHX_GCAL_LSB
 #define REGMASK_CHX_GCAL0_LSB 0xFF00
 
+#define USE_LARGE_DMA_BUFF 1
+
 class ADS131M0x {
   public:
 	static constexpr size_t NUM_CHANNELS_ENABLED = 4;
 	static constexpr size_t DATA_WORD_LENGTH     = 3; // in bytes
 	static constexpr size_t DATA_FRAME_SIZE =
 	    (1 + NUM_CHANNELS_ENABLED + 1) * DATA_WORD_LENGTH; // status, channels, CRC
+#ifdef USE_LARGE_DMA_BUFF
+	static constexpr size_t MAX_READ = 32; // power of 2
+#else
+	static constexpr size_t MAX_READ = 1;
+#endif
 
 #pragma pack(push, 1)
 	struct RawOutput {
@@ -212,8 +221,8 @@ class ADS131M0x {
 
 	static IRAM_ATTR void isrAdcDrdy(void *param);
 	void attachISR();
-	void setWakeupTask(TaskHandle_t h, size_t interval) {
-		dma.taskToWake    = h;
+	void setWakeupTask(TaskHandle_t taskToWakeOnDrdy, size_t interval) {
+		dma.taskToWake    = taskToWakeOnDrdy;
 		dma.wake_interval = interval;
 	};
 	void startAdc();
@@ -277,8 +286,8 @@ class MockAdc {
 
 	void init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pin) {}
 	void deinit() {}
-	void setupAccess(spi_host_device_t spiDevice, uint32_t spi_clock_speed, gpio_num_t clk_pin,
-	                 gpio_num_t miso_pin, gpio_num_t mosi_pin) {}
+	void setupAccess(spi_host_device_t spiDevice, gpio_num_t clk_pin, gpio_num_t miso_pin,
+	                 gpio_num_t mosi_pin) {}
 	void reset() {}
 	bool setChannelPGA(uint8_t channel, uint16_t pga) { return true; }
 	bool setPGA(uint8_t pgaChan0, uint8_t pgaChan1, uint8_t pgaChan2, uint8_t pgaChan3) {

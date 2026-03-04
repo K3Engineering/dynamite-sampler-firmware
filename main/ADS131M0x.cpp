@@ -14,8 +14,11 @@
 
 constexpr char TAG[] = "ADS131";
 
-static constexpr size_t RING_BUFF_SZ   = 64;                                    // power of 2
-static constexpr size_t DMA_FRAME_SIZE = (ADS131M0x::DATA_FRAME_SIZE + 3) & ~3; // multiple of 4
+constexpr size_t DMA_FRAME_SIZE = (ADS131M0x::DATA_FRAME_SIZE + 3) & ~3; // multiple of 4
+
+#ifdef USE_LARGE_DMA_BUFF
+static constexpr size_t RING_BUFF_SZ = ADS131M0x::MAX_READ * 2;
+#endif
 
 static inline void delayMSec(uint32_t ms) { vTaskDelay(ms / portTICK_PERIOD_MS); }
 
@@ -99,6 +102,7 @@ void ADS131M0x::init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pi
 	spi2adc = (RawOutput *)heap_caps_malloc(DMA_FRAME_SIZE, MALLOC_CAP_DMA);
 	adc2spi = (RawOutput *)heap_caps_malloc(DMA_FRAME_SIZE, MALLOC_CAP_DMA);
 
+#ifdef USE_LARGE_DMA_BUFF
 	dma.rx_buffer = (uint8_t *)heap_caps_malloc(DMA_FRAME_SIZE * RING_BUFF_SZ, MALLOC_CAP_DMA);
 	dma.rx_desc_array =
 	    (lldesc_t *)heap_caps_malloc(sizeof(lldesc_t) * RING_BUFF_SZ, MALLOC_CAP_DMA);
@@ -114,6 +118,7 @@ void ADS131M0x::init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pi
 		    .empty  = 0,
 		};
 	}
+#endif // USE_LARGE_DMA_BUFF
 	trans_descr = {
 	    .flags            = 0,
 	    .cmd              = 0,
@@ -138,6 +143,12 @@ void ADS131M0x::deinit() {
 	spi2adc = nullptr;
 	heap_caps_free(adc2spi);
 	adc2spi = nullptr;
+#ifdef USE_LARGE_DMA_BUFF
+	heap_caps_free(dma.rx_buffer);
+	dma.rx_buffer = nullptr;
+	heap_caps_free(dma.rx_desc_array);
+	dma.rx_desc_array = nullptr;
+#endif
 }
 
 void ADS131M0x::setupAccess(spi_host_device_t spiDevice, gpio_num_t clk_pin, gpio_num_t miso_pin,
@@ -185,9 +196,11 @@ void ADS131M0x::setupAccess(spi_host_device_t spiDevice, gpio_num_t clk_pin, gpi
 	ret = spi_device_acquire_bus(handle, portMAX_DELAY);
 	assert(ESP_OK == ret);
 
-	spiHandle  = handle;
+	spiHandle = handle;
+#ifdef USE_LARGE_DMA_BUFF
 	dma.spi_hw = SPI_LL_GET_HW(spiDevice);
 	assert(dma.spi_hw);
+#endif
 }
 
 bool ADS131M0x::setPowerMode(uint8_t powerMode) {
@@ -233,24 +246,15 @@ bool ADS131M0x::setInputChannelSelection(uint8_t channel, uint8_t input) {
 	}
 	return writeRegisterMasked(REG_CH0_CFG + channel * 5, input, REGMASK_CHX_CFG_MUX);
 }
-/*
-const ADS131M0x::RawOutput *ADS131M0x::rawReadADC() {
-    if (ESP_OK == spi_device_polling_start(spiHandle, &trans_descr, portMAX_DELAY)) {
-        spi_device_polling_end(spiHandle, portMAX_DELAY);
-    }
-    return adc2spi;
-}
-*/
-const ADS131M0x::RawOutput *IRAM_ATTR ADS131M0x::rawReadADC() {
-	if (dma.head_index - dma.tail_index <= 1) // one extra!!!
-		return nullptr;
-	return (const RawOutput *)(dma.rx_buffer + (dma.tail_index++ % RING_BUFF_SZ) * DMA_FRAME_SIZE);
-}
 
 uint16_t ADS131M0x::readID() { return readRegister(REG_ID); }
+
 uint16_t ADS131M0x::readSTATUS() { return readRegister(REG_STATUS); }
+
 uint16_t ADS131M0x::readMODE() { return readRegister(REG_MODE); }
+
 uint16_t ADS131M0x::readCLOCK() { return readRegister(REG_CLOCK); }
+
 uint16_t ADS131M0x::readPGA() { return readRegister(REG_GAIN); }
 
 bool ADS131M0x::isCrcOk(const RawOutput *data) {
@@ -260,17 +264,29 @@ bool ADS131M0x::isCrcOk(const RawOutput *data) {
 	return crc == calculatedCrc;
 }
 
-static inline void requestTaskSwitchFromISR(BaseType_t needSwitch, void *ptr) {
-#if (CONFIG_MOCK_ADC == 1)
-	*(bool *)ptr = (needSwitch == pdTRUE);
-#else
-	portYIELD_FROM_ISR(needSwitch);
-#endif
+#ifdef USE_LARGE_DMA_BUFF
+const ADS131M0x::RawOutput *IRAM_ATTR ADS131M0x::rawReadADC() {
+	if (dma.head_index - dma.tail_index <= 1) [[unlikely]] {
+		ESP_LOGW(TAG, "Reading ahead");
+	}
+	return (const RawOutput *)(dma.rx_buffer + (dma.tail_index++ % RING_BUFF_SZ) * DMA_FRAME_SIZE);
 }
+#else
+const ADS131M0x::RawOutput *ADS131M0x::rawReadADC() {
+	if (ESP_OK != spi_device_polling_transmit(spiHandle, &trans_descr)) {
+		ESP_LOGW(TAG, "Reading error");
+	} else if ((adc2spi->status & (htobe16(REGMASK_STATUS_DRDYX))) !=
+	           htobe16(REGMASK_STATUS_DRDYX)) {
+		ESP_LOGW(TAG, "Reading garbage");
+	}
+	return adc2spi;
+}
+#endif // USE_LARGE_DMA_BUFF
 
 // When we flag a piece of code with the IRAM_ATTR attribute, the compiled code
 // is placed in the ESP32’s Internal RAM (IRAM). Otherwise the code is kept in
 // Flash. And Flash on ESP32 is much slower than internal RAM.
+#ifdef USE_LARGE_DMA_BUFF
 void IRAM_ATTR ADS131M0x::isrAdcDrdy(void *param) {
 	ADS131M0x::IsrData *ctrl = (ADS131M0x::IsrData *)param;
 
@@ -287,12 +303,29 @@ void IRAM_ATTR ADS131M0x::isrAdcDrdy(void *param) {
 	ctrl->spi_hw->cmd.usr = 1;
 
 	if ((idx - ctrl->tail_index) > ctrl->wake_interval) [[unlikely]] {
-		// unblock the task that will read the ADC & handle putting in the buffer
 		BaseType_t taskWoken = pdFALSE;
 		vTaskNotifyGiveFromISR(ctrl->taskToWake, &taskWoken);
-		requestTaskSwitchFromISR(taskWoken, param);
+		portYIELD_FROM_ISR(taskWoken);
 	}
 }
+
+#else
+static inline void requestTaskSwitchFromISR(BaseType_t needSwitch, void *ptr) {
+#if (CONFIG_MOCK_ADC == 1)
+	*(bool *)ptr = (needSwitch == pdTRUE);
+#else
+	portYIELD_FROM_ISR(needSwitch);
+#endif
+}
+
+void IRAM_ATTR ADS131M0x::isrAdcDrdy(void *param) {
+	ADS131M0x::IsrData *ctrl = (ADS131M0x::IsrData *)param;
+	// unblock the task that will read the ADC & handle putting in the buffer
+	BaseType_t taskWoken = pdFALSE;
+	vTaskNotifyGiveFromISR(ctrl->taskToWake, &taskWoken);
+	requestTaskSwitchFromISR(taskWoken, param);
+}
+#endif
 
 void ADS131M0x::attachISR() {
 	esp_err_t err = gpio_install_isr_service(0);
@@ -302,6 +335,8 @@ void ADS131M0x::attachISR() {
 	gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE);
 	gpio_isr_handler_add(drdyPin, isrAdcDrdy, &dma);
 }
+
+#ifdef USE_LARGE_DMA_BUFF
 
 static int find_dma_rx_chan(spi_dev_t *hw) {
 	int gdma_peri_id = -1;
@@ -324,13 +359,16 @@ static int find_dma_rx_chan(spi_dev_t *hw) {
 }
 
 void ADS131M0x::startAdc() {
-	spi2adc[0].status = 0;
-	spi_device_polling_transmit(spiHandle, &trans_descr); // Empty ADC FIFO
-	if (ESP_OK == spi_device_polling_start(spiHandle, &trans_descr, portMAX_DELAY)) {
-		while (!spi_ll_usr_is_done(dma.spi_hw)) // wait for transfer to finish
-			;
-		// We do not call spi_device_polling_end() here, see stopAdc()
-	}
+	spi2adc->status = 0;
+	do {
+		spi_device_polling_transmit(spiHandle, &trans_descr); // Empty ADC FIFO
+	} while (adc2spi->status & htobe16(REGMASK_STATUS_DRDYX));
+
+	// if (ESP_OK == spi_device_polling_start(spiHandle, &trans_descr, portMAX_DELAY)) {
+	// Wait for transfer to finish, call spi_device_polling_end() at stopAdc()
+	//         while (!spi_ll_usr_is_done(dma.spi_hw));
+	//    }
+
 	// Hijacking DMA hardware
 	dma.rx_chan = find_dma_rx_chan(dma.spi_hw);
 	assert(dma.rx_chan >= 0);
@@ -352,8 +390,22 @@ void ADS131M0x::startAdc() {
 
 void ADS131M0x::stopAdc() {
 	gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE);
-	spi_device_polling_end(spiHandle, portMAX_DELAY);
+	// spi_device_polling_end(spiHandle, portMAX_DELAY);
 }
+
+#else
+
+void ADS131M0x::startAdc() {
+	spi2adc->status = 0;
+	do {
+		spi_device_polling_transmit(spiHandle, &trans_descr); // Empty ADC FIFO
+	} while (spi2adc->status & htobe16(REGMASK_STATUS_DRDYX));
+	gpio_set_intr_type(drdyPin, GPIO_INTR_NEGEDGE);
+}
+
+void ADS131M0x::stopAdc() { gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE); }
+
+#endif // USE_LARGE_DMA_BUFF
 
 // Should not be called while ADC is running
 void ADS131M0x::stashConfig() {
