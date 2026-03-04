@@ -21,7 +21,7 @@ constexpr char TAG[] = "ADC";
 static AdcClass adc;
 static TaskHandle_t adcReadTaskHandle = NULL;
 
-static void logADS131M0xConfig(const ADS131M0x::ConfigData *cfg) {
+static void logADS131M0xConfig(const AdcClass::ConfigData *cfg) {
 	ESP_LOGI(TAG, "<REGISTERS>");
 	ESP_LOGI(TAG, "ID 0x%X", cfg->id >> 8);
 	ESP_LOGI(TAG, "STATUS 0x%04X", cfg->status);
@@ -40,7 +40,7 @@ static void logADS131M0xConfig(const ADS131M0x::ConfigData *cfg) {
 }
 
 const AdcConfigNetworkData getAdcConfig() {
-	const ADS131M0x::ConfigData *p = adc.getConfig();
+	const AdcClass::ConfigData *p = adc.getConfig();
 	return AdcConfigNetworkData{
 	    .version = 1,
 	    .id      = htole16(p->id),
@@ -80,9 +80,9 @@ static void IRAM_ATTR adcReadAndBuffer() {
 	if (!bleAccess.clientSubscribed) {
 		return;
 	}
-	static constexpr size_t n_samples = (ADS131M0x::MAX_READ > AdcFeedNetworkPacket::NUM_SAMPLES)
+	static constexpr size_t n_samples = (AdcClass::MAX_READS > AdcFeedNetworkPacket::NUM_SAMPLES)
 	                                        ? AdcFeedNetworkPacket::NUM_SAMPLES
-	                                        : ADS131M0x::MAX_READ;
+	                                        : AdcClass::MAX_READS;
 	AdcFeedNetworkData toSend[n_samples];
 	for (size_t n = 0; n < n_samples; ++n) {
 		toSend[n] = adcToNetwork(adc.rawReadADC());

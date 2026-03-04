@@ -17,7 +17,7 @@ constexpr char TAG[] = "ADS131";
 constexpr size_t DMA_FRAME_SIZE = (ADS131M0x::DATA_FRAME_SIZE + 3) & ~3; // multiple of 4
 
 #ifdef USE_LARGE_DMA_BUFF
-static constexpr size_t RING_BUFF_SZ = ADS131M0x::MAX_READ * 2;
+static constexpr size_t RING_BUFF_SZ = ADS131M0x::MAX_READS * 2;
 #endif
 
 static inline void delayMSec(uint32_t ms) { vTaskDelay(ms / portTICK_PERIOD_MS); }
@@ -265,28 +265,17 @@ bool ADS131M0x::isCrcOk(const RawOutput *data) {
 }
 
 #ifdef USE_LARGE_DMA_BUFF
+
 const ADS131M0x::RawOutput *IRAM_ATTR ADS131M0x::rawReadADC() {
 	if (dma.head_index - dma.tail_index <= 1) [[unlikely]] {
 		ESP_LOGW(TAG, "Reading ahead");
 	}
 	return (const RawOutput *)(dma.rx_buffer + (dma.tail_index++ % RING_BUFF_SZ) * DMA_FRAME_SIZE);
 }
-#else
-const ADS131M0x::RawOutput *ADS131M0x::rawReadADC() {
-	if (ESP_OK != spi_device_polling_transmit(spiHandle, &trans_descr)) {
-		ESP_LOGW(TAG, "Reading error");
-	} else if ((adc2spi->status & (htobe16(REGMASK_STATUS_DRDYX))) !=
-	           htobe16(REGMASK_STATUS_DRDYX)) {
-		ESP_LOGW(TAG, "Reading garbage");
-	}
-	return adc2spi;
-}
-#endif // USE_LARGE_DMA_BUFF
 
 // When we flag a piece of code with the IRAM_ATTR attribute, the compiled code
 // is placed in the ESP32’s Internal RAM (IRAM). Otherwise the code is kept in
 // Flash. And Flash on ESP32 is much slower than internal RAM.
-#ifdef USE_LARGE_DMA_BUFF
 void IRAM_ATTR ADS131M0x::isrAdcDrdy(void *param) {
 	ADS131M0x::IsrData *ctrl = (ADS131M0x::IsrData *)param;
 
@@ -308,35 +297,6 @@ void IRAM_ATTR ADS131M0x::isrAdcDrdy(void *param) {
 		portYIELD_FROM_ISR(taskWoken);
 	}
 }
-
-#else
-static inline void requestTaskSwitchFromISR(BaseType_t needSwitch, void *ptr) {
-#if (CONFIG_MOCK_ADC == 1)
-	*(bool *)ptr = (needSwitch == pdTRUE);
-#else
-	portYIELD_FROM_ISR(needSwitch);
-#endif
-}
-
-void IRAM_ATTR ADS131M0x::isrAdcDrdy(void *param) {
-	ADS131M0x::IsrData *ctrl = (ADS131M0x::IsrData *)param;
-	// unblock the task that will read the ADC & handle putting in the buffer
-	BaseType_t taskWoken = pdFALSE;
-	vTaskNotifyGiveFromISR(ctrl->taskToWake, &taskWoken);
-	requestTaskSwitchFromISR(taskWoken, param);
-}
-#endif
-
-void ADS131M0x::attachISR() {
-	esp_err_t err = gpio_install_isr_service(0);
-	if ((err != ESP_OK) && (err != ESP_ERR_INVALID_STATE)) {
-		return;
-	}
-	gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE);
-	gpio_isr_handler_add(drdyPin, isrAdcDrdy, &dma);
-}
-
-#ifdef USE_LARGE_DMA_BUFF
 
 static int find_dma_rx_chan(spi_dev_t *hw) {
 	int gdma_peri_id = -1;
@@ -393,7 +353,25 @@ void ADS131M0x::stopAdc() {
 	// spi_device_polling_end(spiHandle, portMAX_DELAY);
 }
 
-#else
+#else // ! USE_LARGE_DMA_BUFF
+
+const ADS131M0x::RawOutput *IRAM_ATTR ADS131M0x::rawReadADC() {
+	if (ESP_OK != spi_device_polling_transmit(spiHandle, &trans_descr)) {
+		ESP_LOGW(TAG, "Reading error");
+	} else if ((adc2spi->status & (htobe16(REGMASK_STATUS_DRDYX))) !=
+	           htobe16(REGMASK_STATUS_DRDYX)) {
+		ESP_LOGW(TAG, "Reading garbage");
+	}
+	return adc2spi;
+}
+
+void IRAM_ATTR ADS131M0x::isrAdcDrdy(void *param) {
+	ADS131M0x::IsrData *ctrl = (ADS131M0x::IsrData *)param;
+	// unblock the task that will read the ADC & handle putting in the buffer
+	BaseType_t taskWoken = pdFALSE;
+	vTaskNotifyGiveFromISR(ctrl->taskToWake, &taskWoken);
+	portYIELD_FROM_ISR(taskWoken);
+}
 
 void ADS131M0x::startAdc() {
 	spi2adc->status = 0;
@@ -406,6 +384,15 @@ void ADS131M0x::startAdc() {
 void ADS131M0x::stopAdc() { gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE); }
 
 #endif // USE_LARGE_DMA_BUFF
+
+void ADS131M0x::attachISR() {
+	esp_err_t err = gpio_install_isr_service(0);
+	if ((err != ESP_OK) && (err != ESP_ERR_INVALID_STATE)) {
+		return;
+	}
+	gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE);
+	gpio_isr_handler_add(drdyPin, isrAdcDrdy, &dma);
+}
 
 // Should not be called while ADC is running
 void ADS131M0x::stashConfig() {
@@ -422,14 +409,21 @@ void ADS131M0x::stashConfig() {
 
 #include <driver/gptimer.h>
 
+TaskHandle_t MockAdc::taskToWake = 0;
+
 static bool IRAM_ATTR mockTimerCb(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata,
                                   void *user_ctx) {
-	bool res = false;
-	((MockAdc::AdcISR)user_ctx)(&res);
-	return res;
+	return MockAdc::isrAdcDrdy();
 }
 
-void MockAdc::attachISR(AdcISR isr) {
+bool IRAM_ATTR MockAdc::isrAdcDrdy() {
+	// unblock the task that will read the ADC & handle putting in the buffer
+	BaseType_t taskWoken = pdFALSE;
+	vTaskNotifyGiveFromISR(taskToWake, &taskWoken);
+	return (taskWoken == pdTRUE);
+}
+
+void MockAdc::attachISR() {
 	static constexpr gptimer_config_t timer_config = {
 	    .clk_src       = GPTIMER_CLK_SRC_DEFAULT,
 	    .direction     = GPTIMER_COUNT_UP,
@@ -457,7 +451,7 @@ void MockAdc::attachISR(AdcISR isr) {
 	static constexpr gptimer_event_callbacks_t cbs = {
 	    .on_alarm = mockTimerCb,
 	};
-	gptimer_register_event_callbacks(gptimer, &cbs, (void *)isr);
+	gptimer_register_event_callbacks(gptimer, &cbs, nullptr);
 	gptimer_enable(gptimer);
 }
 
@@ -465,7 +459,7 @@ void MockAdc::startAdc() { gptimer_start(gptimer); }
 
 void MockAdc::stopAdc() { gptimer_stop(gptimer); }
 
-const MockAdc::RawOutput *MockAdc::rawReadADC() {
+const MockAdc::RawOutput *IRAM_ATTR MockAdc::rawReadADC() {
 	static RawOutput a{
 	    .status        = 0x1234,
 	    .status_unused = 0,

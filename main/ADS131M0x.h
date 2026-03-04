@@ -173,7 +173,11 @@
 // Mask Register CHX_GCAL_LSB
 #define REGMASK_CHX_GCAL0_LSB 0xFF00
 
-#define USE_LARGE_DMA_BUFF 1
+#define USE_LARGE_DMA_BUFF
+
+#if (CONFIG_MOCK_ADC == 1) && defined USE_LARGE_DMA_BUFF
+#error "LARGE_DMA_BUFF is not supported in MOCK_ADC configutation"
+#endif
 
 class ADS131M0x {
   public:
@@ -182,9 +186,9 @@ class ADS131M0x {
 	static constexpr size_t DATA_FRAME_SIZE =
 	    (1 + NUM_CHANNELS_ENABLED + 1) * DATA_WORD_LENGTH; // status, channels, CRC
 #ifdef USE_LARGE_DMA_BUFF
-	static constexpr size_t MAX_READ = 32; // power of 2
+	static constexpr size_t MAX_READS = 32; // power of 2
 #else
-	static constexpr size_t MAX_READ = 1;
+	static constexpr size_t MAX_READS = 1;
 #endif
 
 #pragma pack(push, 1)
@@ -283,11 +287,18 @@ class MockAdc {
 	static constexpr size_t NUM_CHANNELS_ENABLED = ADS131M0x::NUM_CHANNELS_ENABLED;
 	static constexpr size_t DATA_WORD_LENGTH     = ADS131M0x::DATA_WORD_LENGTH; // in bytes
 	static constexpr size_t DATA_FRAME_SIZE      = ADS131M0x::DATA_FRAME_SIZE;
+	static constexpr size_t MAX_READS            = 1;
+
+	typedef ADS131M0x::RawOutput RawOutput;
+	typedef ADS131M0x::ConfigData ConfigData;
 
 	void init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pin) {}
 	void deinit() {}
 	void setupAccess(spi_host_device_t spiDevice, gpio_num_t clk_pin, gpio_num_t miso_pin,
 	                 gpio_num_t mosi_pin) {}
+	void setWakeupTask(TaskHandle_t taskToWakeOnDrdy, size_t interval) {
+		taskToWake = taskToWakeOnDrdy;
+	}
 	void reset() {}
 	bool setChannelPGA(uint8_t channel, uint16_t pga) { return true; }
 	bool setPGA(uint8_t pgaChan0, uint8_t pgaChan1, uint8_t pgaChan2, uint8_t pgaChan3) {
@@ -297,9 +308,9 @@ class MockAdc {
 	bool setInputChannelSelection(uint8_t channel, uint8_t input) { return true; }
 	bool setOsr(uint16_t osr) { return true; }
 
-	AdcConfigNetworkData savedConfig;
-	void stashConfig() { savedConfig.version = 0; }
-	const AdcConfigNetworkData *getConfig() const { return &savedConfig; }
+	ConfigData savedConfig;
+	void stashConfig() {}
+	const ConfigData *getConfig() const { return &savedConfig; }
 
 	uint16_t readID() { return 0; }
 	uint16_t readSTATUS() { return 0; }
@@ -307,21 +318,21 @@ class MockAdc {
 	uint16_t readCLOCK() { return 0; }
 	uint16_t readPGA() { return 0; }
 
-	typedef ADS131M0x::AdcISR AdcISR;
-	typedef ADS131M0x::RawOutput RawOutput;
-
-	void attachISR(AdcISR isr);
+	static bool IRAM_ATTR isrAdcDrdy();
+	void attachISR();
 	void startAdc();
 	void stopAdc();
 
 	const RawOutput *rawReadADC();
 
 	static bool isCrcOk(const RawOutput *data) { return true; };
+
+	static TaskHandle_t taskToWake;
 };
 
 typedef MockAdc AdcClass;
-#else
+#else  // ! (CONFIG_MOCK_ADC == 1)
 typedef ADS131M0x AdcClass;
-#endif
+#endif // (CONFIG_MOCK_ADC == 1)
 
-#endif
+#endif // ADS131M0x_h
