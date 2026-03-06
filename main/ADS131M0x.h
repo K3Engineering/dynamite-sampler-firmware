@@ -1,12 +1,21 @@
 #ifndef ADS131M0x_h
 #define ADS131M0x_h
 
+#define USE_LARGE_DMA_BUFF
+
 #include <stddef.h>
 #include <stdint.h>
 
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+
 #include <driver/spi_master.h>
-#include <hal/spi_ll.h>
 #include <soc/gpio_num.h>
+
+#ifdef USE_LARGE_DMA_BUFF
+#include <esp_rom_lldesc.h>
+#include <soc/spi_struct.h>
+#endif
 
 #define DRDY_STATE_LOGIC_HIGH 0 // DEFAULS
 #define DRDY_STATE_HI_Z       1
@@ -173,12 +182,6 @@
 // Mask Register CHX_GCAL_LSB
 #define REGMASK_CHX_GCAL0_LSB 0xFF00
 
-#define USE_LARGE_DMA_BUFF
-
-#if (CONFIG_MOCK_ADC == 1) && defined USE_LARGE_DMA_BUFF
-#error "LARGE_DMA_BUFF is not supported in MOCK_ADC configutation"
-#endif
-
 class ADS131M0x {
   public:
 	static constexpr size_t NUM_CHANNELS_ENABLED = 4;
@@ -186,7 +189,9 @@ class ADS131M0x {
 	static constexpr size_t DATA_FRAME_SIZE =
 	    (1 + NUM_CHANNELS_ENABLED + 1) * DATA_WORD_LENGTH; // status, channels, CRC
 #ifdef USE_LARGE_DMA_BUFF
-	static constexpr size_t MAX_READS = 32; // power of 2
+	static constexpr size_t MAX_READS    = 32;
+	static constexpr size_t RING_BUFF_SZ = 64; // power of 2
+	static_assert(RING_BUFF_SZ > MAX_READS + 2);
 #else
 	static constexpr size_t MAX_READS = 1;
 #endif
@@ -226,8 +231,8 @@ class ADS131M0x {
 	static IRAM_ATTR void isrAdcDrdy(void *param);
 	void attachISR();
 	void setWakeupTask(TaskHandle_t taskToWakeOnDrdy, size_t interval) {
-		dma.taskToWake    = taskToWakeOnDrdy;
-		dma.wake_interval = interval;
+		isr_data.taskToWake    = taskToWakeOnDrdy;
+		isr_data.wake_interval = interval;
 	};
 	void startAdc();
 	void stopAdc();
@@ -264,16 +269,18 @@ class ADS131M0x {
 	RawOutput *adc2spi;
 
 	struct IsrData {
+#ifdef USE_LARGE_DMA_BUFF
 		uint8_t *rx_buffer;
 		lldesc_t *rx_desc_array;
 		int rx_chan;
 		volatile size_t head_index;
 		size_t tail_index;
 		spi_dev_t *spi_hw;
+#endif
 		TaskHandle_t taskToWake;
 		size_t wake_interval;
 	};
-	IsrData dma;
+	IsrData isr_data;
 };
 
 #if (CONFIG_MOCK_ADC == 1)
@@ -318,7 +325,6 @@ class MockAdc {
 	uint16_t readCLOCK() { return 0; }
 	uint16_t readPGA() { return 0; }
 
-	static bool IRAM_ATTR isrAdcDrdy();
 	void attachISR();
 	void startAdc();
 	void stopAdc();
@@ -327,7 +333,7 @@ class MockAdc {
 
 	static bool isCrcOk(const RawOutput *data) { return true; };
 
-	static TaskHandle_t taskToWake;
+	TaskHandle_t taskToWake;
 };
 
 typedef MockAdc AdcClass;

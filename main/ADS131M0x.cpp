@@ -4,9 +4,11 @@
 #include <driver/spi_master.h>
 #include <esp_heap_caps.h>
 #include <esp_log.h>
-#include <freertos/FreeRTOS.h>
+
+#ifdef USE_LARGE_DMA_BUFF
 #include <hal/spi_ll.h>
 #include <soc/gdma_struct.h>
+#endif
 
 #include <endian.h>
 
@@ -15,10 +17,6 @@
 constexpr char TAG[] = "ADS131";
 
 constexpr size_t DMA_FRAME_SIZE = (ADS131M0x::DATA_FRAME_SIZE + 3) & ~3; // multiple of 4
-
-#ifdef USE_LARGE_DMA_BUFF
-static constexpr size_t RING_BUFF_SZ = ADS131M0x::MAX_READS * 2;
-#endif
 
 static inline void delayMSec(uint32_t ms) { vTaskDelay(ms / portTICK_PERIOD_MS); }
 
@@ -103,18 +101,18 @@ void ADS131M0x::init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pi
 	adc2spi = (RawOutput *)heap_caps_malloc(DMA_FRAME_SIZE, MALLOC_CAP_DMA);
 
 #ifdef USE_LARGE_DMA_BUFF
-	dma.rx_buffer = (uint8_t *)heap_caps_malloc(DMA_FRAME_SIZE * RING_BUFF_SZ, MALLOC_CAP_DMA);
-	dma.rx_desc_array =
+	isr_data.rx_buffer = (uint8_t *)heap_caps_malloc(DMA_FRAME_SIZE * RING_BUFF_SZ, MALLOC_CAP_DMA);
+	isr_data.rx_desc_array =
 	    (lldesc_t *)heap_caps_malloc(sizeof(lldesc_t) * RING_BUFF_SZ, MALLOC_CAP_DMA);
 	for (size_t i = 0; i < RING_BUFF_SZ; i++) {
-		dma.rx_desc_array[i] = {
+		isr_data.rx_desc_array[i] = {
 		    .size   = DMA_FRAME_SIZE, // Buffer capacity
 		    .length = 0,              // to be updated by the hw
 		    .offset = 0,
 		    .sosf   = 0, // Start of sub-frame (unused)
 		    .eof    = 1, // End of Frame: DMA stops after this descriptor
 		    .owner  = 1, // 1 = Hardware (DMA) owns this
-		    .buf    = dma.rx_buffer + DMA_FRAME_SIZE * i, // Point to data buff
+		    .buf    = isr_data.rx_buffer + DMA_FRAME_SIZE * i, // Point to data buff
 		    .empty  = 0,
 		};
 	}
@@ -144,10 +142,10 @@ void ADS131M0x::deinit() {
 	heap_caps_free(adc2spi);
 	adc2spi = nullptr;
 #ifdef USE_LARGE_DMA_BUFF
-	heap_caps_free(dma.rx_buffer);
-	dma.rx_buffer = nullptr;
-	heap_caps_free(dma.rx_desc_array);
-	dma.rx_desc_array = nullptr;
+	heap_caps_free(isr_data.rx_buffer);
+	isr_data.rx_buffer = nullptr;
+	heap_caps_free(isr_data.rx_desc_array);
+	isr_data.rx_desc_array = nullptr;
 #endif
 }
 
@@ -198,8 +196,8 @@ void ADS131M0x::setupAccess(spi_host_device_t spiDevice, gpio_num_t clk_pin, gpi
 
 	spiHandle = handle;
 #ifdef USE_LARGE_DMA_BUFF
-	dma.spi_hw = SPI_LL_GET_HW(spiDevice);
-	assert(dma.spi_hw);
+	isr_data.spi_hw = SPI_LL_GET_HW(spiDevice);
+	assert(isr_data.spi_hw);
 #endif
 }
 
@@ -267,10 +265,11 @@ bool ADS131M0x::isCrcOk(const RawOutput *data) {
 #ifdef USE_LARGE_DMA_BUFF
 
 const ADS131M0x::RawOutput *IRAM_ATTR ADS131M0x::rawReadADC() {
-	if (dma.head_index - dma.tail_index <= 1) [[unlikely]] {
+	if (isr_data.head_index - isr_data.tail_index <= 1) [[unlikely]] {
 		ESP_LOGW(TAG, "Reading ahead");
 	}
-	return (const RawOutput *)(dma.rx_buffer + (dma.tail_index++ % RING_BUFF_SZ) * DMA_FRAME_SIZE);
+	return (const RawOutput *)(isr_data.rx_buffer +
+	                           (isr_data.tail_index++ % RING_BUFF_SZ) * DMA_FRAME_SIZE);
 }
 
 // When we flag a piece of code with the IRAM_ATTR attribute, the compiled code
@@ -330,20 +329,21 @@ void ADS131M0x::startAdc() {
 	//    }
 
 	// Hijacking DMA hardware
-	dma.rx_chan = find_dma_rx_chan(dma.spi_hw);
-	assert(dma.rx_chan >= 0);
+	isr_data.rx_chan = find_dma_rx_chan(isr_data.spi_hw);
+	assert(isr_data.rx_chan >= 0);
 	// Clear data buffer for tx (rx uses DMA - no buff)
-	for (int i = 0; i < sizeof(dma.spi_hw->data_buf) / sizeof(*dma.spi_hw->data_buf); i++) {
-		dma.spi_hw->data_buf[i] = 0;
+	for (int i = 0; i < sizeof(isr_data.spi_hw->data_buf) / sizeof(*isr_data.spi_hw->data_buf);
+	     i++) {
+		isr_data.spi_hw->data_buf[i] = 0;
 	}
-	dma.head_index = 0;
-	dma.tail_index = 0;
+	isr_data.head_index = 0;
+	isr_data.tail_index = 0;
 	// Reset DMA FIFOs
-	dma.spi_hw->dma_conf.rx_afifo_rst = 1;
-	dma.spi_hw->dma_conf.rx_afifo_rst = 0;
+	isr_data.spi_hw->dma_conf.rx_afifo_rst = 1;
+	isr_data.spi_hw->dma_conf.rx_afifo_rst = 0;
 
-	dma.spi_hw->dma_conf.dma_rx_ena = 1; // Enable DMA Receive
-	dma.spi_hw->dma_conf.dma_tx_ena = 0; // Disable DMA Transmit
+	isr_data.spi_hw->dma_conf.dma_rx_ena = 1; // Enable DMA Receive
+	isr_data.spi_hw->dma_conf.dma_tx_ena = 0; // Disable DMA Transmit
 
 	gpio_set_intr_type(drdyPin, GPIO_INTR_NEGEDGE);
 }
@@ -391,7 +391,7 @@ void ADS131M0x::attachISR() {
 		return;
 	}
 	gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE);
-	gpio_isr_handler_add(drdyPin, isrAdcDrdy, &dma);
+	gpio_isr_handler_add(drdyPin, isrAdcDrdy, &isr_data);
 }
 
 // Should not be called while ADC is running
@@ -409,17 +409,12 @@ void ADS131M0x::stashConfig() {
 
 #include <driver/gptimer.h>
 
-TaskHandle_t MockAdc::taskToWake = 0;
-
 static bool IRAM_ATTR mockTimerCb(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata,
                                   void *user_ctx) {
-	return MockAdc::isrAdcDrdy();
-}
-
-bool IRAM_ATTR MockAdc::isrAdcDrdy() {
+	MockAdc *adc = (MockAdc *)user_ctx;
 	// unblock the task that will read the ADC & handle putting in the buffer
 	BaseType_t taskWoken = pdFALSE;
-	vTaskNotifyGiveFromISR(taskToWake, &taskWoken);
+	vTaskNotifyGiveFromISR(adc->taskToWake, &taskWoken);
 	return (taskWoken == pdTRUE);
 }
 
@@ -451,7 +446,7 @@ void MockAdc::attachISR() {
 	static constexpr gptimer_event_callbacks_t cbs = {
 	    .on_alarm = mockTimerCb,
 	};
-	gptimer_register_event_callbacks(gptimer, &cbs, nullptr);
+	gptimer_register_event_callbacks(gptimer, &cbs, this);
 	gptimer_enable(gptimer);
 }
 
@@ -461,7 +456,7 @@ void MockAdc::stopAdc() { gptimer_stop(gptimer); }
 
 const MockAdc::RawOutput *IRAM_ATTR MockAdc::rawReadADC() {
 	static RawOutput a{
-	    .status        = 0x1234,
+	    .status        = htobe16(REGMASK_STATUS_DRDYX),
 	    .status_unused = 0,
 	    .data          = {},
 	    .crc           = 0,
