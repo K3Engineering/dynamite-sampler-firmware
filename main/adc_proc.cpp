@@ -17,7 +17,6 @@
 constexpr char TAG[] = "ADC";
 
 static AdcClass adc;
-static TaskHandle_t adcReadTaskHandle = NULL;
 
 static void logADS131M0xConfig(const AdcClass::ConfigData *cfg) {
 	ESP_LOGI(TAG, "<REGISTERS>");
@@ -53,6 +52,7 @@ void startAdc() {
 	xStreamBufferReset(bleAccess.adcStreamBufferHandle);
 	adc.startAdc();
 }
+
 void stopAdc() { adc.stopAdc(); }
 
 static inline void copy_adc_tole24(void *dst, const void *src) {
@@ -148,7 +148,8 @@ void setupAdc(int core) {
 		vTaskDelay(10);
 
 	// TODO figure out the memory stack required
-	const UBaseType_t priority = 24; // Highest priority possible
+	TaskHandle_t adcReadTaskHandle = 0;
+	const UBaseType_t priority     = 24; // Highest priority possible
 	xTaskCreatePinnedToCore(taskAdcReadAndBuffer, "task_ADC_read", 1024 * 4, NULL, priority,
 	                        &adcReadTaskHandle, core);
 	assert(adcReadTaskHandle);
