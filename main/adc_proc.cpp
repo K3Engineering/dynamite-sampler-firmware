@@ -4,8 +4,6 @@
 
 #include <driver/gpio.h>
 #include <esp_log.h>
-#include <esp_timer.h>
-#include <soc/gdma_struct.h>
 
 #include <endian.h>
 #include <string.h>
