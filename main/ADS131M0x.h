@@ -1,11 +1,21 @@
 #ifndef ADS131M0x_h
 #define ADS131M0x_h
 
+#define USE_LARGE_DMA_BUFF
+
 #include <stddef.h>
 #include <stdint.h>
 
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+
 #include <driver/spi_master.h>
 #include <soc/gpio_num.h>
+
+#ifdef USE_LARGE_DMA_BUFF
+#include <esp_rom_lldesc.h>
+#include <soc/spi_struct.h>
+#endif
 
 #define DRDY_STATE_LOGIC_HIGH 0 // DEFAULS
 #define DRDY_STATE_HI_Z       1
@@ -121,6 +131,8 @@
 #define REGMASK_STATUS_DRDY2   0x0004
 #define REGMASK_STATUS_DRDY1   0x0002
 #define REGMASK_STATUS_DRDY0   0x0001
+#define REGMASK_STATUS_DRDYX                                                                       \
+	(REGMASK_STATUS_DRDY0 | REGMASK_STATUS_DRDY1 | REGMASK_STATUS_DRDY2 | REGMASK_STATUS_DRDY3)
 
 // Mask Register MODE
 #define REGMASK_MODE_REG_CRC_EN 0x2000
@@ -174,8 +186,15 @@ class ADS131M0x {
   public:
 	static constexpr size_t NUM_CHANNELS_ENABLED = 4;
 	static constexpr size_t DATA_WORD_LENGTH     = 3; // in bytes
-	static constexpr size_t ADC_READ_DATA_SIZE =
+	static constexpr size_t DATA_FRAME_SIZE =
 	    (1 + NUM_CHANNELS_ENABLED + 1) * DATA_WORD_LENGTH; // status, channels, CRC
+#ifdef USE_LARGE_DMA_BUFF
+	static constexpr size_t MAX_READS    = 32;
+	static constexpr size_t RING_BUFF_SZ = 64; // power of 2
+	static_assert(RING_BUFF_SZ > MAX_READS + 2);
+#else
+	static constexpr size_t MAX_READS = 1;
+#endif
 
 #pragma pack(push, 1)
 	struct RawOutput {
@@ -188,7 +207,7 @@ class ADS131M0x {
 		uint8_t crc_unused;
 	};
 #pragma pack(pop)
-	static_assert(sizeof(RawOutput) == ADC_READ_DATA_SIZE);
+	static_assert(sizeof(RawOutput) == DATA_FRAME_SIZE);
 
 	struct ConfigData {
 		uint16_t id;
@@ -200,8 +219,8 @@ class ADS131M0x {
 
 	void init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pin);
 	void deinit();
-	void setupAccess(spi_host_device_t spiDevice, int spi_clock_speed, gpio_num_t clk_pin,
-	                 gpio_num_t miso_pin, gpio_num_t mosi_pin);
+	void setupAccess(spi_host_device_t spiDevice, gpio_num_t clk_pin, gpio_num_t miso_pin,
+	                 gpio_num_t mosi_pin);
 	void reset();
 	bool setPowerMode(uint8_t powerMode);
 	bool setChannelPGA(uint8_t channel, uint16_t pga);
@@ -209,8 +228,12 @@ class ADS131M0x {
 	bool setInputChannelSelection(uint8_t channel, uint8_t input);
 	bool setOsr(uint16_t osr);
 
-	typedef void (*AdcISR)(void *);
-	void attachISR(AdcISR isr);
+	static IRAM_ATTR void isrAdcDrdy(void *param);
+	void attachISR();
+	void setWakeupTask(TaskHandle_t taskToWakeOnDrdy, size_t interval) {
+		isr_data.taskToWake    = taskToWakeOnDrdy;
+		isr_data.wake_interval = interval;
+	};
 	void startAdc();
 	void stopAdc();
 
@@ -234,7 +257,7 @@ class ADS131M0x {
 	uint16_t readPGA();
 
 	spi_device_handle_t spiHandle;
-	spi_transaction_t transDesc;
+	spi_transaction_t trans_descr;
 
 	gpio_num_t csPin;
 	gpio_num_t drdyPin;
@@ -244,6 +267,20 @@ class ADS131M0x {
 
 	RawOutput *spi2adc;
 	RawOutput *adc2spi;
+
+	struct IsrData {
+#ifdef USE_LARGE_DMA_BUFF
+		uint8_t *rx_buffer;
+		lldesc_t *rx_desc_array;
+		int rx_chan;
+		volatile size_t head_index;
+		size_t tail_index;
+		spi_dev_t *spi_hw;
+#endif
+		TaskHandle_t taskToWake;
+		size_t wake_interval;
+	};
+	IsrData isr_data;
 };
 
 #if (CONFIG_MOCK_ADC == 1)
@@ -256,12 +293,19 @@ class MockAdc {
   public:
 	static constexpr size_t NUM_CHANNELS_ENABLED = ADS131M0x::NUM_CHANNELS_ENABLED;
 	static constexpr size_t DATA_WORD_LENGTH     = ADS131M0x::DATA_WORD_LENGTH; // in bytes
-	static constexpr size_t ADC_READ_DATA_SIZE   = ADS131M0x::ADC_READ_DATA_SIZE;
+	static constexpr size_t DATA_FRAME_SIZE      = ADS131M0x::DATA_FRAME_SIZE;
+	static constexpr size_t MAX_READS            = 1;
+
+	typedef ADS131M0x::RawOutput RawOutput;
+	typedef ADS131M0x::ConfigData ConfigData;
 
 	void init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pin) {}
 	void deinit() {}
-	void setupAccess(spi_host_device_t spiDevice, uint32_t spi_clock_speed, gpio_num_t clk_pin,
-	                 gpio_num_t miso_pin, gpio_num_t mosi_pin) {}
+	void setupAccess(spi_host_device_t spiDevice, gpio_num_t clk_pin, gpio_num_t miso_pin,
+	                 gpio_num_t mosi_pin) {}
+	void setWakeupTask(TaskHandle_t taskToWakeOnDrdy, size_t interval) {
+		taskToWake = taskToWakeOnDrdy;
+	}
 	void reset() {}
 	bool setChannelPGA(uint8_t channel, uint16_t pga) { return true; }
 	bool setPGA(uint8_t pgaChan0, uint8_t pgaChan1, uint8_t pgaChan2, uint8_t pgaChan3) {
@@ -271,9 +315,9 @@ class MockAdc {
 	bool setInputChannelSelection(uint8_t channel, uint8_t input) { return true; }
 	bool setOsr(uint16_t osr) { return true; }
 
-	AdcConfigNetworkData savedConfig;
-	void stashConfig() { savedConfig.version = 0; }
-	const AdcConfigNetworkData *getConfig() const { return &savedConfig; }
+	ConfigData savedConfig;
+	void stashConfig() {}
+	const ConfigData *getConfig() const { return &savedConfig; }
 
 	uint16_t readID() { return 0; }
 	uint16_t readSTATUS() { return 0; }
@@ -281,21 +325,20 @@ class MockAdc {
 	uint16_t readCLOCK() { return 0; }
 	uint16_t readPGA() { return 0; }
 
-	typedef ADS131M0x::AdcISR AdcISR;
-	typedef ADS131M0x::AdcRawOutput AdcRawOutput;
-
-	void attachISR(AdcISR isr);
+	void attachISR();
 	void startAdc();
 	void stopAdc();
 
-	const AdcRawOutput *rawReadADC();
+	const RawOutput *rawReadADC();
 
-	static bool isCrcOk(const AdcRawOutput *data) { return true; };
+	static bool isCrcOk(const RawOutput *data) { return true; };
+
+	TaskHandle_t taskToWake;
 };
 
 typedef MockAdc AdcClass;
-#else
+#else  // ! (CONFIG_MOCK_ADC == 1)
 typedef ADS131M0x AdcClass;
-#endif
+#endif // (CONFIG_MOCK_ADC == 1)
 
-#endif
+#endif // ADS131M0x_h

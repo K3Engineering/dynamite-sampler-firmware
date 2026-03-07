@@ -4,7 +4,6 @@
 
 #include <driver/gpio.h>
 #include <esp_log.h>
-#include <esp_timer.h>
 
 #include <endian.h>
 #include <string.h>
@@ -18,9 +17,8 @@
 constexpr char TAG[] = "ADC";
 
 static AdcClass adc;
-static TaskHandle_t adcReadTaskHandle = NULL;
 
-static void logADS131M0xConfig(const ADS131M0x::ConfigData *cfg) {
+static void logADS131M0xConfig(const AdcClass::ConfigData *cfg) {
 	ESP_LOGI(TAG, "<REGISTERS>");
 	ESP_LOGI(TAG, "ID 0x%X", cfg->id >> 8);
 	ESP_LOGI(TAG, "STATUS 0x%04X", cfg->status);
@@ -39,7 +37,7 @@ static void logADS131M0xConfig(const ADS131M0x::ConfigData *cfg) {
 }
 
 const AdcConfigNetworkData getAdcConfig() {
-	const ADS131M0x::ConfigData *p = adc.getConfig();
+	const AdcClass::ConfigData *p = adc.getConfig();
 	return AdcConfigNetworkData{
 	    .version = 1,
 	    .id      = htole16(p->id),
@@ -50,28 +48,12 @@ const AdcConfigNetworkData getAdcConfig() {
 	};
 }
 
-void startAdc() { adc.startAdc(); }
+void startAdc() {
+	xStreamBufferReset(bleAccess.adcStreamBufferHandle);
+	adc.startAdc();
+}
+
 void stopAdc() { adc.stopAdc(); }
-
-static inline void requestTaskSwitchFromISR(BaseType_t needSwitch, void *ptr) {
-#if (CONFIG_MOCK_ADC == 1)
-	*(bool *)ptr = (needSwitch == pdTRUE);
-#else
-	portYIELD_FROM_ISR(needSwitch);
-#endif
-}
-
-// When we flag a piece of code with the IRAM_ATTR attribute, the compiled code
-// is placed in the ESP32’s Internal RAM (IRAM). Otherwise the code is kept in
-// Flash. And Flash on ESP32 is much slower than internal RAM.
-static void IRAM_ATTR isrAdcDrdy(void *param) {
-	// unblock the task that will read the ADC & handle putting in the buffer
-	if (adcReadTaskHandle != NULL) {
-		BaseType_t taskWoken = pdFALSE;
-		vTaskNotifyGiveFromISR(adcReadTaskHandle, &taskWoken);
-		requestTaskSwitchFromISR(taskWoken, param);
-	}
-}
 
 static inline void copy_adc_tole24(void *dst, const void *src) {
 	static_assert(DYNAMITE_NET_BYTE_ORDER != AdcClass::RawOutput::SAMPLE_BYTE_ORDER);
@@ -83,7 +65,7 @@ static inline void copy_adc_tole24(void *dst, const void *src) {
 	((uint8_t *)dst)[2] = ((const uint8_t *)src)[0];
 }
 
-static AdcFeedNetworkData adcToNetwork(const AdcClass::RawOutput *adc) {
+static AdcFeedNetworkData IRAM_ATTR adcToNetwork(const AdcClass::RawOutput *adc) {
 	AdcFeedNetworkData net;
 	for (size_t i = 0; i < AdcFeedNetworkData::NUM_CHAN; ++i) {
 		copy_adc_tole24(net.chan + i, adc->data + AdcClass::DATA_WORD_LENGTH * i);
@@ -92,22 +74,27 @@ static AdcFeedNetworkData adcToNetwork(const AdcClass::RawOutput *adc) {
 }
 // Read ADC values. If BLE device is connected, place them in the buffer.
 // When accumulated enough, notify the ble task
-static void adcReadAndBuffer() {
-	const AdcClass::RawOutput *adcReading = adc.rawReadADC();
-
+static void IRAM_ATTR adcReadAndBuffer() {
 	if (!bleAccess.clientSubscribed) {
 		return;
 	}
-	AdcFeedNetworkData toSend = adcToNetwork(adcReading);
-	xStreamBufferSend(bleAccess.adcStreamBufferHandle, &toSend, sizeof(toSend), 0);
+	static constexpr size_t n_samples = (AdcClass::MAX_READS > AdcFeedNetworkPacket::NUM_SAMPLES)
+	                                        ? AdcFeedNetworkPacket::NUM_SAMPLES
+	                                        : AdcClass::MAX_READS;
+	AdcFeedNetworkData toSend[n_samples];
+	for (size_t n = 0; n < n_samples; ++n) {
+		toSend[n] = adcToNetwork(adc.rawReadADC());
+	}
+	xStreamBufferSend(bleAccess.adcStreamBufferHandle, toSend, n_samples * sizeof(*toSend), 0);
 	// When the buffer is sufficiently large, time to send data.
-	if (xStreamBufferBytesAvailable(bleAccess.adcStreamBufferHandle) >= ADC_FEED_CHUNK_SZ) {
+	if (xStreamBufferBytesAvailable(bleAccess.adcStreamBufferHandle) >=
+	    sizeof(AdcFeedNetworkPacket::adc)) {
 		xTaskNotifyGive(bleAccess.bleAdcFeedPublisherTaskHandle);
 	}
 }
 
 // Task that handles calling the read adc function and placing the values in the buffer.
-static void taskAdcReadAndBuffer(void *) {
+static void IRAM_ATTR taskAdcReadAndBuffer(void *) {
 	while (true) {
 		// Wait until ISR notifies this task. Normally numNotifications == 1,
 		// numNotifications > 1 in case we cannot keep up with adc and have some data lost.
@@ -132,7 +119,8 @@ static void taskSetupAdc(void *setupDone) {
 	gpio_set_direction(PIN_DEBUG_BOT, GPIO_MODE_OUTPUT);
 
 	adc.init(PIN_CS_ADC, PIN_DRDY, PIN_ADC_RESET);
-	adc.setupAccess(SPI3_HOST, SPI_MASTER_FREQ_20M, PIN_NUM_CLK, PIN_NUM_MISO, PIN_NUM_MOSI);
+	adc.setupAccess(SPI3_HOST, PIN_NUM_CLK, PIN_NUM_MISO, PIN_NUM_MOSI);
+	adc.attachISR();
 
 	adc.reset();
 
@@ -147,8 +135,6 @@ static void taskSetupAdc(void *setupDone) {
 	adc.stashConfig();
 	logADS131M0xConfig(adc.getConfig());
 
-	adc.attachISR(isrAdcDrdy);
-
 	// TODO figure out if you need to setup wake from sleep for gpio
 
 	*(volatile bool *)setupDone = true;
@@ -162,7 +148,10 @@ void setupAdc(int core) {
 		vTaskDelay(10);
 
 	// TODO figure out the memory stack required
-	const UBaseType_t priority = 24; // Highest priority possible
-	xTaskCreatePinnedToCore(taskAdcReadAndBuffer, "task_ADC_read", 1024 * 5, NULL, priority,
+	TaskHandle_t adcReadTaskHandle = 0;
+	const UBaseType_t priority     = 24; // Highest priority possible
+	xTaskCreatePinnedToCore(taskAdcReadAndBuffer, "task_ADC_read", 1024 * 4, NULL, priority,
 	                        &adcReadTaskHandle, core);
+	assert(adcReadTaskHandle);
+	adc.setWakeupTask(adcReadTaskHandle, AdcFeedNetworkPacket::NUM_SAMPLES);
 }
