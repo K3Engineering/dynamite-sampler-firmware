@@ -5,6 +5,7 @@
 
 #include "adc_proc.h"
 #include "ble_proc.h"
+#include "runtime_stats.h"
 
 constexpr char TAG[] = "DYNA";
 
@@ -28,6 +29,7 @@ extern "C" void app_main(void) {
 
 	setupAdc(CORE_APP);
 	setupBle(CORE_BLE);
+	setupStats(CORE_BLE);
 
 	otaConditionalRollback();
 
@@ -40,5 +42,6 @@ extern "C" void app_main(void) {
 		ESP_LOGE(TAG, "pm err %d", err);
 	}
 	// ESP_ERROR_CHECK(esp_pm_configure(&pm_config));
+
 	ESP_LOGI(TAG, "Started!");
 }

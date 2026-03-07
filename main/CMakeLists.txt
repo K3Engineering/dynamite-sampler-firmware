@@ -3,7 +3,8 @@ set(srclist
     "adc_proc.cpp" 
     "ble_ota.cpp" 
     "ble_proc.cpp" 
-    "loadcell_calibration.cpp" 
+    "loadcell_calibration.cpp"
+    "runtime_stats.cpp" 
     "main.cpp" 
 )
 
