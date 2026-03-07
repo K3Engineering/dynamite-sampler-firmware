@@ -32,7 +32,7 @@ static void print_task_runtime_stats_delta() {
 		uint32_t delta_total = current_total_runtime - prev_total_runtime;
 		if (delta_total > 0) {
 			ESP_LOGI(TAG, "--------------------------------------------------");
-			ESP_LOGI(TAG, "Task Name       Abs Time        %% Time    Stack");
+			ESP_LOGI(TAG, "Task Name            Abs Time   %% Time    Stack");
 			for (size_t i = 0; i < current_snapshot_size; i++) {
 				for (size_t j = 0; j < prev_snapshot_size; j++) {
 					if (print_one(&prev_snapshot[j], &current_snapshot[i], delta_total)) {
@@ -47,6 +47,9 @@ static void print_task_runtime_stats_delta() {
 	prev_snapshot      = current_snapshot;
 	prev_snapshot_size = current_snapshot_size;
 	prev_total_runtime = current_total_runtime;
+
+	ESP_LOGI(TAG, "Free Heap: MALLOC_CAP_DMA %u, MALLOC_CAP_DEFAULT %u",
+	         heap_caps_get_free_size(MALLOC_CAP_DMA), heap_caps_get_free_size(MALLOC_CAP_DEFAULT));
 }
 
 static void taskPrintRuntimeStats(void *) {
@@ -61,7 +64,7 @@ void setupStats(int core) {
 	xTaskCreatePinnedToCore(taskPrintRuntimeStats, "task_stats", 1024 * 3, NULL, 0, NULL, core);
 }
 
-#else
+#else // ! CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS
 
 void setupStats(int) {}
 
