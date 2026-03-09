@@ -85,11 +85,13 @@ static void IRAM_ATTR adcReadAndBuffer() {
 	for (size_t n = 0; n < n_samples; ++n) {
 		toSend[n] = adcToNetwork(adc.rawReadADC(idx + n));
 	}
-	xStreamBufferSend(bleAccess.adcStreamBufferHandle, toSend, n_samples * sizeof(*toSend), 0);
 #else
 	AdcFeedNetworkData toSend = adcToNetwork(adc.rawReadADC());
-	xStreamBufferSend(bleAccess.adcStreamBufferHandle, &toSend, sizeof(toSend), 0);
 #endif
+	if (sizeof(toSend) != xStreamBufferSend(bleAccess.adcStreamBufferHandle, &toSend,
+	                                        sizeof(toSend), 0)) [[unlikely]] {
+		ESP_LOGE(TAG, "xStreamBufferSend failed");
+	}
 	// When the buffer is sufficiently large, time to send data.
 	if (xStreamBufferBytesAvailable(bleAccess.adcStreamBufferHandle) >=
 	    sizeof(AdcFeedNetworkPacket::adc)) {
