@@ -290,7 +290,7 @@ void IRAM_ATTR ADS131M0x::isrAdcDrdy(void *param) {
 	if (do_wake) [[unlikely]] {
 		ctrl->tail_index += ctrl->wake_interval;
 		BaseType_t taskWoken = pdFALSE;
-		vTaskNotifyGiveFromISR(ctrl->taskToWake, &taskWoken);
+		vTaskNotifyGiveFromISR(ctrl->task_to_wake, &taskWoken);
 		portYIELD_FROM_ISR(taskWoken);
 	}
 }
@@ -356,8 +356,7 @@ void ADS131M0x::stopAdc() {
 const ADS131M0x::RawOutput *IRAM_ATTR ADS131M0x::rawReadADC() {
 	if (ESP_OK != spi_device_polling_transmit(spiHandle, &trans_descr)) {
 		ESP_LOGW(TAG, "Reading error");
-	} else if ((adc2spi->status & (htobe16(REGMASK_STATUS_DRDYX))) !=
-	           htobe16(REGMASK_STATUS_DRDYX)) {
+	} else if ((be16toh(adc2spi->status) & REGMASK_STATUS_DRDYX) != REGMASK_STATUS_DRDYX) {
 		ESP_LOGW(TAG, "Reading garbage");
 	}
 	return adc2spi;
@@ -367,7 +366,7 @@ void IRAM_ATTR ADS131M0x::isrAdcDrdy(void *param) {
 	ADS131M0x::IsrData *ctrl = (ADS131M0x::IsrData *)param;
 	// unblock the task that will read the ADC & handle putting in the buffer
 	BaseType_t taskWoken = pdFALSE;
-	vTaskNotifyGiveFromISR(ctrl->taskToWake, &taskWoken);
+	vTaskNotifyGiveFromISR(ctrl->task_to_wake, &taskWoken);
 	portYIELD_FROM_ISR(taskWoken);
 }
 
@@ -375,7 +374,7 @@ void ADS131M0x::startAdc() {
 	spi2adc->status = 0;
 	do {
 		spi_device_polling_transmit(spiHandle, &trans_descr); // Empty ADC FIFO
-	} while (spi2adc->status & htobe16(REGMASK_STATUS_DRDYX));
+	} while (be16toh(spi2adc->status) & REGMASK_STATUS_DRDYX);
 	gpio_set_intr_type(drdyPin, GPIO_INTR_NEGEDGE);
 }
 
@@ -412,7 +411,7 @@ static bool IRAM_ATTR mockTimerCb(gptimer_handle_t timer, const gptimer_alarm_ev
 	MockAdc *adc = (MockAdc *)user_ctx;
 	// unblock the task that will read the ADC & handle putting in the buffer
 	BaseType_t taskWoken = pdFALSE;
-	vTaskNotifyGiveFromISR(adc->taskToWake, &taskWoken);
+	vTaskNotifyGiveFromISR(adc->task_to_wake, &taskWoken);
 	return (taskWoken == pdTRUE);
 }
 

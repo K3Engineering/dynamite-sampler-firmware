@@ -1,7 +1,7 @@
 #ifndef ADS131M0x_h
 #define ADS131M0x_h
 
-// #define USE_LARGE_DMA_BUFF
+#define USE_LARGE_DMA_BUFF
 
 #include <stddef.h>
 #include <stdint.h>
@@ -131,8 +131,6 @@
 #define REGMASK_STATUS_DRDY2   0x0004
 #define REGMASK_STATUS_DRDY1   0x0002
 #define REGMASK_STATUS_DRDY0   0x0001
-#define REGMASK_STATUS_DRDYX                                                                       \
-	(REGMASK_STATUS_DRDY0 | REGMASK_STATUS_DRDY1 | REGMASK_STATUS_DRDY2 | REGMASK_STATUS_DRDY3)
 
 // Mask Register MODE
 #define REGMASK_MODE_REG_CRC_EN 0x2000
@@ -182,6 +180,9 @@
 // Mask Register CHX_GCAL_LSB
 #define REGMASK_CHX_GCAL0_LSB 0xFF00
 
+constexpr uint16_t REGMASK_STATUS_DRDYX =
+    REGMASK_STATUS_DRDY0 | REGMASK_STATUS_DRDY1 | REGMASK_STATUS_DRDY2 | REGMASK_STATUS_DRDY3;
+
 class ADS131M0x {
   public:
 	static constexpr size_t NUM_CHANNELS_ENABLED = 4;
@@ -230,8 +231,8 @@ class ADS131M0x {
 
 	static IRAM_ATTR void isrAdcDrdy(void *param);
 	void attachISR();
-	void setWakeupTask(TaskHandle_t taskToWakeOnDrdy, size_t interval) {
-		isr_data.taskToWake    = taskToWakeOnDrdy;
+	void setWakeupTask(TaskHandle_t task_to_wake_on_drdy, size_t interval) {
+		isr_data.task_to_wake  = task_to_wake_on_drdy;
 		isr_data.wake_interval = interval;
 	};
 	void startAdc();
@@ -282,7 +283,7 @@ class ADS131M0x {
 		size_t tail_index;
 		spi_dev_t *spi_hw;
 #endif
-		TaskHandle_t taskToWake;
+		TaskHandle_t task_to_wake;
 		size_t wake_interval;
 	};
 	IsrData isr_data;
@@ -308,8 +309,8 @@ class MockAdc {
 	void deinit() {}
 	void setupAccess(spi_host_device_t spiDevice, gpio_num_t clk_pin, gpio_num_t miso_pin,
 	                 gpio_num_t mosi_pin) {}
-	void setWakeupTask(TaskHandle_t taskToWakeOnDrdy, size_t interval) {
-		taskToWake = taskToWakeOnDrdy;
+	void setWakeupTask(TaskHandle_t task_to_wake_on_drdy, size_t interval) {
+		task_to_wake = task_to_wake_on_drdy;
 	}
 	void reset() {}
 	bool setChannelPGA(uint8_t channel, uint16_t pga) { return true; }
@@ -338,7 +339,7 @@ class MockAdc {
 
 	static bool isCrcOk(const RawOutput *data) { return true; };
 
-	TaskHandle_t taskToWake;
+	TaskHandle_t task_to_wake;
 };
 
 typedef MockAdc AdcClass;
