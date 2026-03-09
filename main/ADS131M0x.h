@@ -1,7 +1,7 @@
 #ifndef ADS131M0x_h
 #define ADS131M0x_h
 
-#define USE_LARGE_DMA_BUFF
+// #define USE_LARGE_DMA_BUFF
 
 #include <stddef.h>
 #include <stdint.h>
@@ -237,7 +237,12 @@ class ADS131M0x {
 	void startAdc();
 	void stopAdc();
 
+#ifdef USE_LARGE_DMA_BUFF
+	size_t getBaseIdx() const { return isr_data.tail_index - isr_data.wake_interval; }
+	const RawOutput *rawReadADC(size_t idx) const;
+#else
 	const RawOutput *rawReadADC();
+#endif
 
 	void stashConfig();
 	const ConfigData *getConfig() const { return &savedConfig; }
@@ -273,7 +278,7 @@ class ADS131M0x {
 		uint8_t *rx_buffer;
 		lldesc_t *rx_desc_array;
 		int rx_chan;
-		volatile size_t head_index;
+		size_t head_index;
 		size_t tail_index;
 		spi_dev_t *spi_hw;
 #endif

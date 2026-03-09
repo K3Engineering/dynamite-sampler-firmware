@@ -78,14 +78,18 @@ static void IRAM_ATTR adcReadAndBuffer() {
 	if (!bleAccess.clientSubscribed) {
 		return;
 	}
-	static constexpr size_t n_samples = (AdcClass::MAX_READS > AdcFeedNetworkPacket::NUM_SAMPLES)
-	                                        ? AdcFeedNetworkPacket::NUM_SAMPLES
-	                                        : AdcClass::MAX_READS;
+#ifdef USE_LARGE_DMA_BUFF
+	static constexpr size_t n_samples = AdcFeedNetworkPacket::NUM_SAMPLES;
 	AdcFeedNetworkData toSend[n_samples];
+	const size_t idx = adc.getBaseIdx();
 	for (size_t n = 0; n < n_samples; ++n) {
-		toSend[n] = adcToNetwork(adc.rawReadADC());
+		toSend[n] = adcToNetwork(adc.rawReadADC(idx + n));
 	}
 	xStreamBufferSend(bleAccess.adcStreamBufferHandle, toSend, n_samples * sizeof(*toSend), 0);
+#else
+	AdcFeedNetworkData toSend = adcToNetwork(adc.rawReadADC());
+	xStreamBufferSend(bleAccess.adcStreamBufferHandle, &toSend, sizeof(toSend), 0);
+#endif
 	// When the buffer is sufficiently large, time to send data.
 	if (xStreamBufferBytesAvailable(bleAccess.adcStreamBufferHandle) >=
 	    sizeof(AdcFeedNetworkPacket::adc)) {

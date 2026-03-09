@@ -264,12 +264,8 @@ bool ADS131M0x::isCrcOk(const RawOutput *data) {
 
 #ifdef USE_LARGE_DMA_BUFF
 
-const ADS131M0x::RawOutput *IRAM_ATTR ADS131M0x::rawReadADC() {
-	if (isr_data.head_index - isr_data.tail_index <= 1) [[unlikely]] {
-		ESP_LOGW(TAG, "Reading ahead");
-	}
-	return (const RawOutput *)(isr_data.rx_buffer +
-	                           (isr_data.tail_index++ % RING_BUFF_SZ) * DMA_FRAME_SIZE);
+const ADS131M0x::RawOutput *IRAM_ATTR ADS131M0x::rawReadADC(size_t idx) const {
+	return (RawOutput *)(isr_data.rx_buffer + (idx % RING_BUFF_SZ) * DMA_FRAME_SIZE);
 }
 
 // When we flag a piece of code with the IRAM_ATTR attribute, the compiled code
@@ -278,19 +274,21 @@ const ADS131M0x::RawOutput *IRAM_ATTR ADS131M0x::rawReadADC() {
 void IRAM_ATTR ADS131M0x::isrAdcDrdy(void *param) {
 	ADS131M0x::IsrData *ctrl = (ADS131M0x::IsrData *)param;
 
-	size_t idx = ctrl->head_index;
+	const size_t idx = ctrl->head_index;
 
 	GDMA.channel[ctrl->rx_chan].in.link.addr  = (uint32_t)&ctrl->rx_desc_array[idx % RING_BUFF_SZ];
 	GDMA.channel[ctrl->rx_chan].in.link.start = 1;
 	ctrl->spi_hw->cmd.update                  = 1;
 
-	ctrl->head_index = idx + 1;
+	ctrl->head_index   = idx + 1;
+	const bool do_wake = (idx - ctrl->tail_index) > ctrl->wake_interval;
 
 	while (ctrl->spi_hw->cmd.update)
 		; // Takes a few nanoseconds
 	ctrl->spi_hw->cmd.usr = 1;
 
-	if ((idx - ctrl->tail_index) > ctrl->wake_interval) [[unlikely]] {
+	if (do_wake) [[unlikely]] {
+		ctrl->tail_index += ctrl->wake_interval;
 		BaseType_t taskWoken = pdFALSE;
 		vTaskNotifyGiveFromISR(ctrl->taskToWake, &taskWoken);
 		portYIELD_FROM_ISR(taskWoken);
