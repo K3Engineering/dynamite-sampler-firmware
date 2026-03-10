@@ -280,7 +280,7 @@ void IRAM_ATTR ADS131M0x::interruptHandlerAdcDrdy(void *param) {
 	GDMA.channel[ctrl->rx_chan].in.link.addr  = (uint32_t)&ctrl->rx_desc_array[idx % RING_BUFF_SZ];
 	GDMA.channel[ctrl->rx_chan].in.link.start = 1;
 	ctrl->spi_hw->cmd.update                  = 1;
-	// optimization: do increment and calculation here, while hw is busy updating
+
 	ctrl->head_index   = idx + 1;
 	const bool do_wake = (idx - ctrl->tail_index) > ctrl->wake_interval;
 
