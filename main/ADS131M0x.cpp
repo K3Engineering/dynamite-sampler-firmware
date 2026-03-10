@@ -272,6 +272,7 @@ const ADS131M0x::RawOutput *IRAM_ATTR ADS131M0x::rawReadADC(size_t idx) const {
 // When we flag a piece of code with the IRAM_ATTR attribute, the compiled code
 // is placed in the ESP32’s Internal RAM (IRAM). Otherwise the code is kept in
 // Flash. And Flash on ESP32 is much slower than internal RAM.
+//    -----==|  INERRUPT HANDLER  |==-----
 void IRAM_ATTR ADS131M0x::isrAdcDrdy(void *param) {
 	ADS131M0x::IsrData *ctrl = (ADS131M0x::IsrData *)param;
 
@@ -363,6 +364,7 @@ const ADS131M0x::RawOutput *IRAM_ATTR ADS131M0x::rawReadADC() {
 	return adc2spi;
 }
 
+//    -----==|  INERRUPT HANDLER  |==-----
 void IRAM_ATTR ADS131M0x::isrAdcDrdy(void *param) {
 	ADS131M0x::IsrData *ctrl = (ADS131M0x::IsrData *)param;
 	// unblock the task that will read the ADC & handle putting in the buffer
@@ -384,7 +386,7 @@ void ADS131M0x::stopAdc() { gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE); }
 #endif // USE_LARGE_DMA_BUFF
 
 void ADS131M0x::attachISR() {
-	esp_err_t err = gpio_install_isr_service(0);
+	esp_err_t err = gpio_install_isr_service(ESP_INTR_FLAG_IRAM);
 	if ((err != ESP_OK) && (err != ESP_ERR_INVALID_STATE)) {
 		return;
 	}
@@ -407,6 +409,7 @@ void ADS131M0x::stashConfig() {
 
 #include <driver/gptimer.h>
 
+//    -----==|  INERRUPT HANDLER  |==-----
 static bool IRAM_ATTR mockTimerCb(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata,
                                   void *user_ctx) {
 	MockAdc *adc         = (MockAdc *)user_ctx;

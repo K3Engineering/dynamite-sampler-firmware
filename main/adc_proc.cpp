@@ -16,7 +16,7 @@
 
 constexpr char TAG[] = "ADC";
 
-static AdcClass adc;
+static DRAM_ATTR AdcClass adc;
 
 static void logADS131M0xConfig(const AdcClass::ConfigData *cfg) {
 	ESP_LOGI(TAG, "<REGISTERS>");
