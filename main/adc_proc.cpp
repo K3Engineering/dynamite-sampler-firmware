@@ -81,7 +81,7 @@ static void IRAM_ATTR adcReadAndBuffer() {
 #ifdef USE_LARGE_DMA_BUFF
 	static constexpr size_t n_samples = AdcFeedNetworkPacket::NUM_SAMPLES;
 	AdcFeedNetworkData toSend[n_samples];
-	const size_t idx = adc.getBaseIdx();
+	const size_t idx = adc.getReadyBatchStartIdx();
 	for (size_t n = 0; n < n_samples; ++n) {
 		toSend[n] = adcToNetwork(adc.rawReadADC(idx + n));
 	}

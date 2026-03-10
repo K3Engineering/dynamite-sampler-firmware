@@ -190,7 +190,8 @@ class ADS131M0x {
 	static constexpr size_t DATA_FRAME_SIZE =
 	    (1 + NUM_CHANNELS_ENABLED + 1) * DATA_WORD_LENGTH; // status, channels, CRC
 #ifdef USE_LARGE_DMA_BUFF
-	static constexpr size_t RING_BUFF_SZ = 64; // power of 2
+	static constexpr size_t RING_BUFF_SZ = 64;
+	static_assert((RING_BUFF_SZ & (RING_BUFF_SZ - 1)) == 0, "RING_BUFF_SZ must be a power of 2");
 #endif
 
 #pragma pack(push, 1)
@@ -238,7 +239,7 @@ class ADS131M0x {
 	void stopAdc();
 
 #ifdef USE_LARGE_DMA_BUFF
-	size_t getBaseIdx() const { return isr_data.tail_index - isr_data.wake_interval; }
+	size_t getReadyBatchStartIdx() const { return isr_data.tail_index - isr_data.wake_interval; }
 	const RawOutput *rawReadADC(size_t idx) const;
 #else
 	const RawOutput *rawReadADC();
@@ -335,7 +336,7 @@ class MockAdc {
 	void startAdc();
 	void stopAdc();
 
-	size_t getBaseIdx() const { return 0; }
+	size_t getReadyBatchStartIdx() const { return 0; }
 	const RawOutput *rawReadADC(size_t idx) const;
 	const RawOutput *rawReadADC() { return rawReadADC(0); };
 

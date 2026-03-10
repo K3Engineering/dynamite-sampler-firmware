@@ -287,7 +287,11 @@ void IRAM_ATTR ADS131M0x::interruptHandlerAdcDrdy(void *param) {
 	while (ctrl->spi_hw->cmd.update)
 		; // Takes a few nanoseconds
 	ctrl->spi_hw->cmd.usr = 1;
-
+	// PIPELINE EXPLANATION:
+	// 'idx' is the transfer we are starting via DMA *right now*.
+	// Therefore, transfers up to (idx - 1) are guaranteed to have completed in previous ISR runs.
+	// If the distance from our last notification exceeds the interval, we wake the task
+	// to process the batch of safe, *previously* completed samples while the current one transfers.
 	if (do_wake) [[unlikely]] {
 		ctrl->tail_index += ctrl->wake_interval;
 		BaseType_t taskWoken = pdFALSE;
