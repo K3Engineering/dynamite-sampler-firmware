@@ -190,11 +190,7 @@ class ADS131M0x {
 	static constexpr size_t DATA_FRAME_SIZE =
 	    (1 + NUM_CHANNELS_ENABLED + 1) * DATA_WORD_LENGTH; // status, channels, CRC
 #ifdef USE_LARGE_DMA_BUFF
-	static constexpr size_t MAX_READS    = 32;
 	static constexpr size_t RING_BUFF_SZ = 64; // power of 2
-	static_assert(RING_BUFF_SZ > MAX_READS + 2);
-#else
-	static constexpr size_t MAX_READS = 1;
 #endif
 
 #pragma pack(push, 1)
@@ -232,8 +228,11 @@ class ADS131M0x {
 	static void isrAdcDrdy(void *param);
 	void attachISR();
 	void setWakeupTask(TaskHandle_t task_to_wake_on_drdy, size_t interval) {
-		isr_data.task_to_wake  = task_to_wake_on_drdy;
+		isr_data.task_to_wake = task_to_wake_on_drdy;
+#ifdef USE_LARGE_DMA_BUFF
+		assert(interval < RING_BUFF_SZ / 2);
 		isr_data.wake_interval = interval;
+#endif
 	};
 	void startAdc();
 	void stopAdc();
@@ -282,9 +281,9 @@ class ADS131M0x {
 		size_t head_index;
 		size_t tail_index;
 		spi_dev_t *spi_hw;
+		size_t wake_interval;
 #endif
 		TaskHandle_t task_to_wake;
-		size_t wake_interval;
 	};
 	IsrData isr_data;
 };
@@ -300,8 +299,6 @@ class MockAdc {
 	static constexpr size_t NUM_CHANNELS_ENABLED = ADS131M0x::NUM_CHANNELS_ENABLED;
 	static constexpr size_t DATA_WORD_LENGTH     = ADS131M0x::DATA_WORD_LENGTH; // in bytes
 	static constexpr size_t DATA_FRAME_SIZE      = ADS131M0x::DATA_FRAME_SIZE;
-	static constexpr size_t MAX_READS            = 1;
-
 	typedef ADS131M0x::RawOutput RawOutput;
 	typedef ADS131M0x::ConfigData ConfigData;
 
@@ -310,8 +307,10 @@ class MockAdc {
 	void setupAccess(spi_host_device_t spiDevice, gpio_num_t clk_pin, gpio_num_t miso_pin,
 	                 gpio_num_t mosi_pin) {}
 	void setWakeupTask(TaskHandle_t task_to_wake_on_drdy, size_t interval) {
-		task_to_wake  = task_to_wake_on_drdy;
+		task_to_wake = task_to_wake_on_drdy;
+#ifdef USE_LARGE_DMA_BUFF
 		wake_interval = interval;
+#endif
 	}
 	void reset() {}
 	bool setChannelPGA(uint8_t channel, uint16_t pga) { return true; }
@@ -343,7 +342,9 @@ class MockAdc {
 	static bool isCrcOk(const RawOutput *data) { return true; };
 
 	TaskHandle_t task_to_wake;
+#ifdef USE_LARGE_DMA_BUFF
 	size_t wake_interval;
+#endif
 };
 
 typedef MockAdc AdcClass;

@@ -16,7 +16,7 @@
 
 constexpr char TAG[] = "ADS131";
 
-constexpr size_t DMA_FRAME_SIZE = (ADS131M0x::DATA_FRAME_SIZE + 3) & ~3; // multiple of 4
+constexpr size_t DMA_PADDED_FRAME_SIZE = (ADS131M0x::DATA_FRAME_SIZE + 3) & ~3; // multiple of 4
 
 static inline void delayMSec(uint32_t ms) { vTaskDelay(ms / portTICK_PERIOD_MS); }
 
@@ -97,22 +97,23 @@ void ADS131M0x::init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pi
 	drdyPin  = drdy_pin;
 	resetPin = reset_pin;
 
-	spi2adc = (RawOutput *)heap_caps_malloc(DMA_FRAME_SIZE, MALLOC_CAP_DMA);
-	adc2spi = (RawOutput *)heap_caps_malloc(DMA_FRAME_SIZE, MALLOC_CAP_DMA);
+	spi2adc = (RawOutput *)heap_caps_malloc(DMA_PADDED_FRAME_SIZE, MALLOC_CAP_DMA);
+	adc2spi = (RawOutput *)heap_caps_malloc(DMA_PADDED_FRAME_SIZE, MALLOC_CAP_DMA);
 
 #ifdef USE_LARGE_DMA_BUFF
-	isr_data.rx_buffer = (uint8_t *)heap_caps_malloc(DMA_FRAME_SIZE * RING_BUFF_SZ, MALLOC_CAP_DMA);
+	isr_data.rx_buffer =
+	    (uint8_t *)heap_caps_malloc(DMA_PADDED_FRAME_SIZE * RING_BUFF_SZ, MALLOC_CAP_DMA);
 	isr_data.rx_desc_array =
 	    (lldesc_t *)heap_caps_malloc(sizeof(lldesc_t) * RING_BUFF_SZ, MALLOC_CAP_DMA);
 	for (size_t i = 0; i < RING_BUFF_SZ; i++) {
 		isr_data.rx_desc_array[i] = {
-		    .size   = DMA_FRAME_SIZE, // Buffer capacity
-		    .length = 0,              // to be updated by the hw
+		    .size   = DMA_PADDED_FRAME_SIZE, // Buffer capacity
+		    .length = 0,                     // to be updated by the hw
 		    .offset = 0,
 		    .sosf   = 0, // Start of sub-frame (unused)
 		    .eof    = 1, // End of Frame: DMA stops after this descriptor
 		    .owner  = 1, // 1 = Hardware (DMA) owns this
-		    .buf    = isr_data.rx_buffer + DMA_FRAME_SIZE * i, // Point to data buff
+		    .buf    = isr_data.rx_buffer + DMA_PADDED_FRAME_SIZE * i, // Point to data buff
 		    .empty  = 0,
 		};
 	}
@@ -265,7 +266,7 @@ bool ADS131M0x::isCrcOk(const RawOutput *data) {
 #ifdef USE_LARGE_DMA_BUFF
 
 const ADS131M0x::RawOutput *IRAM_ATTR ADS131M0x::rawReadADC(size_t idx) const {
-	return (RawOutput *)(isr_data.rx_buffer + (idx % RING_BUFF_SZ) * DMA_FRAME_SIZE);
+	return (RawOutput *)(isr_data.rx_buffer + (idx % RING_BUFF_SZ) * DMA_PADDED_FRAME_SIZE);
 }
 
 // When we flag a piece of code with the IRAM_ATTR attribute, the compiled code
