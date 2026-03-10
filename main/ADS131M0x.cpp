@@ -408,10 +408,13 @@ void ADS131M0x::stashConfig() {
 
 static bool IRAM_ATTR mockTimerCb(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata,
                                   void *user_ctx) {
-	MockAdc *adc = (MockAdc *)user_ctx;
-	// unblock the task that will read the ADC & handle putting in the buffer
+	MockAdc *adc         = (MockAdc *)user_ctx;
 	BaseType_t taskWoken = pdFALSE;
-	vTaskNotifyGiveFromISR(adc->task_to_wake, &taskWoken);
+	static size_t count  = 0;
+	if (0 == ++count % adc->wake_interval) {
+		// unblock the task that will read the ADC & handle putting in the buffer
+		vTaskNotifyGiveFromISR(adc->task_to_wake, &taskWoken);
+	}
 	return (taskWoken == pdTRUE);
 }
 
@@ -451,7 +454,7 @@ void MockAdc::startAdc() { gptimer_start(gptimer); }
 
 void MockAdc::stopAdc() { gptimer_stop(gptimer); }
 
-const MockAdc::RawOutput *IRAM_ATTR MockAdc::rawReadADC() {
+const MockAdc::RawOutput *IRAM_ATTR MockAdc::rawReadADC(size_t) const {
 	static RawOutput a{
 	    .status        = htobe16(REGMASK_STATUS_DRDYX),
 	    .status_unused = 0,
@@ -465,4 +468,5 @@ const MockAdc::RawOutput *IRAM_ATTR MockAdc::rawReadADC() {
 	}
 	return &a;
 }
+
 #endif // CONFIG_MOCK_ADC

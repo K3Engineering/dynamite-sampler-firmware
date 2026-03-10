@@ -229,7 +229,7 @@ class ADS131M0x {
 	bool setInputChannelSelection(uint8_t channel, uint8_t input);
 	bool setOsr(uint16_t osr);
 
-	static IRAM_ATTR void isrAdcDrdy(void *param);
+	static void isrAdcDrdy(void *param);
 	void attachISR();
 	void setWakeupTask(TaskHandle_t task_to_wake_on_drdy, size_t interval) {
 		isr_data.task_to_wake  = task_to_wake_on_drdy;
@@ -310,7 +310,8 @@ class MockAdc {
 	void setupAccess(spi_host_device_t spiDevice, gpio_num_t clk_pin, gpio_num_t miso_pin,
 	                 gpio_num_t mosi_pin) {}
 	void setWakeupTask(TaskHandle_t task_to_wake_on_drdy, size_t interval) {
-		task_to_wake = task_to_wake_on_drdy;
+		task_to_wake  = task_to_wake_on_drdy;
+		wake_interval = interval;
 	}
 	void reset() {}
 	bool setChannelPGA(uint8_t channel, uint16_t pga) { return true; }
@@ -335,11 +336,14 @@ class MockAdc {
 	void startAdc();
 	void stopAdc();
 
-	const RawOutput *rawReadADC();
+	size_t getBaseIdx() const { return 0; }
+	const RawOutput *rawReadADC(size_t idx) const;
+	const RawOutput *rawReadADC() { return rawReadADC(0); };
 
 	static bool isCrcOk(const RawOutput *data) { return true; };
 
 	TaskHandle_t task_to_wake;
+	size_t wake_interval;
 };
 
 typedef MockAdc AdcClass;
