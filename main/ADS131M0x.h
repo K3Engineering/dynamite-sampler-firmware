@@ -225,7 +225,7 @@ class ADS131M0x {
 	bool setInputChannelSelection(uint8_t channel, uint8_t input);
 	bool setOsr(uint16_t osr);
 
-	static void isrAdcDrdy(void *param);
+	static void interruptHandlerAdcDrdy(void *param);
 	void attachISR();
 	void setWakeupTask(TaskHandle_t task_to_wake_on_drdy, size_t interval) {
 		isr_data.task_to_wake = task_to_wake_on_drdy;

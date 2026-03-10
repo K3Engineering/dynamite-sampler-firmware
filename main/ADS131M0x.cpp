@@ -272,8 +272,7 @@ const ADS131M0x::RawOutput *IRAM_ATTR ADS131M0x::rawReadADC(size_t idx) const {
 // When we flag a piece of code with the IRAM_ATTR attribute, the compiled code
 // is placed in the ESP32’s Internal RAM (IRAM). Otherwise the code is kept in
 // Flash. And Flash on ESP32 is much slower than internal RAM.
-//    -----==|  INERRUPT HANDLER  |==-----
-void IRAM_ATTR ADS131M0x::isrAdcDrdy(void *param) {
+void IRAM_ATTR ADS131M0x::interruptHandlerAdcDrdy(void *param) {
 	ADS131M0x::IsrData *ctrl = (ADS131M0x::IsrData *)param;
 
 	const size_t idx = ctrl->head_index;
@@ -364,8 +363,7 @@ const ADS131M0x::RawOutput *IRAM_ATTR ADS131M0x::rawReadADC() {
 	return adc2spi;
 }
 
-//    -----==|  INERRUPT HANDLER  |==-----
-void IRAM_ATTR ADS131M0x::isrAdcDrdy(void *param) {
+void IRAM_ATTR ADS131M0x::interruptHandlerAdcDrdy(void *param) {
 	ADS131M0x::IsrData *ctrl = (ADS131M0x::IsrData *)param;
 	// unblock the task that will read the ADC & handle putting in the buffer
 	BaseType_t taskWoken = pdFALSE;
@@ -391,7 +389,7 @@ void ADS131M0x::attachISR() {
 		return;
 	}
 	gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE);
-	gpio_isr_handler_add(drdyPin, isrAdcDrdy, &isr_data);
+	gpio_isr_handler_add(drdyPin, interruptHandlerAdcDrdy, &isr_data);
 }
 
 // Should not be called while ADC is running
@@ -409,9 +407,9 @@ void ADS131M0x::stashConfig() {
 
 #include <driver/gptimer.h>
 
-//    -----==|  INERRUPT HANDLER  |==-----
-static bool IRAM_ATTR mockTimerCb(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata,
-                                  void *user_ctx) {
+static bool IRAM_ATTR interruptHandlerMockTimerCb(gptimer_handle_t timer,
+                                                  const gptimer_alarm_event_data_t *edata,
+                                                  void *user_ctx) {
 	MockAdc *adc         = (MockAdc *)user_ctx;
 	BaseType_t taskWoken = pdFALSE;
 	static size_t count  = 0;
@@ -448,7 +446,7 @@ void MockAdc::attachISR() {
 	gptimer_set_alarm_action(gptimer, &alarm_config);
 
 	static constexpr gptimer_event_callbacks_t cbs = {
-	    .on_alarm = mockTimerCb,
+	    .on_alarm = interruptHandlerMockTimerCb,
 	};
 	gptimer_register_event_callbacks(gptimer, &cbs, this);
 	gptimer_enable(gptimer);
