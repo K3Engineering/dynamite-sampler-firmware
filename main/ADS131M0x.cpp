@@ -119,7 +119,7 @@ void ADS131M0x::init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pi
 	}
 #endif // USE_LARGE_DMA_BUFF
 	trans_descr = {
-	    .flags            = 0,
+	    .flags            = SPI_TRANS_DMA_BUFFER_ALIGN_MANUAL,
 	    .cmd              = 0,
 	    .addr             = 0,
 	    .length           = DATA_FRAME_SIZE * 8, // in bits.
@@ -163,7 +163,7 @@ void ADS131M0x::setupAccess(spi_host_device_t spiDevice, gpio_num_t clk_pin, gpi
 	    .data6_io_num          = -1,
 	    .data7_io_num          = -1,
 	    .data_io_default_level = 0,
-	    .max_transfer_sz       = 0,
+	    .max_transfer_sz       = DATA_FRAME_SIZE,
 	    .flags                 = SPICOMMON_BUSFLAG_MASTER,
 	    .isr_cpu_id            = ESP_INTR_CPU_AFFINITY_AUTO,
 	    .intr_flags            = 0,
