@@ -348,7 +348,7 @@ void ADS131M0x::startAcquisition() {
 	// Enable DMA RX
 	isr_data.spi_hw->dma_conf.dma_rx_ena = 1;
 	// Disable DMA TX. Switch SPI TX to internal register (spi_hw->data_buf).
-	isr_data.spi_hw->dma_conf.dma_tx_ena = 0; // Disable DMA Transmit
+	isr_data.spi_hw->dma_conf.dma_tx_ena = 0;
 
 	gpio_set_intr_type(drdyPin, GPIO_INTR_NEGEDGE);
 }
