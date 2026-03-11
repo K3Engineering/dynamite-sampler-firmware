@@ -381,7 +381,7 @@ void ADS131M0x::startAcquisition() {
 	spi2adc->status = 0;
 	do {
 		spi_device_polling_transmit(spiHandle, &trans_descr); // Empty ADC FIFO
-	} while (be16toh(spi2adc->status) & REGMASK_STATUS_DRDYX);
+	} while (be16toh(adc2spi->status) & REGMASK_STATUS_DRDYX);
 	gpio_set_intr_type(drdyPin, GPIO_INTR_NEGEDGE);
 }
 
