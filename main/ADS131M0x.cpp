@@ -320,7 +320,7 @@ static int find_dma_rx_chan(spi_dev_t *hw) {
 	return chan;
 }
 
-void ADS131M0x::startAdc() {
+void ADS131M0x::startAcquisition() {
 	spi2adc->status = 0;
 	do {
 		spi_device_polling_transmit(spiHandle, &trans_descr); // Empty ADC FIFO
@@ -335,8 +335,8 @@ void ADS131M0x::startAdc() {
 	isr_data.rx_chan = find_dma_rx_chan(isr_data.spi_hw);
 	assert(isr_data.rx_chan >= 0);
 	// Clear data buffer for tx (rx uses DMA - no buff)
-	for (int i = 0; i < sizeof(isr_data.spi_hw->data_buf) / sizeof(*isr_data.spi_hw->data_buf);
-	     i++) {
+	for (size_t i = 0; i < sizeof(isr_data.spi_hw->data_buf) / sizeof(*isr_data.spi_hw->data_buf);
+	     ++i) {
 		isr_data.spi_hw->data_buf[i] = 0;
 	}
 	isr_data.head_index = 0;
@@ -345,13 +345,15 @@ void ADS131M0x::startAdc() {
 	isr_data.spi_hw->dma_conf.rx_afifo_rst = 1;
 	isr_data.spi_hw->dma_conf.rx_afifo_rst = 0;
 
-	isr_data.spi_hw->dma_conf.dma_rx_ena = 1; // Enable DMA Receive
+	// Enable DMA RX
+	isr_data.spi_hw->dma_conf.dma_rx_ena = 1;
+	// Disable DMA TX. Switch SPI TX to internal register (spi_hw->data_buf).
 	isr_data.spi_hw->dma_conf.dma_tx_ena = 0; // Disable DMA Transmit
 
 	gpio_set_intr_type(drdyPin, GPIO_INTR_NEGEDGE);
 }
 
-void ADS131M0x::stopAdc() {
+void ADS131M0x::stopAcquisition() {
 	gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE);
 	// spi_device_polling_end(spiHandle, portMAX_DELAY);
 }
@@ -375,7 +377,7 @@ void IRAM_ATTR ADS131M0x::interruptHandlerAdcDrdy(void *param) {
 	portYIELD_FROM_ISR(taskWoken);
 }
 
-void ADS131M0x::startAdc() {
+void ADS131M0x::startAcquisition() {
 	spi2adc->status = 0;
 	do {
 		spi_device_polling_transmit(spiHandle, &trans_descr); // Empty ADC FIFO
@@ -383,7 +385,7 @@ void ADS131M0x::startAdc() {
 	gpio_set_intr_type(drdyPin, GPIO_INTR_NEGEDGE);
 }
 
-void ADS131M0x::stopAdc() { gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE); }
+void ADS131M0x::stopAcquisition() { gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE); }
 
 #endif // USE_LARGE_DMA_BUFF
 
@@ -456,9 +458,9 @@ void MockAdc::attachISR() {
 	gptimer_enable(gptimer);
 }
 
-void MockAdc::startAdc() { gptimer_start(gptimer); }
+void MockAdc::startAcquisition() { gptimer_start(gptimer); }
 
-void MockAdc::stopAdc() { gptimer_stop(gptimer); }
+void MockAdc::stopAcquisition() { gptimer_stop(gptimer); }
 
 const MockAdc::RawOutput *IRAM_ATTR MockAdc::rawReadADC(size_t) const {
 	static RawOutput a{

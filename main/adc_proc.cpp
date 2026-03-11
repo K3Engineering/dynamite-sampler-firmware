@@ -48,12 +48,12 @@ const AdcConfigNetworkData getAdcConfig() {
 	};
 }
 
-void startAdc() {
+void startAdcAcquisition() {
 	xStreamBufferReset(bleAccess.adcStreamBufferHandle);
-	adc.startAdc();
+	adc.startAcquisition();
 }
 
-void stopAdc() { adc.stopAdc(); }
+void stopAdcAcquisition() { adc.stopAcquisition(); }
 
 static inline void copy_adc_tole24(void *dst, const void *src) {
 	static_assert(DYNAMITE_NET_BYTE_ORDER != AdcClass::RawOutput::SAMPLE_BYTE_ORDER);

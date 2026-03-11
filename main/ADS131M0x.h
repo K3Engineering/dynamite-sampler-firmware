@@ -235,8 +235,8 @@ class ADS131M0x {
 		isr_data.wake_interval = interval;
 #endif
 	};
-	void startAdc();
-	void stopAdc();
+	void startAcquisition();
+	void stopAcquisition();
 
 #ifdef USE_LARGE_DMA_BUFF
 	size_t getReadyBatchStartIdx() const { return isr_data.tail_index - isr_data.wake_interval; }
@@ -333,8 +333,8 @@ class MockAdc {
 	uint16_t readPGA() { return 0; }
 
 	void attachISR();
-	void startAdc();
-	void stopAdc();
+	void startAcquisition();
+	void stopAcquisition();
 
 	size_t getReadyBatchStartIdx() const { return 0; }
 	const RawOutput *rawReadADC(size_t idx) const;
