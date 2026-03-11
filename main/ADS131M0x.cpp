@@ -4,13 +4,19 @@
 #include <driver/spi_master.h>
 #include <esp_heap_caps.h>
 #include <esp_log.h>
-#include <freertos/FreeRTOS.h>
+
+#ifdef USE_LARGE_DMA_BUFF
+#include <hal/spi_ll.h>
+#include <soc/gdma_struct.h>
+#endif
 
 #include <endian.h>
 
 #include "debug_pin.h"
 
 constexpr char TAG[] = "ADS131";
+
+constexpr size_t DMA_PADDED_FRAME_SIZE = (ADS131M0x::DATA_FRAME_SIZE + 3) & ~3; // multiple of 4
 
 static inline void delayMSec(uint32_t ms) { vTaskDelay(ms / portTICK_PERIOD_MS); }
 
@@ -40,21 +46,20 @@ static constexpr uint16_t crc16ccitt(const void *data, size_t count) {
 bool ADS131M0x::writeRegister(uint8_t address, uint16_t value) {
 	spi2adc->status            = htobe16(CMD_WRITE_REG | (address << 7));
 	*(uint16_t *)spi2adc->data = htobe16(value);
-	spi_device_polling_transmit(spiHandle, &transDesc);
+	spi_device_polling_transmit(spiHandle, &trans_descr);
 
-	spi2adc->status            = 0;
-	*(uint16_t *)spi2adc->data = 0;
-	spi_device_polling_transmit(spiHandle, &transDesc);
+	spi2adc->status = 0;
+	spi_device_polling_transmit(spiHandle, &trans_descr);
 
 	return be16toh(adc2spi->status) == (RSP_WRITE_REG | (address << 7));
 }
 
 uint16_t ADS131M0x::readRegister(uint8_t address) {
 	spi2adc->status = htobe16(CMD_READ_REG | (address << 7));
-	spi_device_polling_transmit(spiHandle, &transDesc);
+	spi_device_polling_transmit(spiHandle, &trans_descr);
 
 	spi2adc->status = 0;
-	spi_device_polling_transmit(spiHandle, &transDesc);
+	spi_device_polling_transmit(spiHandle, &trans_descr);
 
 	return be16toh(adc2spi->status);
 }
@@ -92,22 +97,38 @@ void ADS131M0x::init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pi
 	drdyPin  = drdy_pin;
 	resetPin = reset_pin;
 
-	const size_t sz = (sizeof(RawOutput) + 3) & ~3; // Round up to multiple of 4
-	spi2adc         = (RawOutput *)heap_caps_malloc(sz, MALLOC_CAP_DMA);
-	adc2spi         = (RawOutput *)heap_caps_malloc(sz, MALLOC_CAP_DMA);
+	spi2adc = (RawOutput *)heap_caps_malloc(DMA_PADDED_FRAME_SIZE, MALLOC_CAP_DMA);
+	adc2spi = (RawOutput *)heap_caps_malloc(DMA_PADDED_FRAME_SIZE, MALLOC_CAP_DMA);
 
-	transDesc = {
+#ifdef USE_LARGE_DMA_BUFF
+	isr_data.rx_buffer =
+	    (uint8_t *)heap_caps_malloc(DMA_PADDED_FRAME_SIZE * RING_BUFF_SZ, MALLOC_CAP_DMA);
+	isr_data.rx_desc_array =
+	    (lldesc_t *)heap_caps_malloc(sizeof(lldesc_t) * RING_BUFF_SZ, MALLOC_CAP_DMA);
+	for (size_t i = 0; i < RING_BUFF_SZ; i++) {
+		isr_data.rx_desc_array[i] = {
+		    .size   = DMA_PADDED_FRAME_SIZE, // Buffer capacity
+		    .length = 0,                     // to be updated by the hw
+		    .offset = 0,
+		    .sosf   = 0, // Start of sub-frame (unused)
+		    .eof    = 1, // End of Frame: DMA stops after this descriptor
+		    .owner  = 1, // 1 = Hardware (DMA) owns this
+		    .buf    = isr_data.rx_buffer + DMA_PADDED_FRAME_SIZE * i, // Point to data buff
+		    .empty  = 0,
+		};
+	}
+#endif // USE_LARGE_DMA_BUFF
+	trans_descr = {
 	    .flags            = SPI_TRANS_DMA_BUFFER_ALIGN_MANUAL,
 	    .cmd              = 0,
 	    .addr             = 0,
-	    .length           = sizeof(RawOutput) * 8, // in bits.
-	    .rxlength         = 0, // 0 makes it rxlength set to the value of .length
+	    .length           = DATA_FRAME_SIZE * 8, // in bits.
+	    .rxlength         = DATA_FRAME_SIZE * 8,
 	    .override_freq_hz = 0,
 	    .user             = nullptr,
 	    .tx_buffer        = spi2adc,
 	    .rx_buffer        = adc2spi,
 	};
-
 	gpio_set_level(resetPin, 1);
 	gpio_set_level(csPin, 0);
 
@@ -117,18 +138,20 @@ void ADS131M0x::init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pi
 }
 
 void ADS131M0x::deinit() {
-	if (spi2adc) {
-		heap_caps_free(spi2adc);
-		spi2adc = nullptr;
-	}
-	if (adc2spi) {
-		heap_caps_free(adc2spi);
-		adc2spi = nullptr;
-	}
+	heap_caps_free(spi2adc);
+	spi2adc = nullptr;
+	heap_caps_free(adc2spi);
+	adc2spi = nullptr;
+#ifdef USE_LARGE_DMA_BUFF
+	heap_caps_free(isr_data.rx_buffer);
+	isr_data.rx_buffer = nullptr;
+	heap_caps_free(isr_data.rx_desc_array);
+	isr_data.rx_desc_array = nullptr;
+#endif
 }
 
-void ADS131M0x::setupAccess(spi_host_device_t spiDevice, int spi_clock_speed, gpio_num_t clk_pin,
-                            gpio_num_t miso_pin, gpio_num_t mosi_pin) {
+void ADS131M0x::setupAccess(spi_host_device_t spiDevice, gpio_num_t clk_pin, gpio_num_t miso_pin,
+                            gpio_num_t mosi_pin) {
 	const spi_bus_config_t buscfg = {
 	    .mosi_io_num           = mosi_pin,
 	    .miso_io_num           = miso_pin,
@@ -140,16 +163,13 @@ void ADS131M0x::setupAccess(spi_host_device_t spiDevice, int spi_clock_speed, gp
 	    .data6_io_num          = -1,
 	    .data7_io_num          = -1,
 	    .data_io_default_level = 0,
-	    .max_transfer_sz       = sizeof(RawOutput),
+	    .max_transfer_sz       = DATA_FRAME_SIZE,
 	    .flags                 = SPICOMMON_BUSFLAG_MASTER,
 	    .isr_cpu_id            = ESP_INTR_CPU_AFFINITY_AUTO,
 	    .intr_flags            = 0,
 	};
 	esp_err_t ret = spi_bus_initialize(spiDevice, &buscfg, SPI_DMA_CH_AUTO);
-	if (ESP_OK != ret) {
-		ESP_LOGE(TAG, "spi_bus_initialize %d", ret);
-		return;
-	}
+	assert(ESP_OK == ret);
 
 	const spi_device_interface_config_t devcfg = {
 	    .command_bits     = 0,
@@ -160,7 +180,7 @@ void ADS131M0x::setupAccess(spi_host_device_t spiDevice, int spi_clock_speed, gp
 	    .duty_cycle_pos   = 0,
 	    .cs_ena_pretrans  = 0,
 	    .cs_ena_posttrans = 0,
-	    .clock_speed_hz   = spi_clock_speed,
+	    .clock_speed_hz   = SPI_MASTER_FREQ_13M,
 	    .input_delay_ns   = 0,
 	    .sample_point     = SPI_SAMPLING_POINT_PHASE_0,
 	    .spics_io_num     = -1,
@@ -171,24 +191,22 @@ void ADS131M0x::setupAccess(spi_host_device_t spiDevice, int spi_clock_speed, gp
 	};
 	spi_device_handle_t handle;
 	ret = spi_bus_add_device(spiDevice, &devcfg, &handle);
-	if (ESP_OK != ret) {
-		ESP_LOGE(TAG, "spi_bus_add_device %d", ret);
-		return;
-	}
+	assert(ESP_OK == ret);
 	ret = spi_device_acquire_bus(handle, portMAX_DELAY);
-	if (ESP_OK != ret) {
-		ESP_LOGE(TAG, "spi_device_acquire_bus %d", ret);
-		return;
-	}
+	assert(ESP_OK == ret);
+
 	spiHandle = handle;
+#ifdef USE_LARGE_DMA_BUFF
+	isr_data.spi_hw = SPI_LL_GET_HW(spiDevice);
+	assert(isr_data.spi_hw);
+#endif
 }
 
 bool ADS131M0x::setPowerMode(uint8_t powerMode) {
 	if (powerMode > 3) {
 		return false;
 	}
-	writeRegisterMasked(REG_CLOCK, powerMode, REGMASK_CLOCK_PWR);
-	return true;
+	return writeRegisterMasked(REG_CLOCK, powerMode, REGMASK_CLOCK_PWR);
 }
 
 /**
@@ -198,8 +216,7 @@ bool ADS131M0x::setOsr(uint16_t osr) {
 	if (osr > 7) {
 		return false;
 	}
-	writeRegisterMasked(REG_CLOCK, osr << 2, REGMASK_CLOCK_OSR);
-	return true;
+	return writeRegisterMasked(REG_CLOCK, osr << 2, REGMASK_CLOCK_OSR);
 }
 
 bool ADS131M0x::setChannelPGA(uint8_t channel, uint16_t pga) {
@@ -210,8 +227,8 @@ bool ADS131M0x::setChannelPGA(uint8_t channel, uint16_t pga) {
 	if (channel >= NUM_CHANNELS_ENABLED) {
 		return false;
 	}
-	writeRegisterMasked(REG_GAIN, pga << (channel * 4), REGMASK_GAIN_PGAGAIN0 << (channel * 4));
-	return true;
+	return writeRegisterMasked(REG_GAIN, pga << (channel * 4),
+	                           REGMASK_GAIN_PGAGAIN0 << (channel * 4));
 }
 
 bool ADS131M0x::setPGA(uint8_t pgaChan0, uint8_t pgaChan1, uint8_t pgaChan2, uint8_t pgaChan3) {
@@ -226,21 +243,17 @@ bool ADS131M0x::setInputChannelSelection(uint8_t channel, uint8_t input) {
 	if (channel >= NUM_CHANNELS_ENABLED) {
 		return false;
 	}
-	writeRegisterMasked(REG_CH0_CFG + channel * 5, input, REGMASK_CHX_CFG_MUX);
-	return true;
-}
-
-const ADS131M0x::RawOutput *ADS131M0x::rawReadADC() {
-	if (ESP_OK == spi_device_polling_start(spiHandle, &transDesc, portMAX_DELAY)) {
-		spi_device_polling_end(spiHandle, portMAX_DELAY);
-	}
-	return adc2spi;
+	return writeRegisterMasked(REG_CH0_CFG + channel * 5, input, REGMASK_CHX_CFG_MUX);
 }
 
 uint16_t ADS131M0x::readID() { return readRegister(REG_ID); }
+
 uint16_t ADS131M0x::readSTATUS() { return readRegister(REG_STATUS); }
+
 uint16_t ADS131M0x::readMODE() { return readRegister(REG_MODE); }
+
 uint16_t ADS131M0x::readCLOCK() { return readRegister(REG_CLOCK); }
+
 uint16_t ADS131M0x::readPGA() { return readRegister(REG_GAIN); }
 
 bool ADS131M0x::isCrcOk(const RawOutput *data) {
@@ -250,18 +263,140 @@ bool ADS131M0x::isCrcOk(const RawOutput *data) {
 	return crc == calculatedCrc;
 }
 
-void ADS131M0x::attachISR(AdcISR isr) {
-	esp_err_t err = gpio_install_isr_service(0);
+#ifdef USE_LARGE_DMA_BUFF
+
+const ADS131M0x::RawOutput *IRAM_ATTR ADS131M0x::rawReadADC(size_t idx) const {
+	return (RawOutput *)(isr_data.rx_buffer + (idx % RING_BUFF_SZ) * DMA_PADDED_FRAME_SIZE);
+}
+
+// When we flag a piece of code with the IRAM_ATTR attribute, the compiled code
+// is placed in the ESP32’s Internal RAM (IRAM). Otherwise the code is kept in
+// Flash. And Flash on ESP32 is much slower than internal RAM.
+void IRAM_ATTR ADS131M0x::interruptHandlerAdcDrdy(void *param) {
+	ADS131M0x::IsrData *ctrl = (ADS131M0x::IsrData *)param;
+
+	const size_t idx = ctrl->head_index;
+
+	GDMA.channel[ctrl->rx_chan].in.link.addr  = (uint32_t)&ctrl->rx_desc_array[idx % RING_BUFF_SZ];
+	GDMA.channel[ctrl->rx_chan].in.link.start = 1;
+	ctrl->spi_hw->cmd.update                  = 1;
+
+	ctrl->head_index   = idx + 1;
+	const bool do_wake = (idx - ctrl->tail_index) > ctrl->wake_interval;
+
+	while (ctrl->spi_hw->cmd.update)
+		; // Takes a few nanoseconds
+	ctrl->spi_hw->cmd.usr = 1;
+	// PIPELINE EXPLANATION:
+	// 'idx' is the transfer we are starting via DMA *right now*.
+	// Therefore, transfers up to (idx - 1) are guaranteed to have completed in previous ISR runs.
+	// If the distance from our last notification exceeds the interval, we wake the task
+	// to process the batch of safe, *previously* completed samples while the current one transfers.
+	if (do_wake) [[unlikely]] {
+		ctrl->tail_index += ctrl->wake_interval;
+		BaseType_t taskWoken = pdFALSE;
+		vTaskNotifyGiveFromISR(ctrl->task_to_wake, &taskWoken);
+		portYIELD_FROM_ISR(taskWoken);
+	}
+}
+
+static int find_dma_rx_chan(spi_dev_t *hw) {
+	int gdma_peri_id = -1;
+	if (hw == &GPSPI2) {
+		gdma_peri_id = 0;
+	} else if (hw == &GPSPI3) {
+		gdma_peri_id = 1;
+	} else {
+		return -1;
+	}
+	int chan = -1;
+	// Search the available GDMA channels to find which one standard driver allocated to us
+	for (size_t i = 0; i < sizeof(GDMA.channel) / sizeof(*GDMA.channel); i++) {
+		if (GDMA.channel[i].in.peri_sel.sel == gdma_peri_id) {
+			chan = i;
+			break;
+		}
+	}
+	return chan;
+}
+
+void ADS131M0x::startAcquisition() {
+	spi2adc->status = 0;
+	do {
+		spi_device_polling_transmit(spiHandle, &trans_descr); // Empty ADC FIFO
+	} while (adc2spi->status & htobe16(REGMASK_STATUS_DRDYX));
+
+	// if (ESP_OK == spi_device_polling_start(spiHandle, &trans_descr, portMAX_DELAY)) {
+	// Wait for transfer to finish, call spi_device_polling_end() at stopAdc()
+	//         while (!spi_ll_usr_is_done(dma.spi_hw));
+	//    }
+
+	// Hijacking DMA hardware
+	isr_data.rx_chan = find_dma_rx_chan(isr_data.spi_hw);
+	assert(isr_data.rx_chan >= 0);
+	// Clear data buffer for tx (rx uses DMA - no buff)
+	for (size_t i = 0; i < sizeof(isr_data.spi_hw->data_buf) / sizeof(*isr_data.spi_hw->data_buf);
+	     ++i) {
+		isr_data.spi_hw->data_buf[i] = 0;
+	}
+	isr_data.head_index = 0;
+	isr_data.tail_index = 0;
+	// Reset DMA FIFOs
+	isr_data.spi_hw->dma_conf.rx_afifo_rst = 1;
+	isr_data.spi_hw->dma_conf.rx_afifo_rst = 0;
+
+	// Enable DMA RX
+	isr_data.spi_hw->dma_conf.dma_rx_ena = 1;
+	// Disable DMA TX. Switch SPI TX to internal register (spi_hw->data_buf).
+	isr_data.spi_hw->dma_conf.dma_tx_ena = 0;
+
+	gpio_set_intr_type(drdyPin, GPIO_INTR_NEGEDGE);
+}
+
+void ADS131M0x::stopAcquisition() {
+	gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE);
+	// spi_device_polling_end(spiHandle, portMAX_DELAY);
+}
+
+#else // ! USE_LARGE_DMA_BUFF
+
+const ADS131M0x::RawOutput *IRAM_ATTR ADS131M0x::rawReadADC() {
+	if (ESP_OK != spi_device_polling_transmit(spiHandle, &trans_descr)) {
+		ESP_LOGW(TAG, "Reading error");
+	} else if ((be16toh(adc2spi->status) & REGMASK_STATUS_DRDYX) != REGMASK_STATUS_DRDYX) {
+		ESP_LOGW(TAG, "Reading garbage");
+	}
+	return adc2spi;
+}
+
+void IRAM_ATTR ADS131M0x::interruptHandlerAdcDrdy(void *param) {
+	ADS131M0x::IsrData *ctrl = (ADS131M0x::IsrData *)param;
+	// unblock the task that will read the ADC & handle putting in the buffer
+	BaseType_t taskWoken = pdFALSE;
+	vTaskNotifyGiveFromISR(ctrl->task_to_wake, &taskWoken);
+	portYIELD_FROM_ISR(taskWoken);
+}
+
+void ADS131M0x::startAcquisition() {
+	spi2adc->status = 0;
+	do {
+		spi_device_polling_transmit(spiHandle, &trans_descr); // Empty ADC FIFO
+	} while (be16toh(spi2adc->status) & REGMASK_STATUS_DRDYX);
+	gpio_set_intr_type(drdyPin, GPIO_INTR_NEGEDGE);
+}
+
+void ADS131M0x::stopAcquisition() { gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE); }
+
+#endif // USE_LARGE_DMA_BUFF
+
+void ADS131M0x::attachISR() {
+	esp_err_t err = gpio_install_isr_service(ESP_INTR_FLAG_IRAM);
 	if ((err != ESP_OK) && (err != ESP_ERR_INVALID_STATE)) {
 		return;
 	}
 	gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE);
-	gpio_isr_handler_add(drdyPin, isr, nullptr);
+	gpio_isr_handler_add(drdyPin, interruptHandlerAdcDrdy, &isr_data);
 }
-
-void ADS131M0x::startAdc() { gpio_set_intr_type(drdyPin, GPIO_INTR_NEGEDGE); }
-
-void ADS131M0x::stopAdc() { gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE); }
 
 // Should not be called while ADC is running
 void ADS131M0x::stashConfig() {
@@ -278,14 +413,20 @@ void ADS131M0x::stashConfig() {
 
 #include <driver/gptimer.h>
 
-static bool IRAM_ATTR mockTimerCb(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata,
-                                  void *user_ctx) {
-	bool res = false;
-	((MockAdc::AdcISR)user_ctx)(&res);
-	return res;
+static bool IRAM_ATTR interruptHandlerMockTimerCb(gptimer_handle_t timer,
+                                                  const gptimer_alarm_event_data_t *edata,
+                                                  void *user_ctx) {
+	MockAdc *adc         = (MockAdc *)user_ctx;
+	BaseType_t taskWoken = pdFALSE;
+	static size_t count  = 0;
+	if (0 == ++count % adc->wake_interval) {
+		// unblock the task that will read the ADC & handle putting in the buffer
+		vTaskNotifyGiveFromISR(adc->task_to_wake, &taskWoken);
+	}
+	return (taskWoken == pdTRUE);
 }
 
-void MockAdc::attachISR(AdcISR isr) {
+void MockAdc::attachISR() {
 	static constexpr gptimer_config_t timer_config = {
 	    .clk_src       = GPTIMER_CLK_SRC_DEFAULT,
 	    .direction     = GPTIMER_COUNT_UP,
@@ -311,19 +452,19 @@ void MockAdc::attachISR(AdcISR isr) {
 	gptimer_set_alarm_action(gptimer, &alarm_config);
 
 	static constexpr gptimer_event_callbacks_t cbs = {
-	    .on_alarm = mockTimerCb,
+	    .on_alarm = interruptHandlerMockTimerCb,
 	};
-	gptimer_register_event_callbacks(gptimer, &cbs, (void *)isr);
+	gptimer_register_event_callbacks(gptimer, &cbs, this);
 	gptimer_enable(gptimer);
 }
 
-void MockAdc::startAdc() { gptimer_start(gptimer); }
+void MockAdc::startAcquisition() { gptimer_start(gptimer); }
 
-void MockAdc::stopAdc() { gptimer_stop(gptimer); }
+void MockAdc::stopAcquisition() { gptimer_stop(gptimer); }
 
-const MockAdc::AdcRawOutput *MockAdc::rawReadADC() {
-	static AdcRawOutput a{
-	    .status        = 0x1234,
+const MockAdc::RawOutput *IRAM_ATTR MockAdc::rawReadADC(size_t) const {
+	static RawOutput a{
+	    .status        = htobe16(REGMASK_STATUS_DRDYX),
 	    .status_unused = 0,
 	    .data          = {},
 	    .crc           = 0,
@@ -335,4 +476,5 @@ const MockAdc::AdcRawOutput *MockAdc::rawReadADC() {
 	}
 	return &a;
 }
+
 #endif // CONFIG_MOCK_ADC

@@ -118,9 +118,9 @@ class AdcFeedCallbacks : public NimBLECharacteristicCallbacks {
 		bleAccess.clientSubscribed = subValue & 1;
 		if (bleAccess.clientSubscribed) {
 			adcFeedConnectionHandle = connInfo.getConnHandle();
-			startAdc();
+			startAdcAcquisition();
 		} else {
-			stopAdc();
+			stopAdcAcquisition();
 			adcFeedConnectionHandle = 0;
 		}
 	}
@@ -173,7 +173,7 @@ static void setupAdvertising(const char *name) {
 }
 
 // Read the adc buffer and update the BLE characteristic
-static void blePublishAdcBuffer() {
+static void IRAM_ATTR blePublishAdcBuffer() {
 	AdcFeedNetworkPacket packet;
 	static_assert(sizeof(packet) <= BLE_PUBL_DATA_ATT_PAYLOAD);
 	if (xStreamBufferBytesAvailable(bleAccess.adcStreamBufferHandle) >= sizeof(packet.adc)) {
@@ -189,7 +189,7 @@ static void blePublishAdcBuffer() {
 }
 
 // Task that is notified when the ADC buffer is ready to be sent
-static void taskBlePublishAdcBuffer(void *) {
+static void IRAM_ATTR taskBlePublishAdcBuffer(void *) {
 	while (true) {
 		// This task is unblocked every ADC tick, provided
 		// the buffer has at least ADC_FEED_CHUNK_SZ bytes
