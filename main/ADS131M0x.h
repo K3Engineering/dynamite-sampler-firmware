@@ -271,12 +271,12 @@ class ADS131M0x {
 
 	ConfigData savedConfig;
 
-	RawOutput *spi2adc;
-	RawOutput *adc2spi;
+	RawOutput *tx_small_buff;
+	RawOutput *rx_small_buff;
 
 	struct IsrData {
 #ifdef USE_LARGE_DMA_BUFF
-		uint8_t *rx_buffer;
+		uint8_t *rx_ring_buff;
 		lldesc_t *rx_desc_array;
 		int rx_chan;
 		size_t head_index;
