@@ -16,7 +16,6 @@
 
 constexpr char TAG[] = "BLE";
 
-static NimBLEServer *bleServer          = NULL;
 static NimBLECharacteristic *chrAdcFeed = NULL;
 static uint16_t adcFeedConnectionHandle = 0; // TODO: rename
 
@@ -102,7 +101,7 @@ class TxPowerManagerCallbacks : public NimBLECharacteristicCallbacks {
 };
 
 static void setupPowerManagerInterface(NimBLEServer *server) {
-	NimBLEService *srvc = bleServer->createService(&TX_PWR_SVC_UUID128);
+	NimBLEService *srvc = server->createService(&TX_PWR_SVC_UUID128);
 	{ // Set transmitter power - write
 		NimBLECharacteristic *chr = srvc->createCharacteristic(
 		    &TX_PWR_CHR_UUID128, NIMBLE_PROPERTY::WRITE, sizeof(TxPowerNetworkData));
@@ -133,7 +132,7 @@ class AdcConfigCallbacks : public NimBLECharacteristicCallbacks {
 };
 
 static void setupAdcFeed(NimBLEServer *server) {
-	NimBLEService *srvc = bleServer->createService(&DYNAMITE_SAMPLER_SVC_UUID128);
+	NimBLEService *srvc = server->createService(&DYNAMITE_SAMPLER_SVC_UUID128);
 	{ // ADC feed
 		chrAdcFeed = srvc->createCharacteristic(&ADC_FEED_CHR_UUID128, NIMBLE_PROPERTY::NOTIFY);
 		static AdcFeedCallbacks cb;
@@ -218,7 +217,7 @@ static void taskSetupBle(void *setupDone) {
 	NimBLEDevice::setMTU(BLE_ATT_MTU_MAX);
 
 	// Create the BLE Server
-	bleServer = NimBLEDevice::createServer();
+	NimBLEServer *bleServer = NimBLEDevice::createServer();
 	static MyServerCallbacks cb;
 	bleServer->setCallbacks(&cb, false);
 
