@@ -92,9 +92,12 @@ static void IRAM_ATTR adcReadAndBuffer() {
 	                                        sizeof(toSend), 0)) [[unlikely]] {
 		ESP_LOGE(TAG, "xStreamBufferSend failed");
 	}
+#ifndef USE_LARGE_DMA_BUFF
 	// When the buffer is sufficiently large, time to send data.
 	if (xStreamBufferBytesAvailable(bleAccess.adcStreamBufferHandle) >=
-	    sizeof(AdcFeedNetworkPacket::adc)) {
+	    sizeof(AdcFeedNetworkPacket::adc))
+#endif
+	{
 		xTaskNotifyGive(bleAccess.bleAdcFeedPublisherTaskHandle);
 	}
 }
