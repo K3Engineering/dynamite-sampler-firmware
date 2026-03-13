@@ -175,14 +175,17 @@ static void setupAdvertising(const char *name) {
 static void IRAM_ATTR blePublishAdcBuffer() {
 	AdcFeedNetworkPacket packet;
 	static_assert(sizeof(packet) <= BLE_PUBL_DATA_ATT_PAYLOAD);
-	if (xStreamBufferBytesAvailable(bleAccess.adcStreamBufferHandle) >= sizeof(packet.adc)) {
+	for (size_t avail = xStreamBufferBytesAvailable(bleAccess.adcStreamBufferHandle);
+	     avail >= sizeof(packet.adc); avail -= sizeof(packet.adc)) {
 		size_t bytesRead = xStreamBufferReceive(bleAccess.adcStreamBufferHandle, &packet.adc,
 		                                        sizeof(packet.adc), 0);
-		if (bytesRead == sizeof(packet.adc)) {
+		if (bytesRead == sizeof(packet.adc)) [[likely]] {
 			static uint16_t count             = 0;
 			packet.hdr.sample_sequence_number = htole16(count);
 			chrAdcFeed->notify(packet, adcFeedConnectionHandle);
 			count += sizeof(packet.adc) / sizeof(*packet.adc);
+		} else {
+			assert(0);
 		}
 	}
 }
