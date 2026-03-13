@@ -363,7 +363,8 @@ void ADS131M0x::stopAcquisition() {
 const ADS131M0x::RawOutput *IRAM_ATTR ADS131M0x::rawReadADC() {
 	if (ESP_OK != spi_device_polling_transmit(spiHandle, &trans_descr)) {
 		ESP_LOGW(TAG, "Reading error");
-	} else if ((be16toh(rx_small_buff->status) & REGMASK_STATUS_DRDYX) != REGMASK_STATUS_DRDYX) {
+	} else if ((rx_small_buff->status & htobe16(REGMASK_STATUS_DRDYX)) !=
+	           htobe16(REGMASK_STATUS_DRDYX)) {
 		ESP_LOGW(TAG, "Reading garbage");
 	}
 	return rx_small_buff;
@@ -381,7 +382,7 @@ void ADS131M0x::startAcquisition() {
 	tx_small_buff->status = 0;
 	do {
 		spi_device_polling_transmit(spiHandle, &trans_descr); // Empty ADC FIFO
-	} while (be16toh(rx_small_buff->status) & REGMASK_STATUS_DRDYX);
+	} while (rx_small_buff->status & htobe16(REGMASK_STATUS_DRDYX));
 	gpio_set_intr_type(drdyPin, GPIO_INTR_NEGEDGE);
 }
 
@@ -473,7 +474,7 @@ const MockAdc::RawOutput *IRAM_ATTR MockAdc::rawReadADC(size_t) const {
 	static uint32_t val[NUM_CHANNELS_ENABLED]{0};
 	for (size_t i = 0; i < NUM_CHANNELS_ENABLED; ++i) {
 		val[i] += i;
-		static_assert(AdcClass::DATA_WORD_LENGTH == 3, "Assumes 24-bit ADC samle");
+		static_assert(AdcClass::DATA_WORD_LENGTH == 3, "Assumes 24-bit ADC sample");
 		static_assert(RawOutput::SAMPLE_BYTE_ORDER != __BYTE_ORDER__);
 		a.data[i * DATA_WORD_LENGTH]     = val[i] >> 16;
 		a.data[i * DATA_WORD_LENGTH + 1] = val[i] >> 8;
