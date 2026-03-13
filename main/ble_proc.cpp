@@ -17,12 +17,11 @@
 constexpr char TAG[] = "BLE";
 
 static NimBLECharacteristic *chrAdcFeed = NULL;
-static uint16_t adcFeedConnectionHandle = 0; // TODO: rename
+static uint16_t adcFeedConnectionHandle = BLE_HS_CONN_HANDLE_NONE; // TODO: rename
 
 BleAccess bleAccess{
     .adcStreamBufferHandle         = NULL,
     .bleAdcFeedPublisherTaskHandle = NULL,
-    .clientSubscribed              = false,
 };
 
 class MyServerCallbacks : public NimBLEServerCallbacks {
@@ -114,13 +113,12 @@ static void setupPowerManagerInterface(NimBLEServer *server) {
 class AdcFeedCallbacks : public NimBLECharacteristicCallbacks {
 	void onSubscribe(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo,
 	                 uint16_t subValue) override {
-		bleAccess.clientSubscribed = subValue & 1;
-		if (bleAccess.clientSubscribed) {
+		if (subValue & 1) {
 			adcFeedConnectionHandle = connInfo.getConnHandle();
 			startAdcAcquisition();
 		} else {
 			stopAdcAcquisition();
-			adcFeedConnectionHandle = 0;
+			adcFeedConnectionHandle = BLE_HS_CONN_HANDLE_NONE;
 		}
 	}
 };

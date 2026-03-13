@@ -10,8 +10,6 @@
 struct BleAccess {
 	StreamBufferHandle_t adcStreamBufferHandle;
 	TaskHandle_t bleAdcFeedPublisherTaskHandle;
-
-	volatile bool clientSubscribed;
 };
 
 extern BleAccess bleAccess;
