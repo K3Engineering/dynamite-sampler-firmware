@@ -470,9 +470,13 @@ const MockAdc::RawOutput *IRAM_ATTR MockAdc::rawReadADC(size_t) const {
 	    .crc           = 0,
 	    .crc_unused    = 0,
 	};
-	static uint8_t val = 42;
-	for (int i = 3; i < sizeof(a.data); i += 3) {
-		a.data[i] = ++val;
+	static uint32_t val[NUM_CHANNELS_ENABLED]{0};
+	for (size_t i = 0; i < NUM_CHANNELS_ENABLED; ++i) {
+		val[i] += i;
+		static_assert(RawOutput::SAMPLE_BYTE_ORDER != __BYTE_ORDER__);
+		a.data[i * DATA_WORD_LENGTH]     = val[i] >> 16;
+		a.data[i * DATA_WORD_LENGTH + 1] = val[i] >> 8;
+		a.data[i * DATA_WORD_LENGTH + 2] = val[i];
 	}
 	return &a;
 }
