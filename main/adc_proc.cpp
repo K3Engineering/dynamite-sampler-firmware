@@ -58,7 +58,7 @@ void stopAdcAcquisition() { adc.stopAcquisition(); }
 static inline void copy_adc_tole24(void *dst, const void *src) {
 	static_assert(DYNAMITE_NET_BYTE_ORDER != AdcClass::RawOutput::SAMPLE_BYTE_ORDER);
 	static_assert(AdcFeedNetworkData::AdcSample::BYTES_PER_SAMPLE == AdcClass::DATA_WORD_LENGTH);
-	static_assert(AdcClass::DATA_WORD_LENGTH == 3, "Assumes 24-bit ADC samle");
+	static_assert(AdcClass::DATA_WORD_LENGTH == 3, "Assumes 24-bit ADC sample");
 
 	((uint8_t *)dst)[0] = ((const uint8_t *)src)[2];
 	((uint8_t *)dst)[1] = ((const uint8_t *)src)[1];
@@ -75,9 +75,6 @@ static AdcFeedNetworkData IRAM_ATTR adcToNetwork(const AdcClass::RawOutput *adc)
 // Read ADC values. If BLE device is connected, place them in the buffer.
 // When accumulated enough, notify the ble task
 static void IRAM_ATTR adcReadAndBuffer() {
-	if (!bleAccess.clientSubscribed) {
-		return;
-	}
 #ifdef USE_LARGE_DMA_BUFF
 	static constexpr size_t n_samples = AdcFeedNetworkPacket::NUM_SAMPLES;
 	AdcFeedNetworkData toSend[n_samples];
@@ -92,9 +89,12 @@ static void IRAM_ATTR adcReadAndBuffer() {
 	                                        sizeof(toSend), 0)) [[unlikely]] {
 		ESP_LOGE(TAG, "xStreamBufferSend failed");
 	}
+#ifndef USE_LARGE_DMA_BUFF
 	// When the buffer is sufficiently large, time to send data.
 	if (xStreamBufferBytesAvailable(bleAccess.adcStreamBufferHandle) >=
-	    sizeof(AdcFeedNetworkPacket::adc)) {
+	    sizeof(AdcFeedNetworkPacket::adc))
+#endif
+	{
 		xTaskNotifyGive(bleAccess.bleAdcFeedPublisherTaskHandle);
 	}
 }

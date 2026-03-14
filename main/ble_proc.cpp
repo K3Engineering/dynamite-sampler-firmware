@@ -16,14 +16,12 @@
 
 constexpr char TAG[] = "BLE";
 
-static NimBLEServer *bleServer          = NULL;
 static NimBLECharacteristic *chrAdcFeed = NULL;
-static uint16_t adcFeedConnectionHandle = 0; // TODO: rename
+static uint16_t adcFeedConnectionHandle = BLE_HS_CONN_HANDLE_NONE; // TODO: rename
 
 BleAccess bleAccess{
     .adcStreamBufferHandle         = NULL,
     .bleAdcFeedPublisherTaskHandle = NULL,
-    .clientSubscribed              = false,
 };
 
 class MyServerCallbacks : public NimBLEServerCallbacks {
@@ -102,7 +100,7 @@ class TxPowerManagerCallbacks : public NimBLECharacteristicCallbacks {
 };
 
 static void setupPowerManagerInterface(NimBLEServer *server) {
-	NimBLEService *srvc = bleServer->createService(&TX_PWR_SVC_UUID128);
+	NimBLEService *srvc = server->createService(&TX_PWR_SVC_UUID128);
 	{ // Set transmitter power - write
 		NimBLECharacteristic *chr = srvc->createCharacteristic(
 		    &TX_PWR_CHR_UUID128, NIMBLE_PROPERTY::WRITE, sizeof(TxPowerNetworkData));
@@ -115,13 +113,12 @@ static void setupPowerManagerInterface(NimBLEServer *server) {
 class AdcFeedCallbacks : public NimBLECharacteristicCallbacks {
 	void onSubscribe(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo,
 	                 uint16_t subValue) override {
-		bleAccess.clientSubscribed = subValue & 1;
-		if (bleAccess.clientSubscribed) {
+		if (subValue & 1) {
 			adcFeedConnectionHandle = connInfo.getConnHandle();
 			startAdcAcquisition();
 		} else {
 			stopAdcAcquisition();
-			adcFeedConnectionHandle = 0;
+			adcFeedConnectionHandle = BLE_HS_CONN_HANDLE_NONE;
 		}
 	}
 };
@@ -133,7 +130,7 @@ class AdcConfigCallbacks : public NimBLECharacteristicCallbacks {
 };
 
 static void setupAdcFeed(NimBLEServer *server) {
-	NimBLEService *srvc = bleServer->createService(&DYNAMITE_SAMPLER_SVC_UUID128);
+	NimBLEService *srvc = server->createService(&DYNAMITE_SAMPLER_SVC_UUID128);
 	{ // ADC feed
 		chrAdcFeed = srvc->createCharacteristic(&ADC_FEED_CHR_UUID128, NIMBLE_PROPERTY::NOTIFY);
 		static AdcFeedCallbacks cb;
@@ -176,14 +173,17 @@ static void setupAdvertising(const char *name) {
 static void IRAM_ATTR blePublishAdcBuffer() {
 	AdcFeedNetworkPacket packet;
 	static_assert(sizeof(packet) <= BLE_PUBL_DATA_ATT_PAYLOAD);
-	if (xStreamBufferBytesAvailable(bleAccess.adcStreamBufferHandle) >= sizeof(packet.adc)) {
+	for (size_t avail = xStreamBufferBytesAvailable(bleAccess.adcStreamBufferHandle);
+	     avail >= sizeof(packet.adc); avail -= sizeof(packet.adc)) {
 		size_t bytesRead = xStreamBufferReceive(bleAccess.adcStreamBufferHandle, &packet.adc,
 		                                        sizeof(packet.adc), 0);
-		if (bytesRead == sizeof(packet.adc)) {
+		if (bytesRead == sizeof(packet.adc)) [[likely]] {
 			static uint16_t count             = 0;
 			packet.hdr.sample_sequence_number = htole16(count);
 			chrAdcFeed->notify(packet, adcFeedConnectionHandle);
 			count += sizeof(packet.adc) / sizeof(*packet.adc);
+		} else {
+			assert(0);
 		}
 	}
 }
@@ -218,7 +218,7 @@ static void taskSetupBle(void *setupDone) {
 	NimBLEDevice::setMTU(BLE_ATT_MTU_MAX);
 
 	// Create the BLE Server
-	bleServer = NimBLEDevice::createServer();
+	NimBLEServer *bleServer = NimBLEDevice::createServer();
 	static MyServerCallbacks cb;
 	bleServer->setCallbacks(&cb, false);
 
