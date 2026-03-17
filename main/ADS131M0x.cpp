@@ -6,8 +6,9 @@
 #include <esp_log.h>
 
 #ifdef USE_LARGE_DMA_BUFF
+#include <hal/gdma_ll.h>
 #include <hal/spi_ll.h>
-#include <soc/gdma_struct.h>
+#include <soc/gdma_channel.h>
 #endif
 
 #include <endian.h>
@@ -275,23 +276,21 @@ const ADS131M0x::RawOutput *IRAM_ATTR ADS131M0x::rawReadADC(size_t idx) const {
 void IRAM_ATTR ADS131M0x::interruptHandlerAdcDrdy(void *param) {
 	ADS131M0x::IsrData *ctrl = (ADS131M0x::IsrData *)param;
 
-	const size_t idx = ctrl->head_index;
+	const size_t idx = ctrl->head_index++;
 
-	GDMA.channel[ctrl->rx_chan].in.link.addr  = (uint32_t)&ctrl->rx_desc_array[idx % RING_BUFF_SZ];
-	GDMA.channel[ctrl->rx_chan].in.link.start = 1;
-	ctrl->spi_hw->cmd.update                  = 1;
+	gdma_ll_rx_set_desc_addr(&GDMA, ctrl->rx_chan,
+	                         (uint32_t)&ctrl->rx_desc_array[idx % RING_BUFF_SZ]);
+	gdma_ll_rx_start(&GDMA, ctrl->rx_chan);
 
-	ctrl->head_index   = idx + 1;
-	const bool do_wake = (idx - ctrl->tail_index) > ctrl->wake_interval;
+	spi_ll_apply_config(ctrl->spi_hw);
+	spi_ll_user_start(ctrl->spi_hw);
 
-	while (ctrl->spi_hw->cmd.update)
-		; // Takes a few nanoseconds
-	ctrl->spi_hw->cmd.usr = 1;
 	// PIPELINE EXPLANATION:
 	// 'idx' is the transfer we are starting via DMA *right now*.
 	// Therefore, transfers up to (idx - 1) are guaranteed to have completed in previous ISR runs.
 	// If the distance from our last notification exceeds the interval, we wake the task
 	// to process the batch of safe, *previously* completed samples while the current one transfers.
+	const bool do_wake = (idx - ctrl->tail_index) > ctrl->wake_interval;
 	if (do_wake) [[unlikely]] {
 		ctrl->tail_index += ctrl->wake_interval;
 		BaseType_t taskWoken = pdFALSE;
@@ -301,18 +300,18 @@ void IRAM_ATTR ADS131M0x::interruptHandlerAdcDrdy(void *param) {
 }
 
 static int find_dma_rx_chan(spi_dev_t *hw) {
-	int gdma_peri_id = -1;
+	int gdma_periph_id = -1;
 	if (hw == &GPSPI2) {
-		gdma_peri_id = 0;
+		gdma_periph_id = SOC_GDMA_TRIG_PERIPH_SPI2;
 	} else if (hw == &GPSPI3) {
-		gdma_peri_id = 1;
+		gdma_periph_id = SOC_GDMA_TRIG_PERIPH_SPI3;
 	} else {
 		return -1;
 	}
 	int chan = -1;
 	// Search the available GDMA channels to find which one standard driver allocated to us
 	for (size_t i = 0; i < sizeof(GDMA.channel) / sizeof(*GDMA.channel); i++) {
-		if (GDMA.channel[i].in.peri_sel.sel == gdma_peri_id) {
+		if (GDMA.channel[i].in.peri_sel.sel == gdma_periph_id) {
 			chan = i;
 			break;
 		}
@@ -320,42 +319,44 @@ static int find_dma_rx_chan(spi_dev_t *hw) {
 	return chan;
 }
 
-void ADS131M0x::startAcquisition() {
-	tx_small_buff->status = 0;
-	do {
-		spi_device_polling_transmit(spiHandle, &trans_descr); // Empty ADC FIFO
-	} while (rx_small_buff->status & htobe16(REGMASK_STATUS_DRDYX));
-
-	// if (ESP_OK == spi_device_polling_start(spiHandle, &trans_descr, portMAX_DELAY)) {
-	// Wait for transfer to finish, call spi_device_polling_end() at stopAdc()
-	//         while (!spi_ll_usr_is_done(dma.spi_hw));
-	//    }
-
-	// Hijacking DMA hardware
-	isr_data.rx_chan = find_dma_rx_chan(isr_data.spi_hw);
-	assert(isr_data.rx_chan >= 0);
-	// Clear data buffer for tx (rx uses DMA - no buff)
-	for (size_t i = 0; i < sizeof(isr_data.spi_hw->data_buf) / sizeof(*isr_data.spi_hw->data_buf);
-	     ++i) {
-		isr_data.spi_hw->data_buf[i] = 0;
+static inline void clear_spi_buffer(spi_dev_t *hw) {
+	for (size_t i = 0; i < sizeof(hw->data_buf) / sizeof(*hw->data_buf); ++i) {
+		hw->data_buf[i] = 0;
 	}
+}
+
+void ADS131M0x::startAcquisition() {
 	isr_data.head_index = 0;
 	isr_data.tail_index = 0;
-	// Reset DMA FIFOs
-	isr_data.spi_hw->dma_conf.rx_afifo_rst = 1;
-	isr_data.spi_hw->dma_conf.rx_afifo_rst = 0;
 
-	// Enable DMA RX
-	isr_data.spi_hw->dma_conf.dma_rx_ena = 1;
-	// Disable DMA TX. Switch SPI TX to internal register (spi_hw->data_buf).
-	isr_data.spi_hw->dma_conf.dma_tx_ena = 0;
+	tx_small_buff->status = 0;
+	if (ESP_OK != spi_device_polling_start(spiHandle, &trans_descr, portMAX_DELAY)) {
+		return;
+	}
+	// spi_device_polling_end() at stopAcquisition()
+
+	// ------- Hijacking DMA/SPI hardware -------
+	// Wait for transfer to finish
+	while (!spi_ll_usr_is_done(isr_data.spi_hw))
+		;
+	isr_data.rx_chan = find_dma_rx_chan(isr_data.spi_hw);
+	assert(isr_data.rx_chan >= 0);
+
+	// TX will read form SPI register buffer, fill it with 0 and disable DMA
+	clear_spi_buffer(isr_data.spi_hw);
+	spi_ll_dma_tx_enable(isr_data.spi_hw, false);
+
+	// RX will use DMA, clear FIFO and enable DMA.
+	spi_ll_dma_rx_fifo_reset(isr_data.spi_hw);
+	spi_ll_dma_rx_enable(isr_data.spi_hw, true);
+	// ------- Hijacking done -------
 
 	gpio_set_intr_type(drdyPin, GPIO_INTR_NEGEDGE);
 }
 
 void ADS131M0x::stopAcquisition() {
 	gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE);
-	// spi_device_polling_end(spiHandle, portMAX_DELAY);
+	spi_device_polling_end(spiHandle, portMAX_DELAY);
 }
 
 #else // ! USE_LARGE_DMA_BUFF
