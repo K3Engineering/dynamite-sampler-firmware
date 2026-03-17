@@ -72,8 +72,7 @@ static AdcFeedNetworkData IRAM_ATTR adcToNetwork(const AdcClass::RawOutput *adc)
 	}
 	return net;
 }
-// Read ADC values. If BLE device is connected, place them in the buffer.
-// When accumulated enough, notify the ble task
+// Read ADC values. Place them in StreamBuffer. Notify the BLE task
 static void IRAM_ATTR adcReadAndBuffer() {
 #ifdef USE_LARGE_DMA_BUFF
 	static constexpr size_t n_samples = AdcFeedNetworkPacket::NUM_SAMPLES;
@@ -90,7 +89,6 @@ static void IRAM_ATTR adcReadAndBuffer() {
 		ESP_LOGE(TAG, "xStreamBufferSend failed");
 	}
 #ifndef USE_LARGE_DMA_BUFF
-	// When the buffer is sufficiently large, time to send data.
 	if (xStreamBufferBytesAvailable(bleAccess.adcStreamBufferHandle) >=
 	    sizeof(AdcFeedNetworkPacket::adc))
 #endif

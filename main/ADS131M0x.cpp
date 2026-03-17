@@ -330,27 +330,26 @@ void ADS131M0x::startAcquisition() {
 	isr_data.tail_index = 0;
 
 	tx_small_buff->status = 0;
-	if (ESP_OK == spi_device_polling_start(spiHandle, &trans_descr, portMAX_DELAY)) {
-		// Wait for transfer to finish
-		while (!spi_ll_usr_is_done(isr_data.spi_hw))
-			;
-		// spi_device_polling_end() to be called at stopAdc()
+	if (ESP_OK != spi_device_polling_start(spiHandle, &trans_descr, portMAX_DELAY)) {
+		return;
 	}
+	// spi_device_polling_end() at stopAcquisition()
 
-	// Hijacking DMA hardware -------
+	// ------- Hijacking DMA/SPI hardware -------
+	// Wait for transfer to finish
+	while (!spi_ll_usr_is_done(isr_data.spi_hw))
+		;
 	isr_data.rx_chan = find_dma_rx_chan(isr_data.spi_hw);
 	assert(isr_data.rx_chan >= 0);
 
-	// TX will read form register buffer, fill it with 0 and disable DMA
+	// TX will read form SPI register buffer, fill it with 0 and disable DMA
 	clear_spi_buffer(isr_data.spi_hw);
 	spi_ll_dma_tx_enable(isr_data.spi_hw, false);
 
 	// RX will use DMA, clear FIFO and enable DMA.
 	spi_ll_dma_rx_fifo_reset(isr_data.spi_hw);
 	spi_ll_dma_rx_enable(isr_data.spi_hw, true);
-
-	// We assume dma is in good order, in doubt - call gdma_ll_rx_reset_channel();
-	// Hijacking done -------
+	// ------- Hijacking done -------
 
 	gpio_set_intr_type(drdyPin, GPIO_INTR_NEGEDGE);
 }
