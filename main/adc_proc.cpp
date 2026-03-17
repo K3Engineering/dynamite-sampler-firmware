@@ -25,9 +25,9 @@ static void logADS131M0xConfig(const AdcClass::ConfigData *cfg) {
 	ESP_LOGI(TAG, "MODE 0x%04X", cfg->mode);
 	const uint16_t clock = cfg->clock;
 	ESP_LOGI(TAG, "CLOCK 0x%04X", cfg->clock);
-	ESP_LOGI(TAG, " POWER MODE %u", clock & 0x03);
-	ESP_LOGI(TAG, " OSR %u", 128 << ((clock >> 2) & 0x07));
-	ESP_LOGI(TAG, " Turbo %c", (clock & 0x20) ? 'Y' : 'N');
+	ESP_LOGI(TAG, " POWER MODE %u", clock & REGMASK_CLOCK_PWR);
+	ESP_LOGI(TAG, " OSR %u", 128 << ((clock & REGMASK_CLOCK_OSR) >> 2));
+	ESP_LOGI(TAG, " Turbo %c", (clock & REGMASK_CLOCK_TBM) ? 'Y' : 'N');
 	ESP_LOGI(TAG, " Ch enabled 0x%X", (clock >> 8) & 0xF);
 	uint16_t pga = cfg->pga;
 	for (size_t i = 0; i < sizeof(pga) * 2; ++i) {
