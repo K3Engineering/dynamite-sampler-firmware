@@ -319,7 +319,7 @@ static int find_dma_rx_chan(spi_dev_t *hw) {
 	return chan;
 }
 
-static void inline clear_spi_buffer(spi_dev_t *hw) {
+static inline void clear_spi_buffer(spi_dev_t *hw) {
 	for (size_t i = 0; i < sizeof(hw->data_buf) / sizeof(*hw->data_buf); ++i) {
 		hw->data_buf[i] = 0;
 	}
