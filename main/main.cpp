@@ -16,7 +16,7 @@ constexpr uint32_t CORE_BLE = CONFIG_BT_NIMBLE_PINNED_TO_CORE;
 constexpr uint32_t CORE_APP = 1;
 static_assert(CORE_BLE != CORE_APP);
 
-extern "C" void app_main(void) {
+static void printHeader() {
 	ESP_LOGI(TAG, "Running on Core: %u", esp_cpu_get_core_id());
 
 	// ESP_LOGI(TAG, "Config PM SLP IRAM OPT (put lightsleep into ram): %u",
@@ -26,13 +26,9 @@ extern "C" void app_main(void) {
 	esp_efuse_mac_get_default(mac);
 	ESP_LOGI(TAG, "MAC address: %02x%02x%02x%02x%02x%02x", mac[5], mac[4], mac[3], mac[2], mac[1],
 	         mac[0]);
+}
 
-	setupAdc(CORE_APP);
-	setupBle(CORE_BLE);
-	setupStats(CORE_BLE);
-
-	otaConditionalRollback();
-
+static void setPower() {
 	constexpr esp_pm_config_t pmConfig = {
 	    .max_freq_mhz       = 80,
 	    .min_freq_mhz       = 10,
@@ -42,6 +38,18 @@ extern "C" void app_main(void) {
 		ESP_LOGE(TAG, "pm err %d", err);
 	}
 	// ESP_ERROR_CHECK(esp_pm_configure(&pm_config));
+}
+
+extern "C" void app_main(void) {
+	printHeader();
+
+	setupAdc(CORE_APP);
+	setupBle(CORE_BLE);
+	setupStats(CORE_BLE);
+
+	setPower();
+
+	otaConditionalRollback();
 
 	ESP_LOGI(TAG, "Started!");
 }

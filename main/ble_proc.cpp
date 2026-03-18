@@ -112,6 +112,7 @@ class AdcFeedCallbacks : public NimBLECharacteristicCallbacks {
 	                 uint16_t subValue) override {
 		if (subValue & 1) {
 			adcFeedConnectionHandle = connInfo.getConnHandle();
+			xStreamBufferReset(adcStreamBufferHandle);
 			startAdcAcquisition();
 		} else {
 			stopAdcAcquisition();

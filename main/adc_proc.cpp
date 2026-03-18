@@ -48,10 +48,7 @@ const AdcConfigNetworkData getAdcConfig() {
 	};
 }
 
-void startAdcAcquisition() {
-	xStreamBufferReset(adcStreamBufferHandle);
-	adc.startAcquisition();
-}
+void startAdcAcquisition() { adc.startAcquisition(); }
 
 void stopAdcAcquisition() { adc.stopAcquisition(); }
 
