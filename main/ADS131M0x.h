@@ -230,11 +230,8 @@ class ADS131M0x {
 	static void interruptHandlerAdcDrdy(void *param);
 	void attachISR();
 	void setWakeupTask(TaskHandle_t task_to_wake_on_drdy, size_t interval) {
-		isr_data.task_to_wake = task_to_wake_on_drdy;
-#ifdef USE_LARGE_DMA_BUFF
-		assert(interval < RING_BUFF_SZ / 2);
+		isr_data.task_to_wake  = task_to_wake_on_drdy;
 		isr_data.wake_interval = interval;
-#endif
 	};
 	void startAcquisition();
 	void stopAcquisition();
@@ -243,6 +240,13 @@ class ADS131M0x {
 	size_t getReadyBatchStartIdx() const { return isr_data.tail_index - isr_data.wake_interval; }
 	const RawOutput *rawReadADC(size_t idx) const;
 #else
+	size_t getReadyBatchStartIdx() {
+		size_t res = isr_data.tail_index;
+		if (++isr_data.tail_index >= isr_data.wake_interval) {
+			isr_data.tail_index = 0;
+		}
+		return res;
+	}
 	const RawOutput *rawReadADC();
 #endif
 
@@ -281,10 +285,10 @@ class ADS131M0x {
 		lldesc_t *rx_desc_array;
 		int rx_chan;
 		size_t head_index;
-		size_t tail_index;
 		spi_dev_t *spi_hw;
-		size_t wake_interval;
 #endif
+		size_t tail_index;
+		size_t wake_interval;
 		TaskHandle_t task_to_wake;
 	};
 	IsrData isr_data;
