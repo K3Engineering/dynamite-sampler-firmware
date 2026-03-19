@@ -19,10 +19,7 @@ constexpr char TAG[] = "BLE";
 static NimBLECharacteristic *chrAdcFeed = NULL;
 static uint16_t adcFeedConnectionHandle = BLE_HS_CONN_HANDLE_NONE; // TODO: rename
 
-BleAccess bleAccess{
-    .adcStreamBufferHandle         = NULL,
-    .bleAdcFeedPublisherTaskHandle = NULL,
-};
+StreamBufferHandle_t adcStreamBufferHandle = NULL;
 
 class MyServerCallbacks : public NimBLEServerCallbacks {
 	void onConnect(NimBLEServer *server, NimBLEConnInfo &connInfo) override {
@@ -169,35 +166,21 @@ static void setupAdvertising(const char *name) {
 	NimBLEDevice::startAdvertising();
 }
 
-// Read the adc buffer and update the BLE characteristic
-static void IRAM_ATTR blePublishAdcBuffer() {
-	AdcFeedNetworkPacket packet;
-	static_assert(sizeof(packet) <= BLE_PUBL_DATA_ATT_PAYLOAD);
-	for (size_t avail = xStreamBufferBytesAvailable(bleAccess.adcStreamBufferHandle);
-	     avail >= sizeof(packet.adc); avail -= sizeof(packet.adc)) {
-		size_t bytesRead = xStreamBufferReceive(bleAccess.adcStreamBufferHandle, &packet.adc,
-		                                        sizeof(packet.adc), 0);
+// Task that is notified when the ADC buffer is ready to be sent
+static void IRAM_ATTR taskBlePublishAdcBuffer(void *) {
+	uint16_t count = 0;
+	while (true) {
+		AdcFeedNetworkPacket packet;
+		static_assert(sizeof(packet) <= BLE_PUBL_DATA_ATT_PAYLOAD);
+		// Read the ADC buffer and update the BLE characteristic
+		size_t bytesRead = xStreamBufferReceive(adcStreamBufferHandle, &packet.adc,
+		                                        sizeof(packet.adc), portMAX_DELAY);
 		if (bytesRead == sizeof(packet.adc)) [[likely]] {
-			static uint16_t count             = 0;
 			packet.hdr.sample_sequence_number = htole16(count);
 			chrAdcFeed->notify(packet, adcFeedConnectionHandle);
 			count += sizeof(packet.adc) / sizeof(*packet.adc);
 		} else {
 			assert(0);
-		}
-	}
-}
-
-// Task that is notified when the ADC buffer is ready to be sent
-static void IRAM_ATTR taskBlePublishAdcBuffer(void *) {
-	while (true) {
-		// This task is unblocked every ADC tick, provided
-		// the buffer has at least ADC_FEED_CHUNK_SZ bytes
-		// so this end receives notifications more frequently when
-		// there is extra data in the queue
-		uint32_t numNotifications = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-		if (numNotifications > 0) [[likely]] {
-			blePublishAdcBuffer();
 		}
 	}
 	vTaskDelete(NULL);
@@ -236,8 +219,8 @@ static void taskSetupBle(void *setupDone) {
 
 void setupBle(int core) {
 	// This buffer is to share the ADC values from the adc read task and BLE notify task
-	bleAccess.adcStreamBufferHandle = xStreamBufferCreate(ADC_FEED_CHUNK_SZ * 8, 1);
-	assert(bleAccess.adcStreamBufferHandle != NULL);
+	adcStreamBufferHandle = xStreamBufferCreate(ADC_FEED_CHUNK_SZ * 8, ADC_FEED_CHUNK_SZ);
+	assert(adcStreamBufferHandle != NULL);
 
 	volatile bool done = false;
 	xTaskCreatePinnedToCore(taskSetupBle, "task_BLE_setup", 1024 * 5, (void *)&done, 1, NULL, core);
@@ -245,8 +228,8 @@ void setupBle(int core) {
 		vTaskDelay(10);
 
 	// TODO figure out priority for the BLE task
-	xTaskCreatePinnedToCore(taskBlePublishAdcBuffer, "task_BLE_publish", 1024 * 5, NULL, 3,
-	                        &bleAccess.bleAdcFeedPublisherTaskHandle, core);
+	xTaskCreatePinnedToCore(taskBlePublishAdcBuffer, "task_BLE_publish", 1024 * 5, NULL, 3, NULL,
+	                        core);
 
 	ESP_LOGI(TAG, "Waiting a client connection to notify...");
 }

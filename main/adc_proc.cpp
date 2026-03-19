@@ -48,10 +48,7 @@ const AdcConfigNetworkData getAdcConfig() {
 	};
 }
 
-void startAdcAcquisition() {
-	xStreamBufferReset(bleAccess.adcStreamBufferHandle);
-	adc.startAcquisition();
-}
+void startAdcAcquisition() { adc.startAcquisition(); }
 
 void stopAdcAcquisition() { adc.stopAcquisition(); }
 
@@ -72,39 +69,34 @@ static AdcFeedNetworkData IRAM_ATTR adcToNetwork(const AdcClass::RawOutput *adc)
 	}
 	return net;
 }
-// Read ADC values. Place them in StreamBuffer. Notify the BLE task
-static void IRAM_ATTR adcReadAndBuffer() {
-#ifdef USE_LARGE_DMA_BUFF
-	static constexpr size_t n_samples = AdcFeedNetworkPacket::NUM_SAMPLES;
-	AdcFeedNetworkData toSend[n_samples];
-	const size_t idx = adc.getReadyBatchStartIdx();
-	for (size_t n = 0; n < n_samples; ++n) {
-		toSend[n] = adcToNetwork(adc.rawReadADC(idx + n));
-	}
-#else
-	AdcFeedNetworkData toSend = adcToNetwork(adc.rawReadADC());
-#endif
-	if (sizeof(toSend) != xStreamBufferSend(bleAccess.adcStreamBufferHandle, &toSend,
-	                                        sizeof(toSend), 0)) [[unlikely]] {
-		ESP_LOGE(TAG, "xStreamBufferSend failed");
-	}
-#ifndef USE_LARGE_DMA_BUFF
-	if (xStreamBufferBytesAvailable(bleAccess.adcStreamBufferHandle) >=
-	    sizeof(AdcFeedNetworkPacket::adc))
-#endif
-	{
-		xTaskNotifyGive(bleAccess.bleAdcFeedPublisherTaskHandle);
-	}
-}
 
 // Task that handles calling the read adc function and placing the values in the buffer.
 static void IRAM_ATTR taskAdcReadAndBuffer(void *) {
+	static constexpr size_t n_samples = AdcFeedNetworkPacket::NUM_SAMPLES;
+	AdcFeedNetworkData toSend[n_samples];
+
 	while (true) {
 		// Wait until ISR notifies this task. Normally numNotifications == 1,
 		// numNotifications > 1 in case we cannot keep up with adc and have some data lost.
 		uint32_t numNotifications = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-		if (numNotifications > 0) [[likely]] {
-			adcReadAndBuffer();
+		if (0 == numNotifications) [[unlikely]] {
+			continue;
+		}
+		// Read ADC values. Place them in StreamBuffer. Notify the BLE task
+		const size_t idx = adc.getReadyBatchStartIdx();
+#ifdef USE_LARGE_DMA_BUFF
+		for (size_t n = 0; n < n_samples; ++n) {
+			toSend[n] = adcToNetwork(adc.rawReadADC(idx + n));
+		}
+#else
+		toSend[idx] = adcToNetwork(adc.rawReadADC());
+		if (idx < n_samples - 1) {
+			continue;
+		}
+#endif
+		if (sizeof(toSend) != xStreamBufferSend(adcStreamBufferHandle, &toSend, sizeof(toSend), 0))
+		    [[unlikely]] {
+			ESP_LOGE(TAG, "xStreamBufferSend failed");
 		}
 	}
 	vTaskDelete(NULL);
