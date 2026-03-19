@@ -460,7 +460,10 @@ void MockAdc::attachISR() {
 	gptimer_enable(gptimer);
 }
 
-void MockAdc::startAcquisition() { gptimer_start(gptimer); }
+void MockAdc::startAcquisition() {
+	tail_index = 0;
+	gptimer_start(gptimer);
+}
 
 void MockAdc::stopAcquisition() { gptimer_stop(gptimer); }
 

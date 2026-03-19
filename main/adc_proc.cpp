@@ -82,8 +82,7 @@ static void IRAM_ATTR taskAdcReadAndBuffer(void *) {
 		if (0 == numNotifications) [[unlikely]] {
 			continue;
 		}
-		// Read ADC values.Place them in StreamBuffer.Notify the BLE task
-
+		// Read ADC values. Place them in StreamBuffer. Notify the BLE task
 		const size_t idx = adc.getReadyBatchStartIdx();
 #ifdef USE_LARGE_DMA_BUFF
 		for (size_t n = 0; n < n_samples; ++n) {

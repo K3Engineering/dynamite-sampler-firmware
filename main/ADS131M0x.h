@@ -230,7 +230,10 @@ class ADS131M0x {
 	static void interruptHandlerAdcDrdy(void *param);
 	void attachISR();
 	void setWakeupTask(TaskHandle_t task_to_wake_on_drdy, size_t interval) {
-		isr_data.task_to_wake  = task_to_wake_on_drdy;
+		isr_data.task_to_wake = task_to_wake_on_drdy;
+#ifdef USE_LARGE_DMA_BUFF
+		assert(interval < RING_BUFF_SZ / 2);
+#endif
 		isr_data.wake_interval = interval;
 	};
 	void startAcquisition();
@@ -313,10 +316,8 @@ class MockAdc {
 	void setupAccess(spi_host_device_t spiDevice, gpio_num_t clk_pin, gpio_num_t miso_pin,
 	                 gpio_num_t mosi_pin) {}
 	void setWakeupTask(TaskHandle_t task_to_wake_on_drdy, size_t interval) {
-		task_to_wake = task_to_wake_on_drdy;
-#ifdef USE_LARGE_DMA_BUFF
+		task_to_wake  = task_to_wake_on_drdy;
 		wake_interval = interval;
-#endif
 	}
 	void reset() {}
 	bool setChannelPGA(uint8_t channel, uint16_t pga) { return true; }
@@ -341,16 +342,22 @@ class MockAdc {
 	void startAcquisition();
 	void stopAcquisition();
 
-	size_t getReadyBatchStartIdx() const { return 0; }
+	size_t getReadyBatchStartIdx() {
+		size_t res = tail_index;
+		if (++tail_index >= wake_interval) {
+			tail_index = 0;
+		}
+		return res;
+	}
+
 	const RawOutput *rawReadADC(size_t idx) const;
 	const RawOutput *rawReadADC() { return rawReadADC(0); };
 
 	static bool isCrcOk(const RawOutput *data) { return true; };
 
-	TaskHandle_t task_to_wake;
-#ifdef USE_LARGE_DMA_BUFF
+	size_t tail_index;
 	size_t wake_interval;
-#endif
+	TaskHandle_t task_to_wake;
 };
 
 typedef MockAdc AdcClass;
