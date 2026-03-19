@@ -380,6 +380,7 @@ void IRAM_ATTR ADS131M0x::interruptHandlerAdcDrdy(void *param) {
 }
 
 void ADS131M0x::startAcquisition() {
+	isr_data.tail_index   = 0;
 	tx_small_buff->status = 0;
 	do {
 		spi_device_polling_transmit(spiHandle, &trans_descr); // Empty ADC FIFO
