@@ -17,12 +17,12 @@
 #include <soc/spi_struct.h>
 #endif
 
-#define DRDY_STATE_LOGIC_HIGH 0 // DEFAULS
+#define DRDY_STATE_LOGIC_HIGH 0 // Default
 #define DRDY_STATE_HI_Z       1
 
 #define POWER_MODE_VERY_LOW_POWER  0
 #define POWER_MODE_LOW_POWER       1
-#define POWER_MODE_HIGH_RESOLUTION 2 // DEFAULT
+#define POWER_MODE_HIGH_RESOLUTION 2 // Default
 
 #define CHANNEL_PGA_1   0
 #define CHANNEL_PGA_2   1
@@ -200,10 +200,10 @@ class ADS131M0x {
 		static constexpr size_t SAMPLE_BYTE_ORDER = __ORDER_BIG_ENDIAN__;
 
 		uint16_t status;
-		uint8_t status_unused;
+		uint8_t unusedStatus;
 		uint8_t data[DATA_WORD_LENGTH * NUM_CHANNELS_ENABLED];
 		uint16_t crc;
-		uint8_t crc_unused;
+		uint8_t unusedCrc;
 	};
 #pragma pack(pop)
 	static_assert(sizeof(RawOutput) == DATA_FRAME_SIZE);
@@ -216,10 +216,10 @@ class ADS131M0x {
 		uint16_t pga;
 	};
 
-	void init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pin);
+	void init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset);
 	void deinit();
-	void setupAccess(spi_host_device_t spiDevice, gpio_num_t clk_pin, gpio_num_t miso_pin,
-	                 gpio_num_t mosi_pin);
+	void setupAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
+	                 gpio_num_t mosiPin);
 	void reset();
 	bool setPowerMode(uint8_t powerMode);
 	bool setChannelPGA(uint8_t channel, uint16_t pga);
@@ -229,24 +229,24 @@ class ADS131M0x {
 
 	static void interruptHandlerAdcDrdy(void *param);
 	void attachISR();
-	void setWakeupTask(TaskHandle_t task_to_wake_on_drdy, size_t interval) {
-		isr_data.task_to_wake = task_to_wake_on_drdy;
+	void setWakeupTask(TaskHandle_t taskToWakeOnDrdy, size_t interval) {
+		isrData.taskToWake = taskToWakeOnDrdy;
 #ifdef USE_LARGE_DMA_BUFF
 		assert(interval < RING_BUFF_SZ / 2);
 #endif
-		isr_data.wake_interval = interval;
+		isrData.wakeInterval = interval;
 	};
 	void startAcquisition();
 	void stopAcquisition();
 
 #ifdef USE_LARGE_DMA_BUFF
-	size_t getReadyBatchStartIdx() const { return isr_data.tail_index - isr_data.wake_interval; }
+	size_t getReadyBatchStartIdx() const { return isrData.tailIndex - isrData.wakeInterval; }
 	const RawOutput *rawReadADC(size_t idx) const;
 #else
 	size_t getReadyBatchStartIdx() {
-		size_t res = isr_data.tail_index;
-		if (++isr_data.tail_index >= isr_data.wake_interval) {
-			isr_data.tail_index = 0;
+		size_t res = isrData.tailIndex;
+		if (++isrData.tailIndex >= isrData.wakeInterval) {
+			isrData.tailIndex = 0;
 		}
 		return res;
 	}
@@ -271,7 +271,7 @@ class ADS131M0x {
 	uint16_t readPGA();
 
 	spi_device_handle_t spiHandle;
-	spi_transaction_t trans_descr;
+	spi_transaction_t transDescr;
 
 	gpio_num_t csPin;
 	gpio_num_t drdyPin;
@@ -279,22 +279,22 @@ class ADS131M0x {
 
 	ConfigData savedConfig;
 
-	RawOutput *tx_small_buff;
-	RawOutput *rx_small_buff;
+	RawOutput *txSmallBuff;
+	RawOutput *rxSmallBuff;
 
 	struct IsrData {
 #ifdef USE_LARGE_DMA_BUFF
-		uint8_t *rx_ring_buff;
-		lldesc_t *rx_desc_array;
-		int rx_chan;
-		size_t head_index;
-		spi_dev_t *spi_hw;
+		uint8_t *rxRingBuff;
+		lldesc_t *rxDescArray;
+		int rxChan;
+		size_t headIndex;
+		spi_dev_t *spiHw;
 #endif
-		size_t tail_index;
-		size_t wake_interval;
-		TaskHandle_t task_to_wake;
+		size_t tailIndex;
+		size_t wakeInterval;
+		TaskHandle_t taskToWake;
 	};
-	IsrData isr_data;
+	IsrData isrData;
 };
 
 #if (CONFIG_MOCK_ADC == 1)
@@ -311,13 +311,13 @@ class MockAdc {
 	typedef ADS131M0x::RawOutput RawOutput;
 	typedef ADS131M0x::ConfigData ConfigData;
 
-	void init(gpio_num_t cs_pin, gpio_num_t drdy_pin, gpio_num_t reset_pin) {}
+	void init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset) {}
 	void deinit() {}
-	void setupAccess(spi_host_device_t spiDevice, gpio_num_t clk_pin, gpio_num_t miso_pin,
-	                 gpio_num_t mosi_pin) {}
-	void setWakeupTask(TaskHandle_t task_to_wake_on_drdy, size_t interval) {
-		task_to_wake  = task_to_wake_on_drdy;
-		wake_interval = interval;
+	void setupAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
+	                 gpio_num_t mosiPin) {}
+	void setWakeupTask(TaskHandle_t taskToWakeOnDrdy, size_t interval) {
+		taskToWake   = taskToWakeOnDrdy;
+		wakeInterval = interval;
 	}
 	void reset() {}
 	bool setChannelPGA(uint8_t channel, uint16_t pga) { return true; }
@@ -343,9 +343,9 @@ class MockAdc {
 	void stopAcquisition();
 
 	size_t getReadyBatchStartIdx() {
-		size_t res = tail_index;
-		if (++tail_index >= wake_interval) {
-			tail_index = 0;
+		size_t res = tailIndex;
+		if (++tailIndex >= wakeInterval) {
+			tailIndex = 0;
 		}
 		return res;
 	}
@@ -355,9 +355,9 @@ class MockAdc {
 
 	static bool isCrcOk(const RawOutput *data) { return true; };
 
-	size_t tail_index;
-	size_t wake_interval;
-	TaskHandle_t task_to_wake;
+	size_t tailIndex;
+	size_t wakeInterval;
+	TaskHandle_t taskToWake;
 };
 
 typedef MockAdc AdcClass;

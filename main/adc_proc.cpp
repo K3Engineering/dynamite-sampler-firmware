@@ -52,7 +52,7 @@ void startAdcAcquisition() { adc.startAcquisition(); }
 
 void stopAdcAcquisition() { adc.stopAcquisition(); }
 
-static inline void copy_adc_tole24(void *dst, const void *src) {
+static inline void copyAdcToLE24(void *dst, const void *src) {
 	static_assert(DYNAMITE_NET_BYTE_ORDER != AdcClass::RawOutput::SAMPLE_BYTE_ORDER);
 	static_assert(AdcFeedNetworkData::AdcSample::BYTES_PER_SAMPLE == AdcClass::DATA_WORD_LENGTH);
 	static_assert(AdcClass::DATA_WORD_LENGTH == 3, "Assumes 24-bit ADC sample");
@@ -65,15 +65,15 @@ static inline void copy_adc_tole24(void *dst, const void *src) {
 static AdcFeedNetworkData IRAM_ATTR adcToNetwork(const AdcClass::RawOutput *adc) {
 	AdcFeedNetworkData net;
 	for (size_t i = 0; i < AdcFeedNetworkData::NUM_CHAN; ++i) {
-		copy_adc_tole24(net.chan + i, adc->data + AdcClass::DATA_WORD_LENGTH * i);
+		copyAdcToLE24(net.chan + i, adc->data + AdcClass::DATA_WORD_LENGTH * i);
 	}
 	return net;
 }
 
 // Task that handles calling the read adc function and placing the values in the buffer.
 static void IRAM_ATTR taskAdcReadAndBuffer(void *) {
-	static constexpr size_t n_samples = AdcFeedNetworkPacket::NUM_SAMPLES;
-	AdcFeedNetworkData toSend[n_samples];
+	static constexpr size_t N_SAMPLES = AdcFeedNetworkPacket::NUM_SAMPLES;
+	AdcFeedNetworkData toSend[N_SAMPLES];
 
 	while (true) {
 		// Wait until ISR notifies this task. Normally numNotifications == 1,
@@ -85,12 +85,12 @@ static void IRAM_ATTR taskAdcReadAndBuffer(void *) {
 		// Read ADC values. Place them in StreamBuffer. Notify the BLE task
 		const size_t idx = adc.getReadyBatchStartIdx();
 #ifdef USE_LARGE_DMA_BUFF
-		for (size_t n = 0; n < n_samples; ++n) {
+		for (size_t n = 0; n < N_SAMPLES; ++n) {
 			toSend[n] = adcToNetwork(adc.rawReadADC(idx + n));
 		}
 #else
 		toSend[idx] = adcToNetwork(adc.rawReadADC());
-		if (idx < n_samples - 1) {
+		if (idx < N_SAMPLES - 1) {
 			continue;
 		}
 #endif
