@@ -93,10 +93,10 @@ void ADS131M0x::reset() {
 	delayMSec(10);
 }
 
-void ADS131M0x::init(gpio_num_t csPin_, gpio_num_t drdyPin_, gpio_num_t resetPin_) {
-	csPin    = csPin_;
-	drdyPin  = drdyPin_;
-	resetPin = resetPin_;
+void ADS131M0x::init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset) {
+	csPin    = pinCs;
+	drdyPin  = pinDrdy;
+	resetPin = pinReset;
 
 	txSmallBuff = (RawOutput *)heap_caps_malloc(DMA_PADDED_FRAME_SIZE, MALLOC_CAP_DMA);
 	rxSmallBuff = (RawOutput *)heap_caps_malloc(DMA_PADDED_FRAME_SIZE, MALLOC_CAP_DMA);
@@ -153,7 +153,7 @@ void ADS131M0x::deinit() {
 
 void ADS131M0x::setupAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
                             gpio_num_t mosiPin) {
-	const spi_bus_config_t buscfg = {
+	const spi_bus_config_t busCfg = {
 	    .mosi_io_num           = mosiPin,
 	    .miso_io_num           = misoPin,
 	    .sclk_io_num           = clkPin,
@@ -169,7 +169,7 @@ void ADS131M0x::setupAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, gpio
 	    .isr_cpu_id            = ESP_INTR_CPU_AFFINITY_AUTO,
 	    .intr_flags            = 0,
 	};
-	esp_err_t ret = spi_bus_initialize(spiDevice, &buscfg, SPI_DMA_CH_AUTO);
+	esp_err_t ret = spi_bus_initialize(spiDevice, &busCfg, SPI_DMA_CH_AUTO);
 	assert(ESP_OK == ret);
 
 	const spi_device_interface_config_t devcfg = {
@@ -469,11 +469,11 @@ void MockAdc::stopAcquisition() { gptimer_stop(gptimer); }
 
 const MockAdc::RawOutput *IRAM_ATTR MockAdc::rawReadADC(size_t) const {
 	static RawOutput a{
-	    .status        = htobe16(REGMASK_STATUS_DRDYX),
-	    .status_unused = 0,
-	    .data          = {},
-	    .crc           = 0,
-	    .crc_unused    = 0,
+	    .status       = htobe16(REGMASK_STATUS_DRDYX),
+	    .unusedStatus = 0,
+	    .data         = {},
+	    .crc          = 0,
+	    .unusedCrc    = 0,
 	};
 	static uint32_t val[NUM_CHANNELS_ENABLED]{0};
 	for (size_t i = 0; i < NUM_CHANNELS_ENABLED; ++i) {

@@ -17,12 +17,12 @@
 #include <soc/spi_struct.h>
 #endif
 
-#define DRDY_STATE_LOGIC_HIGH 0 // DEFAULS
+#define DRDY_STATE_LOGIC_HIGH 0 // Default
 #define DRDY_STATE_HI_Z       1
 
 #define POWER_MODE_VERY_LOW_POWER  0
 #define POWER_MODE_LOW_POWER       1
-#define POWER_MODE_HIGH_RESOLUTION 2 // DEFAULT
+#define POWER_MODE_HIGH_RESOLUTION 2 // Default
 
 #define CHANNEL_PGA_1   0
 #define CHANNEL_PGA_2   1
@@ -200,10 +200,10 @@ class ADS131M0x {
 		static constexpr size_t SAMPLE_BYTE_ORDER = __ORDER_BIG_ENDIAN__;
 
 		uint16_t status;
-		uint8_t status_unused;
+		uint8_t unusedStatus;
 		uint8_t data[DATA_WORD_LENGTH * NUM_CHANNELS_ENABLED];
 		uint16_t crc;
-		uint8_t crc_unused;
+		uint8_t unusedCrc;
 	};
 #pragma pack(pop)
 	static_assert(sizeof(RawOutput) == DATA_FRAME_SIZE);
@@ -216,7 +216,7 @@ class ADS131M0x {
 		uint16_t pga;
 	};
 
-	void init(gpio_num_t csPin, gpio_num_t drdyPin, gpio_num_t resetPin);
+	void init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset);
 	void deinit();
 	void setupAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
 	                 gpio_num_t mosiPin);
@@ -311,7 +311,7 @@ class MockAdc {
 	typedef ADS131M0x::RawOutput RawOutput;
 	typedef ADS131M0x::ConfigData ConfigData;
 
-	void init(gpio_num_t csPin, gpio_num_t drdyPin, gpio_num_t resetPin) {}
+	void init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset) {}
 	void deinit() {}
 	void setupAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
 	                 gpio_num_t mosiPin) {}
