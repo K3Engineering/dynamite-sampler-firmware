@@ -1,8 +1,6 @@
 #ifndef ADS131M0x_h
 #define ADS131M0x_h
 
-#define USE_LARGE_DMA_BUFF
-
 #include <stddef.h>
 #include <stdint.h>
 
@@ -12,10 +10,8 @@
 #include <driver/spi_master.h>
 #include <soc/gpio_num.h>
 
-#ifdef USE_LARGE_DMA_BUFF
 #include <esp_rom_lldesc.h>
 #include <soc/spi_struct.h>
-#endif
 
 #define DRDY_STATE_LOGIC_HIGH 0 // Default
 #define DRDY_STATE_HI_Z       1
@@ -190,10 +186,8 @@ class ADS131M0x {
 	static constexpr size_t DATA_WORD_LENGTH     = 3; // in bytes
 	static constexpr size_t DATA_FRAME_SIZE =
 	    (1 + NUM_CHANNELS_ENABLED + 1) * DATA_WORD_LENGTH; // status, channels, CRC
-#ifdef USE_LARGE_DMA_BUFF
 	static constexpr size_t RING_BUFF_SZ = 64;
 	static_assert((RING_BUFF_SZ & (RING_BUFF_SZ - 1)) == 0, "RING_BUFF_SZ must be a power of 2");
-#endif
 
 #pragma pack(push, 1)
 	struct RawOutput {
@@ -231,27 +225,14 @@ class ADS131M0x {
 	void attachISR();
 	void setWakeupTask(TaskHandle_t taskToWakeOnDrdy, size_t interval) {
 		isrData.taskToWake = taskToWakeOnDrdy;
-#ifdef USE_LARGE_DMA_BUFF
 		assert(interval < RING_BUFF_SZ / 2);
-#endif
 		isrData.wakeInterval = interval;
 	};
 	void startAcquisition();
 	void stopAcquisition();
 
-#ifdef USE_LARGE_DMA_BUFF
 	size_t getReadyBatchStartIdx() const { return isrData.tailIndex - isrData.wakeInterval; }
 	const RawOutput *rawReadADC(size_t idx) const;
-#else
-	size_t getReadyBatchStartIdx() {
-		size_t res = isrData.tailIndex;
-		if (++isrData.tailIndex >= isrData.wakeInterval) {
-			isrData.tailIndex = 0;
-		}
-		return res;
-	}
-	const RawOutput *rawReadADC();
-#endif
 
 	void stashConfig();
 	const ConfigData *getConfig() const { return &savedConfig; }
@@ -283,13 +264,11 @@ class ADS131M0x {
 	RawOutput *rxSmallBuff;
 
 	struct IsrData {
-#ifdef USE_LARGE_DMA_BUFF
 		uint8_t *rxRingBuff;
 		lldesc_t *rxDescArray;
 		int rxChan;
 		size_t headIndex;
 		spi_dev_t *spiHw;
-#endif
 		size_t tailIndex;
 		size_t wakeInterval;
 		TaskHandle_t taskToWake;
