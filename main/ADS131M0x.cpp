@@ -5,11 +5,9 @@
 #include <esp_heap_caps.h>
 #include <esp_log.h>
 
-#ifdef USE_LARGE_DMA_BUFF
 #include <hal/gdma_ll.h>
 #include <hal/spi_ll.h>
 #include <soc/gdma_channel.h>
-#endif
 
 #include <endian.h>
 
@@ -101,7 +99,6 @@ void ADS131M0x::init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset) 
 	txSmallBuff = (RawOutput *)heap_caps_malloc(DMA_PADDED_FRAME_SIZE, MALLOC_CAP_DMA);
 	rxSmallBuff = (RawOutput *)heap_caps_malloc(DMA_PADDED_FRAME_SIZE, MALLOC_CAP_DMA);
 
-#ifdef USE_LARGE_DMA_BUFF
 	isrData.rxRingBuff =
 	    (uint8_t *)heap_caps_malloc(DMA_PADDED_FRAME_SIZE * RING_BUFF_SZ, MALLOC_CAP_DMA);
 	isrData.rxDescArray =
@@ -118,7 +115,6 @@ void ADS131M0x::init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset) 
 		    .empty  = 0,
 		};
 	}
-#endif // USE_LARGE_DMA_BUFF
 	transDescr = {
 	    .flags            = SPI_TRANS_DMA_BUFFER_ALIGN_MANUAL,
 	    .cmd              = 0,
@@ -143,12 +139,10 @@ void ADS131M0x::deinit() {
 	txSmallBuff = nullptr;
 	heap_caps_free(rxSmallBuff);
 	rxSmallBuff = nullptr;
-#ifdef USE_LARGE_DMA_BUFF
 	heap_caps_free(isrData.rxRingBuff);
 	isrData.rxRingBuff = nullptr;
 	heap_caps_free(isrData.rxDescArray);
 	isrData.rxDescArray = nullptr;
-#endif
 }
 
 void ADS131M0x::setupAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
@@ -196,11 +190,9 @@ void ADS131M0x::setupAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, gpio
 	ret = spi_device_acquire_bus(handle, portMAX_DELAY);
 	assert(ESP_OK == ret);
 
-	spiHandle = handle;
-#ifdef USE_LARGE_DMA_BUFF
+	spiHandle     = handle;
 	isrData.spiHw = SPI_LL_GET_HW(spiDevice);
 	assert(isrData.spiHw);
-#endif
 }
 
 bool ADS131M0x::setPowerMode(uint8_t powerMode) {
@@ -263,8 +255,6 @@ bool ADS131M0x::isCrcOk(const RawOutput *data) {
 
 	return crc == calculatedCrc;
 }
-
-#ifdef USE_LARGE_DMA_BUFF
 
 const ADS131M0x::RawOutput *IRAM_ATTR ADS131M0x::rawReadADC(size_t idx) const {
 	return (RawOutput *)(isrData.rxRingBuff + (idx % RING_BUFF_SZ) * DMA_PADDED_FRAME_SIZE);
@@ -357,39 +347,6 @@ void ADS131M0x::stopAcquisition() {
 	gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE);
 	spi_device_polling_end(spiHandle, portMAX_DELAY);
 }
-
-#else // ! USE_LARGE_DMA_BUFF
-
-const ADS131M0x::RawOutput *IRAM_ATTR ADS131M0x::rawReadADC() {
-	if (ESP_OK != spi_device_polling_transmit(spiHandle, &transDescr)) {
-		ESP_LOGW(TAG, "Reading error");
-	} else if ((rxSmallBuff->status & htobe16(REGMASK_STATUS_DRDYX)) !=
-	           htobe16(REGMASK_STATUS_DRDYX)) {
-		ESP_LOGW(TAG, "Reading garbage");
-	}
-	return rxSmallBuff;
-}
-
-void IRAM_ATTR ADS131M0x::interruptHandlerAdcDrdy(void *param) {
-	ADS131M0x::IsrData *ctrl = (ADS131M0x::IsrData *)param;
-	// unblock the task that will read the ADC & handle putting in the buffer
-	BaseType_t taskWoken = pdFALSE;
-	vTaskNotifyGiveFromISR(ctrl->taskToWake, &taskWoken);
-	portYIELD_FROM_ISR(taskWoken);
-}
-
-void ADS131M0x::startAcquisition() {
-	isrData.tailIndex   = 0;
-	txSmallBuff->status = 0;
-	do {
-		spi_device_polling_transmit(spiHandle, &transDescr); // Empty ADC FIFO
-	} while (rxSmallBuff->status & htobe16(REGMASK_STATUS_DRDYX));
-	gpio_set_intr_type(drdyPin, GPIO_INTR_NEGEDGE);
-}
-
-void ADS131M0x::stopAcquisition() { gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE); }
-
-#endif // USE_LARGE_DMA_BUFF
 
 void ADS131M0x::attachISR() {
 	esp_err_t err = gpio_install_isr_service(ESP_INTR_FLAG_IRAM);
