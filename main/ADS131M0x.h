@@ -13,6 +13,11 @@
 #include <esp_rom_lldesc.h>
 #include <soc/spi_struct.h>
 
+#define IS_M04
+#if !defined(IS_M04)
+#error Never tested configuration
+#endif
+
 #define DRDY_STATE_LOGIC_HIGH 0 // Default
 #define DRDY_STATE_HI_Z       1
 
@@ -54,9 +59,9 @@
 #define CMD_WRITE_REG 0x6000
 
 // Responses
-#ifdef IS_M02
+#if defined(IS_M02)
 #define RSP_RESET_OK 0xFF22
-#else
+#elif defined(IS_M04)
 #define RSP_RESET_OK 0xFF24
 #endif
 #define RSP_RESET_NOK 0x0011
@@ -117,9 +122,9 @@
 #define REGMASK_STATUS_REGMAP   0x2000
 #define REGMASK_STATUS_CRC_ERR  0x1000
 #define REGMASK_STATUS_CRC_TYPE 0x0800
-#ifdef IS_M02
+#if defined(IS_M02)
 #define REGMASK_STATUS_RESET 0x0200
-#else
+#elif defined(IS_M04)
 #define REGMASK_STATUS_RESET 0x0400
 #endif
 #define REGMASK_STATUS_WLENGTH 0x0300
@@ -182,10 +187,10 @@ constexpr uint16_t REGMASK_STATUS_DRDYX =
 
 class ADS131M0x {
   public:
-	static constexpr size_t NUM_CHANNELS_ENABLED = 4;
-	static constexpr size_t DATA_WORD_LENGTH     = 3; // in bytes
+	static constexpr size_t NUM_CHANNELS     = 4;
+	static constexpr size_t DATA_WORD_LENGTH = 3; // in bytes
 	static constexpr size_t DATA_FRAME_SIZE =
-	    (1 + NUM_CHANNELS_ENABLED + 1) * DATA_WORD_LENGTH; // status, channels, CRC
+	    (1 + NUM_CHANNELS + 1) * DATA_WORD_LENGTH; // status, channels, CRC
 	static constexpr size_t RING_BUFF_SZ = 64;
 	static_assert((RING_BUFF_SZ & (RING_BUFF_SZ - 1)) == 0, "RING_BUFF_SZ must be a power of 2");
 
@@ -195,7 +200,7 @@ class ADS131M0x {
 
 		uint16_t status;
 		uint8_t unusedStatus;
-		uint8_t data[DATA_WORD_LENGTH * NUM_CHANNELS_ENABLED];
+		uint8_t data[DATA_WORD_LENGTH * NUM_CHANNELS];
 		uint16_t crc;
 		uint8_t unusedCrc;
 	};
@@ -215,6 +220,7 @@ class ADS131M0x {
 	void setupAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
 	                 gpio_num_t mosiPin);
 	void reset();
+	bool enableChannel(uint8_t channel, bool enable);
 	bool setPowerMode(uint8_t powerMode);
 	bool setChannelPGA(uint8_t channel, uint16_t pga);
 	bool setPGA(uint8_t pgaChan0, uint8_t pgaChan1, uint8_t pgaChan2, uint8_t pgaChan3);
@@ -284,9 +290,9 @@ class MockAdc {
 	gptimer_handle_t gptimer;
 
   public:
-	static constexpr size_t NUM_CHANNELS_ENABLED = ADS131M0x::NUM_CHANNELS_ENABLED;
-	static constexpr size_t DATA_WORD_LENGTH     = ADS131M0x::DATA_WORD_LENGTH; // in bytes
-	static constexpr size_t DATA_FRAME_SIZE      = ADS131M0x::DATA_FRAME_SIZE;
+	static constexpr size_t NUM_CHANNELS     = ADS131M0x::NUM_CHANNELS;
+	static constexpr size_t DATA_WORD_LENGTH = ADS131M0x::DATA_WORD_LENGTH; // in bytes
+	static constexpr size_t DATA_FRAME_SIZE  = ADS131M0x::DATA_FRAME_SIZE;
 	typedef ADS131M0x::RawOutput RawOutput;
 	typedef ADS131M0x::ConfigData ConfigData;
 

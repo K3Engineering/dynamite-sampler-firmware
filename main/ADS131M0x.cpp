@@ -212,12 +212,24 @@ bool ADS131M0x::setOsr(uint16_t osr) {
 	return writeRegisterMasked(REG_CLOCK, osr << 2, REGMASK_CLOCK_OSR);
 }
 
+bool ADS131M0x::enableChannel(uint8_t channel, bool enable) {
+	static_assert(REGMASK_CLOCK_CH1_EN == (REGMASK_CLOCK_CH0_EN << 1));
+	static_assert(REGMASK_CLOCK_CH2_EN == (REGMASK_CLOCK_CH0_EN << 2));
+	static_assert(REGMASK_CLOCK_CH3_EN == (REGMASK_CLOCK_CH0_EN << 3));
+
+	if (channel >= NUM_CHANNELS) {
+		return false;
+	}
+	return writeRegisterMasked(REG_CLOCK, enable ? (REGMASK_CLOCK_CH0_EN << channel) : 0,
+	                           REGMASK_CLOCK_CH0_EN << channel);
+}
+
 bool ADS131M0x::setChannelPGA(uint8_t channel, uint16_t pga) {
 	static_assert(REGMASK_GAIN_PGAGAIN1 == (REGMASK_GAIN_PGAGAIN0 << 4));
 	static_assert(REGMASK_GAIN_PGAGAIN2 == (REGMASK_GAIN_PGAGAIN0 << 8));
 	static_assert(REGMASK_GAIN_PGAGAIN3 == (REGMASK_GAIN_PGAGAIN0 << 12));
 
-	if (channel >= NUM_CHANNELS_ENABLED) {
+	if (channel >= NUM_CHANNELS) {
 		return false;
 	}
 	return writeRegisterMasked(REG_GAIN, pga << (channel * 4),
@@ -233,7 +245,7 @@ bool ADS131M0x::setInputChannelSelection(uint8_t channel, uint8_t input) {
 	static_assert(REG_CH2_CFG == REG_CH0_CFG + 5 * 2);
 	static_assert(REG_CH3_CFG == REG_CH0_CFG + 5 * 3);
 
-	if (channel >= NUM_CHANNELS_ENABLED) {
+	if (channel >= NUM_CHANNELS) {
 		return false;
 	}
 	return writeRegisterMasked(REG_CH0_CFG + channel * 5, input, REGMASK_CHX_CFG_MUX);
@@ -432,7 +444,7 @@ const MockAdc::RawOutput *IRAM_ATTR MockAdc::rawReadADC(size_t) const {
 	    .crc          = 0,
 	    .unusedCrc    = 0,
 	};
-	static uint32_t val[NUM_CHANNELS_ENABLED]{0};
+	static uint32_t val[NUM_CHANNELS]{0};
 	for (size_t i = 0; i < NUM_CHANNELS_ENABLED; ++i) {
 		val[i] += i;
 		static_assert(AdcClass::DATA_WORD_LENGTH == 3, "Assumes 24-bit ADC sample");

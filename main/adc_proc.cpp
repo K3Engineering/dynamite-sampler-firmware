@@ -113,13 +113,18 @@ static void taskSetupAdc(void *setupDone) {
 
 	adc.reset();
 
-	for (uint8_t chan = 0; chan < 4; ++chan) {
+	for (uint8_t chan = 0; chan < adc.NUM_CHANNELS; ++chan) {
 		adc.setInputChannelSelection(chan, INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS);
 	}
 	adc.setPGA(ads131UserConfig.pga[0], ads131UserConfig.pga[1], ads131UserConfig.pga[2],
 	           ads131UserConfig.pga[3]);
 	adc.setPowerMode(ads131UserConfig.powerMode);
 	adc.setOsr(ads131UserConfig.osr);
+
+	adc.enableChannel(0, false);
+	adc.enableChannel(1, true);
+	adc.enableChannel(2, true);
+	adc.enableChannel(3, false);
 
 	adc.stashConfig();
 	logADS131M0xConfig(adc.getConfig());
