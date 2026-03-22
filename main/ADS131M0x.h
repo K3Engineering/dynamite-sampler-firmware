@@ -305,6 +305,7 @@ class MockAdc {
 		wakeInterval = interval;
 	}
 	void reset() {}
+	bool enableChannel(uint8_t channel, bool enable) { return true; }
 	bool setChannelPGA(uint8_t channel, uint16_t pga) { return true; }
 	bool setPGA(uint8_t pgaChan0, uint8_t pgaChan1, uint8_t pgaChan2, uint8_t pgaChan3) {
 		return true;

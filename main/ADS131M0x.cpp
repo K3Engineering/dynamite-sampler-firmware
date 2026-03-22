@@ -445,7 +445,7 @@ const MockAdc::RawOutput *IRAM_ATTR MockAdc::rawReadADC(size_t) const {
 	    .unusedCrc    = 0,
 	};
 	static uint32_t val[NUM_CHANNELS]{0};
-	for (size_t i = 0; i < NUM_CHANNELS_ENABLED; ++i) {
+	for (size_t i = 0; i < NUM_CHANNELS; ++i) {
 		val[i] += i;
 		static_assert(AdcClass::DATA_WORD_LENGTH == 3, "Assumes 24-bit ADC sample");
 		static_assert(RawOutput::SAMPLE_BYTE_ORDER != __BYTE_ORDER__);
