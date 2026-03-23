@@ -236,11 +236,7 @@ bool ADS131M0x::setChannelPGA(uint8_t channel, uint16_t pga) {
 	                           REGMASK_GAIN_PGAGAIN0 << (channel * 4));
 }
 
-bool ADS131M0x::setPGA(uint8_t pgaChan0, uint8_t pgaChan1, uint8_t pgaChan2, uint8_t pgaChan3) {
-	return writeRegister(REG_GAIN, pgaChan0 | (pgaChan1 << 4) | (pgaChan2 << 8) | (pgaChan3 << 12));
-}
-
-bool ADS131M0x::setInputChannelSelection(uint8_t channel, uint8_t input) {
+bool ADS131M0x::setChannelInputSelection(uint8_t channel, uint16_t input) {
 	static_assert(REG_CH1_CFG == REG_CH0_CFG + 5);
 	static_assert(REG_CH2_CFG == REG_CH0_CFG + 5 * 2);
 	static_assert(REG_CH3_CFG == REG_CH0_CFG + 5 * 3);

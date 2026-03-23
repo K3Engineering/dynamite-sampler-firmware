@@ -223,8 +223,7 @@ class ADS131M0x {
 	bool enableChannel(uint8_t channel, bool enable);
 	bool setPowerMode(uint8_t powerMode);
 	bool setChannelPGA(uint8_t channel, uint16_t pga);
-	bool setPGA(uint8_t pgaChan0, uint8_t pgaChan1, uint8_t pgaChan2, uint8_t pgaChan3);
-	bool setInputChannelSelection(uint8_t channel, uint8_t input);
+	bool setChannelInputSelection(uint8_t channel, uint16_t input);
 	bool setOsr(uint16_t osr);
 
 	static void interruptHandlerAdcDrdy(void *param);
@@ -307,11 +306,8 @@ class MockAdc {
 	void reset() {}
 	bool enableChannel(uint8_t channel, bool enable) { return true; }
 	bool setChannelPGA(uint8_t channel, uint16_t pga) { return true; }
-	bool setPGA(uint8_t pgaChan0, uint8_t pgaChan1, uint8_t pgaChan2, uint8_t pgaChan3) {
-		return true;
-	}
 	bool setPowerMode(uint8_t powerMode) { return true; }
-	bool setInputChannelSelection(uint8_t channel, uint8_t input) { return true; }
+	bool setChannelInputSelection(uint8_t channel, uint16_t input) { return true; }
 	bool setOsr(uint16_t osr) { return true; }
 
 	ConfigData savedConfig;

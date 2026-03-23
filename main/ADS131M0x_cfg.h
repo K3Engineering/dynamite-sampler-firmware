@@ -4,13 +4,29 @@
 #include "ADS131M0x.h"
 
 struct ADS131Cfg {
-	uint8_t pga[4];
-	uint8_t powerMode;
-	uint8_t osr;
+	bool enable[ADS131M0x::NUM_CHANNELS];
+	uint16_t input[ADS131M0x::NUM_CHANNELS];
+	uint16_t pga[ADS131M0x::NUM_CHANNELS];
+	uint16_t powerMode;
+	uint16_t osr;
 };
 
 // V3.0.0 hardware
 constexpr ADS131Cfg ads131UserConfig_boardv300 = {
+    .enable =
+        {
+            false,
+            true,
+            true,
+            false,
+        },
+    .input =
+        {
+            INPUT_CHANNEL_MUX_INPUT_SHORTED,
+            INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS,
+            INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS,
+            INPUT_CHANNEL_MUX_INPUT_SHORTED,
+        },
     .pga =
         {
             CHANNEL_PGA_1, // DIRECT, bottom connector
@@ -24,6 +40,20 @@ constexpr ADS131Cfg ads131UserConfig_boardv300 = {
 
 // V4.0.0 hardware
 constexpr ADS131Cfg ads131UserConfig_boardv400 = {
+    .enable =
+        {
+            false,
+            true,
+            true,
+            false,
+        },
+    .input =
+        {
+            INPUT_CHANNEL_MUX_INPUT_SHORTED,
+            INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS,
+            INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS,
+            INPUT_CHANNEL_MUX_INPUT_SHORTED,
+        },
     .pga =
         {
             // NOTE - on this hardware revision, DIRECT gain
