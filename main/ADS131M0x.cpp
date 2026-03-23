@@ -15,7 +15,10 @@
 
 constexpr char TAG[] = "ADS131";
 
-constexpr size_t DMA_PADDED_FRAME_SIZE = (ADS131M0x::DATA_FRAME_SIZE + 3) & ~3; // multiple of 4
+constexpr size_t DMA_PADDED_FRAME_SIZE = (sizeof(ADS131M0x::RawOutput) + 3) & ~3; // multiple of 4
+
+constexpr size_t RING_BUFF_SZ = 64;
+static_assert((RING_BUFF_SZ & (RING_BUFF_SZ - 1)) == 0, "RING_BUFF_SZ must be a power of 2");
 
 static inline void delayMSec(uint32_t ms) { vTaskDelay(ms / portTICK_PERIOD_MS); }
 
@@ -119,8 +122,8 @@ void ADS131M0x::init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset) 
 	    .flags            = SPI_TRANS_DMA_BUFFER_ALIGN_MANUAL,
 	    .cmd              = 0,
 	    .addr             = 0,
-	    .length           = DATA_FRAME_SIZE * 8, // in bits.
-	    .rxlength         = DATA_FRAME_SIZE * 8,
+	    .length           = sizeof(RawOutput) * 8, // in bits.
+	    .rxlength         = sizeof(RawOutput) * 8,
 	    .override_freq_hz = 0,
 	    .user             = nullptr,
 	    .tx_buffer        = txSmallBuff,
@@ -158,7 +161,7 @@ void ADS131M0x::setupAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, gpio
 	    .data6_io_num          = -1,
 	    .data7_io_num          = -1,
 	    .data_io_default_level = 0,
-	    .max_transfer_sz       = DATA_FRAME_SIZE,
+	    .max_transfer_sz       = sizeof(RawOutput),
 	    .flags                 = SPICOMMON_BUSFLAG_MASTER,
 	    .isr_cpu_id            = ESP_INTR_CPU_AFFINITY_AUTO,
 	    .intr_flags            = 0,
@@ -365,6 +368,12 @@ void ADS131M0x::attachISR() {
 	gpio_isr_handler_add(drdyPin, interruptHandlerAdcDrdy, &isrData);
 }
 
+void ADS131M0x::setWakeupTask(TaskHandle_t taskToWakeOnDrdy, size_t interval) {
+	isrData.taskToWake = taskToWakeOnDrdy;
+	assert(interval < RING_BUFF_SZ / 2);
+	isrData.wakeInterval = interval;
+};
+
 // Should not be called while ADC is running
 void ADS131M0x::stashConfig() {
 	savedConfig = {
@@ -434,7 +443,8 @@ void MockAdc::stopAcquisition() { gptimer_stop(gptimer); }
 
 const MockAdc::RawOutput *IRAM_ATTR MockAdc::rawReadADC(size_t) const {
 	static RawOutput a{
-	    .status       = htobe16(REGMASK_STATUS_DRDYX),
+	    .status       = htobe16(REGMASK_STATUS_DRDY0 | REGMASK_STATUS_DRDY1 | REGMASK_STATUS_DRDY2 |
+	                            REGMASK_STATUS_DRDY3),
 	    .unusedStatus = 0,
 	    .data         = {},
 	    .crc          = 0,
@@ -453,3 +463,21 @@ const MockAdc::RawOutput *IRAM_ATTR MockAdc::rawReadADC(size_t) const {
 }
 
 #endif // CONFIG_MOCK_ADC
+
+void logADS131M0xConfig(const AdcClass::HwConfigData *cfg) {
+	ESP_LOGI(TAG, "<REGISTERS>");
+	ESP_LOGI(TAG, "ID 131M0x%X", (cfg->id >> 8) & 0x0F);
+	ESP_LOGI(TAG, "STATUS 0x%04X", cfg->status);
+	ESP_LOGI(TAG, "MODE 0x%04X", cfg->mode);
+	const uint16_t clock = cfg->clock;
+	ESP_LOGI(TAG, "CLOCK 0x%04X", cfg->clock);
+	ESP_LOGI(TAG, " POWER MODE %u", clock & ADS131M0x::REGMASK_CLOCK_PWR);
+	ESP_LOGI(TAG, " OSR %u", 128 << ((clock & ADS131M0x::REGMASK_CLOCK_OSR) >> 2));
+	ESP_LOGI(TAG, " Turbo %c", (clock & ADS131M0x::REGMASK_CLOCK_TBM) ? 'Y' : 'N');
+	ESP_LOGI(TAG, " Ch enabled 0x%X", (clock >> 8) & 0xF);
+	uint16_t pga = cfg->pga;
+	for (size_t i = 0; i < sizeof(pga) * 2; ++i) {
+		ESP_LOGI(TAG, "GAIN ch %u = %u", i, 1 << (pga & ADS131M0x::REGMASK_GAIN_PGAGAIN0));
+		pga >>= 4;
+	};
+}

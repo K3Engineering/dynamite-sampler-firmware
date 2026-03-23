@@ -18,26 +18,8 @@ constexpr char TAG[] = "ADC";
 
 static DRAM_ATTR AdcClass adc;
 
-static void logADS131M0xConfig(const AdcClass::ConfigData *cfg) {
-	ESP_LOGI(TAG, "<REGISTERS>");
-	ESP_LOGI(TAG, "ID 0x%X", cfg->id >> 8);
-	ESP_LOGI(TAG, "STATUS 0x%04X", cfg->status);
-	ESP_LOGI(TAG, "MODE 0x%04X", cfg->mode);
-	const uint16_t clock = cfg->clock;
-	ESP_LOGI(TAG, "CLOCK 0x%04X", cfg->clock);
-	ESP_LOGI(TAG, " POWER MODE %u", clock & REGMASK_CLOCK_PWR);
-	ESP_LOGI(TAG, " OSR %u", 128 << ((clock & REGMASK_CLOCK_OSR) >> 2));
-	ESP_LOGI(TAG, " Turbo %c", (clock & REGMASK_CLOCK_TBM) ? 'Y' : 'N');
-	ESP_LOGI(TAG, " Ch enabled 0x%X", (clock >> 8) & 0xF);
-	uint16_t pga = cfg->pga;
-	for (size_t i = 0; i < sizeof(pga) * 2; ++i) {
-		ESP_LOGI(TAG, "GAIN ch %u = %u", i, 1 << (pga & 0x07));
-		pga >>= 4;
-	};
-}
-
 const AdcConfigNetworkData getAdcConfig() {
-	const AdcClass::ConfigData *p = adc.getConfig();
+	const AdcClass::HwConfigData *p = adc.getConfig();
 	return AdcConfigNetworkData{
 	    .version = 1,
 	    .id      = htole16(p->id),
