@@ -443,8 +443,8 @@ void MockAdc::stopAcquisition() { gptimer_stop(gptimer); }
 
 const MockAdc::RawOutput *IRAM_ATTR MockAdc::rawReadADC(size_t) const {
 	static RawOutput a{
-	    .status       = htobe16(REGMASK_STATUS_DRDY0 | REGMASK_STATUS_DRDY1 | REGMASK_STATUS_DRDY2 |
-	                            REGMASK_STATUS_DRDY3),
+	    .status       = htobe16(ADS131M0x::REGMASK_STATUS_DRDY0 | ADS131M0x::REGMASK_STATUS_DRDY1 |
+	                            ADS131M0x::REGMASK_STATUS_DRDY2 | ADS131M0x::REGMASK_STATUS_DRDY3),
 	    .unusedStatus = 0,
 	    .data         = {},
 	    .crc          = 0,

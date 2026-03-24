@@ -282,7 +282,6 @@ class MockAdc {
   public:
 	static constexpr size_t NUM_CHANNELS     = ADS131M0x::NUM_CHANNELS;
 	static constexpr size_t DATA_WORD_LENGTH = ADS131M0x::DATA_WORD_LENGTH; // in bytes
-	static constexpr size_t DATA_FRAME_SIZE  = ADS131M0x::DATA_FRAME_SIZE;
 	typedef ADS131M0x::RawOutput RawOutput;
 	typedef ADS131M0x::HwConfigData HwConfigData;
 
@@ -301,9 +300,9 @@ class MockAdc {
 	bool setChannelInputSelection(uint8_t channel, uint16_t input) { return true; }
 	bool setOsr(uint16_t osr) { return true; }
 
-	ConfigData savedConfig;
+	HwConfigData savedConfig;
 	void stashConfig() {}
-	const ConfigData *getConfig() const { return &savedConfig; }
+	const HwConfigData *getConfig() const { return &savedConfig; }
 
 	uint16_t readID() { return 0; }
 	uint16_t readSTATUS() { return 0; }
