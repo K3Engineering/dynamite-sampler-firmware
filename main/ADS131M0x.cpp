@@ -1,4 +1,5 @@
 #include "ADS131M0x.h"
+#include "ADS131M0x_reg.h"
 
 #include <driver/gpio.h>
 #include <driver/spi_master.h>
@@ -14,8 +15,6 @@
 #include "debug_pin.h"
 
 constexpr char TAG[] = "ADS131";
-
-constexpr size_t DMA_PADDED_FRAME_SIZE = (sizeof(ADS131M0x::RawOutput) + 3) & ~3; // multiple of 4
 
 constexpr size_t RING_BUFF_SZ = 64;
 static_assert((RING_BUFF_SZ & (RING_BUFF_SZ - 1)) == 0, "RING_BUFF_SZ must be a power of 2");
@@ -46,18 +45,18 @@ static constexpr uint16_t crc16ccitt(const void *data, size_t count) {
 }
 
 bool ADS131M0x::writeRegister(uint8_t address, uint16_t value) {
-	txSmallBuff->status            = htobe16(CMD_WRITE_REG | (address << 7));
+	txSmallBuff->status            = htobe16(ADS131M0xReg::CMD_WRITE_REG | (address << 7));
 	*(uint16_t *)txSmallBuff->data = htobe16(value);
 	spi_device_polling_transmit(spiHandle, &transDescr);
 
 	txSmallBuff->status = 0;
 	spi_device_polling_transmit(spiHandle, &transDescr);
 
-	return be16toh(rxSmallBuff->status) == (RSP_WRITE_REG | (address << 7));
+	return be16toh(rxSmallBuff->status) == (ADS131M0xReg::RSP_WRITE_REG | (address << 7));
 }
 
 uint16_t ADS131M0x::readRegister(uint8_t address) {
-	txSmallBuff->status = htobe16(CMD_READ_REG | (address << 7));
+	txSmallBuff->status = htobe16(ADS131M0xReg::CMD_READ_REG | (address << 7));
 	spi_device_polling_transmit(spiHandle, &transDescr);
 
 	txSmallBuff->status = 0;
@@ -199,10 +198,7 @@ void ADS131M0x::setupAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, gpio
 }
 
 bool ADS131M0x::setPowerMode(uint8_t powerMode) {
-	if (powerMode > 3) {
-		return false;
-	}
-	return writeRegisterMasked(REG_CLOCK, powerMode, REGMASK_CLOCK_PWR);
+	return writeRegisterMasked(ADS131M0xReg::REG_CLOCK, powerMode, ADS131M0xReg::REGMASK_CLOCK_PWR);
 }
 
 /**
@@ -212,54 +208,53 @@ bool ADS131M0x::setOsr(uint16_t osr) {
 	if (osr > 7) {
 		return false;
 	}
-	return writeRegisterMasked(REG_CLOCK, osr << 2, REGMASK_CLOCK_OSR);
+	return writeRegisterMasked(ADS131M0xReg::REG_CLOCK, osr << 2, ADS131M0xReg::REGMASK_CLOCK_OSR);
 }
 
-bool ADS131M0x::enableChannel(uint8_t channel, bool enable) {
-	static_assert(REGMASK_CLOCK_CH1_EN == (REGMASK_CLOCK_CH0_EN << 1));
-	static_assert(REGMASK_CLOCK_CH2_EN == (REGMASK_CLOCK_CH0_EN << 2));
-	static_assert(REGMASK_CLOCK_CH3_EN == (REGMASK_CLOCK_CH0_EN << 3));
+bool ADS131M0x::setChannelEnable(uint8_t channel, bool enable) {
+	static_assert(ADS131M0xReg::REGMASK_CLOCK_CH1_EN == (ADS131M0xReg::REGMASK_CLOCK_CH0_EN << 1));
+	static_assert(ADS131M0xReg::REGMASK_CLOCK_CH2_EN == (ADS131M0xReg::REGMASK_CLOCK_CH0_EN << 2));
+	static_assert(ADS131M0xReg::REGMASK_CLOCK_CH3_EN == (ADS131M0xReg::REGMASK_CLOCK_CH0_EN << 3));
+	static_assert(ADS131M0xReg::REGMASK_CLOCK_CH7_EN == (ADS131M0xReg::REGMASK_CLOCK_CH0_EN << 7));
 
-	if (channel >= NUM_CHANNELS) {
-		return false;
-	}
-	return writeRegisterMasked(REG_CLOCK, enable ? (REGMASK_CLOCK_CH0_EN << channel) : 0,
-	                           REGMASK_CLOCK_CH0_EN << channel);
+	return writeRegisterMasked(ADS131M0xReg::REG_CLOCK,
+	                           enable ? (ADS131M0xReg::REGMASK_CLOCK_CH0_EN << channel) : 0,
+	                           ADS131M0xReg::REGMASK_CLOCK_CH0_EN << channel);
 }
 
 bool ADS131M0x::setChannelPGA(uint8_t channel, uint16_t pga) {
-	static_assert(REGMASK_GAIN_PGAGAIN1 == (REGMASK_GAIN_PGAGAIN0 << 4));
-	static_assert(REGMASK_GAIN_PGAGAIN2 == (REGMASK_GAIN_PGAGAIN0 << 8));
-	static_assert(REGMASK_GAIN_PGAGAIN3 == (REGMASK_GAIN_PGAGAIN0 << 12));
+	static_assert(ADS131M0xReg::REGMASK_GAIN_PGAGAIN1 ==
+	              (ADS131M0xReg::REGMASK_GAIN_PGAGAIN0 << 4));
+	static_assert(ADS131M0xReg::REGMASK_GAIN_PGAGAIN2 ==
+	              (ADS131M0xReg::REGMASK_GAIN_PGAGAIN0 << 8));
+	static_assert(ADS131M0xReg::REGMASK_GAIN_PGAGAIN3 ==
+	              (ADS131M0xReg::REGMASK_GAIN_PGAGAIN0 << 12));
+	static_assert(ADS131M0xReg::REGMASK_GAIN_PGAGAIN0 == ADS131M0xReg::REGMASK_GAIN_PGAGAIN4);
 
-	if (channel >= NUM_CHANNELS) {
-		return false;
-	}
-
-	return writeRegisterMasked((channel < 4) ? REG_GAIN : REG_GAIN2, pga << ((channel % 4) * 4),
-	                           REGMASK_GAIN_PGAGAIN0 << ((channel % 4) * 4));
+	return writeRegisterMasked((channel < 4) ? ADS131M0xReg::REG_GAIN1 : ADS131M0xReg::REG_GAIN2,
+	                           pga << ((channel % 4) * 4),
+	                           ADS131M0xReg::REGMASK_GAIN_PGAGAIN0 << ((channel % 4) * 4));
 }
 
 bool ADS131M0x::setChannelInputSelection(uint8_t channel, uint16_t input) {
-	static_assert(REG_CH1_CFG == REG_CH0_CFG + 5);
-	static_assert(REG_CH2_CFG == REG_CH0_CFG + 5 * 2);
-	static_assert(REG_CH3_CFG == REG_CH0_CFG + 5 * 3);
+	static_assert(ADS131M0xReg::REG_CH1_CFG == ADS131M0xReg::REG_CH0_CFG + 5);
+	static_assert(ADS131M0xReg::REG_CH2_CFG == ADS131M0xReg::REG_CH0_CFG + 5 * 2);
+	static_assert(ADS131M0xReg::REG_CH3_CFG == ADS131M0xReg::REG_CH0_CFG + 5 * 3);
+	static_assert(ADS131M0xReg::REG_CH7_CFG == ADS131M0xReg::REG_CH0_CFG + 5 * 7);
 
-	if (channel >= NUM_CHANNELS) {
-		return false;
-	}
-	return writeRegisterMasked(REG_CH0_CFG + channel * 5, input, REGMASK_CHX_CFG_MUX);
+	return writeRegisterMasked(ADS131M0xReg::REG_CH0_CFG + channel * 5, input,
+	                           ADS131M0xReg::REGMASK_CHX_CFG_MUX);
 }
 
-uint16_t ADS131M0x::readID() { return readRegister(REG_ID); }
+uint16_t ADS131M0x::readID() { return readRegister(ADS131M0xReg::REG_ID); }
 
-uint16_t ADS131M0x::readSTATUS() { return readRegister(REG_STATUS); }
+uint16_t ADS131M0x::readSTATUS() { return readRegister(ADS131M0xReg::REG_STATUS); }
 
-uint16_t ADS131M0x::readMODE() { return readRegister(REG_MODE); }
+uint16_t ADS131M0x::readMODE() { return readRegister(ADS131M0xReg::REG_MODE); }
 
-uint16_t ADS131M0x::readCLOCK() { return readRegister(REG_CLOCK); }
+uint16_t ADS131M0x::readCLOCK() { return readRegister(ADS131M0xReg::REG_CLOCK); }
 
-uint16_t ADS131M0x::readPGA() { return readRegister(REG_GAIN); }
+uint16_t ADS131M0x::readPGA() { return readRegister(ADS131M0xReg::REG_GAIN1); }
 
 bool ADS131M0x::isCrcOk(const RawOutput *data) {
 	uint16_t crc           = be16toh(data->crc);
@@ -433,8 +428,8 @@ void MockAdc::stopAcquisition() { gptimer_stop(gptimer); }
 
 const MockAdc::RawOutput *IRAM_ATTR MockAdc::rawReadADC(size_t) const {
 	static RawOutput a{
-	    .status       = htobe16(ADS131M0x::REGMASK_STATUS_DRDY0 | ADS131M0x::REGMASK_STATUS_DRDY1 |
-	                            ADS131M0x::REGMASK_STATUS_DRDY2 | ADS131M0x::REGMASK_STATUS_DRDY3),
+	    .status = htobe16(ADS131M0xReg::REGMASK_STATUS_DRDY0 | ADS131M0xReg::REGMASK_STATUS_DRDY1 |
+	                      ADS131M0xReg::REGMASK_STATUS_DRDY2 | ADS131M0xReg::REGMASK_STATUS_DRDY3),
 	    .unusedStatus = 0,
 	    .data         = {},
 	    .crc          = 0,

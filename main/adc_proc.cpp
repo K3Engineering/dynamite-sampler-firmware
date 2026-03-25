@@ -12,6 +12,7 @@
 #include "adc_proc.h"
 
 #include "ADS131M0x_cfg.h"
+#include "ADS131M0x_reg.h"
 #include "debug_pin.h"
 
 constexpr char TAG[] = "ADC";
@@ -50,13 +51,13 @@ static void logADS131M0xConfig(const ADS131HwConfigData *cfg) {
 	ESP_LOGI(TAG, "MODE 0x%04X", cfg->mode);
 	const uint16_t clock = cfg->clock;
 	ESP_LOGI(TAG, "CLOCK 0x%04X", cfg->clock);
-	ESP_LOGI(TAG, " POWER MODE %u", clock & ADS131M0x::REGMASK_CLOCK_PWR);
-	ESP_LOGI(TAG, " OSR %u", 128 << ((clock & ADS131M0x::REGMASK_CLOCK_OSR) >> 2));
-	ESP_LOGI(TAG, " Turbo %c", (clock & ADS131M0x::REGMASK_CLOCK_TBM) ? 'Y' : 'N');
+	ESP_LOGI(TAG, " POWER MODE %u", clock & ADS131M0xReg::REGMASK_CLOCK_PWR);
+	ESP_LOGI(TAG, " OSR %u", 128 << ((clock & ADS131M0xReg::REGMASK_CLOCK_OSR) >> 2));
+	ESP_LOGI(TAG, " Turbo %c", (clock & ADS131M0xReg::REGMASK_CLOCK_TBM) ? 'Y' : 'N');
 	ESP_LOGI(TAG, " Ch enabled 0x%X", (clock >> 8) & 0xF);
 	uint16_t pga = cfg->pga;
 	for (size_t i = 0; i < 4; ++i) {
-		ESP_LOGI(TAG, "GAIN ch %u = %u", i, 1 << (pga & ADS131M0x::REGMASK_GAIN_PGAGAIN0));
+		ESP_LOGI(TAG, "GAIN ch %u = %u", i, 1 << (pga & ADS131M0xReg::REGMASK_GAIN_PGAGAIN0));
 		pga >>= 4;
 	};
 }
@@ -123,7 +124,7 @@ static void taskSetupAdc(void *setupDone) {
 	adc.reset();
 
 	for (uint8_t chan = 0; chan < adc.NUM_CHANNELS; ++chan) {
-		adc.enableChannel(0, ads131UserConfig.enable[chan]);
+		adc.setChannelEnable(0, ads131UserConfig.enable[chan]);
 		adc.setChannelInputSelection(chan, ads131UserConfig.input[chan]);
 		adc.setChannelPGA(chan, ads131UserConfig.pga[chan]);
 	}
