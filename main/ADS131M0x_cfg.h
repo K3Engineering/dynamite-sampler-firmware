@@ -3,16 +3,19 @@
 
 #include "ADS131M0x.h"
 
+template <size_t NCHANNELS>
 struct ADS131UserCfg {
-	bool enable[ADS131M0x::NUM_CHANNELS];
-	uint16_t input[ADS131M0x::NUM_CHANNELS];
-	uint16_t pga[ADS131M0x::NUM_CHANNELS];
+	bool enable[NCHANNELS];
+	uint16_t input[NCHANNELS];
+	uint16_t pga[NCHANNELS];
 	uint16_t powerMode;
 	uint16_t osr;
 };
 
+using ADS131M04UserCfg = ADS131UserCfg<4>;
+
 // V3.0.0 hardware
-constexpr ADS131UserCfg ads131UserConfig_boardv300 = {
+constexpr ADS131M04UserCfg ads131UserConfig_boardv300{
     .enable =
         {
             false,
@@ -39,7 +42,7 @@ constexpr ADS131UserCfg ads131UserConfig_boardv300 = {
 };
 
 // V4.0.0 hardware
-constexpr ADS131UserCfg ads131UserConfig_boardv400 = {
+constexpr ADS131M04UserCfg ads131UserConfig_boardv400{
     .enable =
         {
             false,
@@ -67,6 +70,6 @@ constexpr ADS131UserCfg ads131UserConfig_boardv400 = {
     .osr       = ADS131M0x::OSR_4096,
 };
 
-constexpr ADS131UserCfg ads131UserConfig = ads131UserConfig_boardv400;
+constexpr ADS131M04UserCfg ads131UserConfig{ads131UserConfig_boardv400};
 
 #endif // ADS131M0x_CFG_h
