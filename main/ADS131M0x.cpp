@@ -235,8 +235,9 @@ bool ADS131M0x::setChannelPGA(uint8_t channel, uint16_t pga) {
 	if (channel >= NUM_CHANNELS) {
 		return false;
 	}
-	return writeRegisterMasked(REG_GAIN, pga << (channel * 4),
-	                           REGMASK_GAIN_PGAGAIN0 << (channel * 4));
+
+	return writeRegisterMasked((channel < 4) ? REG_GAIN : REG_GAIN2, pga << ((channel % 4) * 4),
+	                           REGMASK_GAIN_PGAGAIN0 << ((channel % 4) * 4));
 }
 
 bool ADS131M0x::setChannelInputSelection(uint8_t channel, uint16_t input) {
@@ -374,17 +375,6 @@ void ADS131M0x::setWakeupTask(TaskHandle_t taskToWakeOnDrdy, size_t interval) {
 	isrData.wakeInterval = interval;
 };
 
-// Should not be called while ADC is running
-void ADS131M0x::stashConfig() {
-	savedConfig = {
-	    .id     = readID(),
-	    .status = readSTATUS(),
-	    .mode   = readMODE(),
-	    .clock  = readCLOCK(),
-	    .pga    = readPGA(),
-	};
-}
-
 #if (CONFIG_MOCK_ADC == 1)
 
 #include <driver/gptimer.h>
@@ -463,21 +453,3 @@ const MockAdc::RawOutput *IRAM_ATTR MockAdc::rawReadADC(size_t) const {
 }
 
 #endif // CONFIG_MOCK_ADC
-
-void logADS131M0xConfig(const AdcClass::HwConfigData *cfg) {
-	ESP_LOGI(TAG, "<REGISTERS>");
-	ESP_LOGI(TAG, "ID 131M0x%X", (cfg->id >> 8) & 0x0F);
-	ESP_LOGI(TAG, "STATUS 0x%04X", cfg->status);
-	ESP_LOGI(TAG, "MODE 0x%04X", cfg->mode);
-	const uint16_t clock = cfg->clock;
-	ESP_LOGI(TAG, "CLOCK 0x%04X", cfg->clock);
-	ESP_LOGI(TAG, " POWER MODE %u", clock & ADS131M0x::REGMASK_CLOCK_PWR);
-	ESP_LOGI(TAG, " OSR %u", 128 << ((clock & ADS131M0x::REGMASK_CLOCK_OSR) >> 2));
-	ESP_LOGI(TAG, " Turbo %c", (clock & ADS131M0x::REGMASK_CLOCK_TBM) ? 'Y' : 'N');
-	ESP_LOGI(TAG, " Ch enabled 0x%X", (clock >> 8) & 0xF);
-	uint16_t pga = cfg->pga;
-	for (size_t i = 0; i < sizeof(pga) * 2; ++i) {
-		ESP_LOGI(TAG, "GAIN ch %u = %u", i, 1 << (pga & ADS131M0x::REGMASK_GAIN_PGAGAIN0));
-		pga >>= 4;
-	};
-}

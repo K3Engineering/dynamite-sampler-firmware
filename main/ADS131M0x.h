@@ -69,10 +69,10 @@ class ADS131M0x {
 	static constexpr uint16_t REG_STATUS = 0x01;
 
 	// Registers Global Settings across channels
-	static constexpr uint16_t REG_MODE  = 0x02;
-	static constexpr uint16_t REG_CLOCK = 0x03;
-	static constexpr uint16_t REG_GAIN  = 0x04;
-	// static constexpr uint16_t REG_GAIN2   = 0x05;
+	static constexpr uint16_t REG_MODE    = 0x02;
+	static constexpr uint16_t REG_CLOCK   = 0x03;
+	static constexpr uint16_t REG_GAIN    = 0x04;
+	static constexpr uint16_t REG_GAIN2   = 0x05;
 	static constexpr uint16_t REG_CFG     = 0x06;
 	static constexpr uint16_t THRSHLD_MSB = 0x07;
 	static constexpr uint16_t THRSHLD_LSB = 0x08;
@@ -126,10 +126,10 @@ class ADS131M0x {
 	static constexpr uint16_t REGMASK_STATUS_DRDY1    = REGMASK_STATUS_DRDY0 << 1;
 	static constexpr uint16_t REGMASK_STATUS_DRDY2    = REGMASK_STATUS_DRDY0 << 2;
 	static constexpr uint16_t REGMASK_STATUS_DRDY3    = REGMASK_STATUS_DRDY0 << 3;
-	// static constexpr uint16_t REGMASK_STATUS_DRDY4    = REGMASK_STATUS_DRDY0 << 4;
-	// static constexpr uint16_t REGMASK_STATUS_DRDY5    = REGMASK_STATUS_DRDY0 << 5;
-	// static constexpr uint16_t REGMASK_STATUS_DRDY6    = REGMASK_STATUS_DRDY0 << 6;
-	// static constexpr uint16_t REGMASK_STATUS_DRDY7    = REGMASK_STATUS_DRDY0 << 7;
+	static constexpr uint16_t REGMASK_STATUS_DRDY4    = REGMASK_STATUS_DRDY0 << 4;
+	static constexpr uint16_t REGMASK_STATUS_DRDY5    = REGMASK_STATUS_DRDY0 << 5;
+	static constexpr uint16_t REGMASK_STATUS_DRDY6    = REGMASK_STATUS_DRDY0 << 6;
+	static constexpr uint16_t REGMASK_STATUS_DRDY7    = REGMASK_STATUS_DRDY0 << 7;
 
 	// Mask Register MODE
 	static constexpr uint16_t REGMASK_MODE_REG_CRC_EN = 0x2000;
@@ -147,10 +147,10 @@ class ADS131M0x {
 	static constexpr uint16_t REGMASK_CLOCK_CH1_EN = REGMASK_CLOCK_CH0_EN << 1;
 	static constexpr uint16_t REGMASK_CLOCK_CH2_EN = REGMASK_CLOCK_CH0_EN << 2;
 	static constexpr uint16_t REGMASK_CLOCK_CH3_EN = REGMASK_CLOCK_CH0_EN << 3;
-	// static constexpr uint16_t REGMASK_CLOCK_CH4_EN = REGMASK_CLOCK_CH0_EN << 4;
-	// static constexpr uint16_t REGMASK_CLOCK_CH5_EN = REGMASK_CLOCK_CH0_EN << 5;
-	// static constexpr uint16_t REGMASK_CLOCK_CH6_EN = REGMASK_CLOCK_CH0_EN << 6;
-	// static constexpr uint16_t REGMASK_CLOCK_CH7_EN = REGMASK_CLOCK_CH0_EN << 7;
+	static constexpr uint16_t REGMASK_CLOCK_CH4_EN = REGMASK_CLOCK_CH0_EN << 4;
+	static constexpr uint16_t REGMASK_CLOCK_CH5_EN = REGMASK_CLOCK_CH0_EN << 5;
+	static constexpr uint16_t REGMASK_CLOCK_CH6_EN = REGMASK_CLOCK_CH0_EN << 6;
+	static constexpr uint16_t REGMASK_CLOCK_CH7_EN = REGMASK_CLOCK_CH0_EN << 7;
 
 	static constexpr uint16_t REGMASK_CLOCK_TBM = 0x0020;
 	static constexpr uint16_t REGMASK_CLOCK_OSR = 0x001C;
@@ -202,18 +202,11 @@ class ADS131M0x {
 	static_assert(sizeof(ADS131M0x::RawOutput) == (1 + NUM_CHANNELS + 1) * DATA_WORD_LENGTH,
 	              "status, channels, CRC");
 
-	struct HwConfigData {
-		uint16_t id;
-		uint16_t status;
-		uint16_t mode;
-		uint16_t clock;
-		uint16_t pga;
-	};
-
 	void init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset);
 	void deinit();
 	void setupAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
 	                 gpio_num_t mosiPin);
+
 	void reset();
 	bool enableChannel(uint8_t channel, bool enable);
 	bool setPowerMode(uint8_t powerMode);
@@ -221,31 +214,29 @@ class ADS131M0x {
 	bool setChannelInputSelection(uint8_t channel, uint16_t input);
 	bool setOsr(uint16_t osr);
 
-	static void interruptHandlerAdcDrdy(void *param);
+	uint16_t readID();
+	uint16_t readSTATUS();
+	uint16_t readMODE();
+	uint16_t readCLOCK();
+	uint16_t readPGA();
+
 	void attachISR();
 	void setWakeupTask(TaskHandle_t taskToWakeOnDrdy, size_t interval);
+
 	void startAcquisition();
 	void stopAcquisition();
 
 	size_t getReadyBatchStartIdx() const { return isrData.tailIndex - isrData.wakeInterval; }
 	const RawOutput *rawReadADC(size_t idx) const;
 
-	void stashConfig();
-	const HwConfigData *getConfig() const { return &savedConfig; }
-
 	static bool isCrcOk(const RawOutput *data);
 
   private:
-	uint16_t readRegister(uint8_t address);
+	static void interruptHandlerAdcDrdy(void *param);
 
+	uint16_t readRegister(uint8_t address);
 	bool writeRegister(uint8_t address, uint16_t value);
 	bool writeRegisterMasked(uint8_t address, uint16_t value, uint16_t mask);
-
-	uint16_t readID();
-	uint16_t readSTATUS();
-	uint16_t readMODE();
-	uint16_t readCLOCK();
-	uint16_t readPGA();
 
 	spi_device_handle_t spiHandle;
 	spi_transaction_t transDescr;
@@ -253,8 +244,6 @@ class ADS131M0x {
 	gpio_num_t csPin;
 	gpio_num_t drdyPin;
 	gpio_num_t resetPin;
-
-	HwConfigData savedConfig;
 
 	RawOutput *txSmallBuff;
 	RawOutput *rxSmallBuff;
@@ -283,7 +272,6 @@ class MockAdc {
 	static constexpr size_t NUM_CHANNELS     = ADS131M0x::NUM_CHANNELS;
 	static constexpr size_t DATA_WORD_LENGTH = ADS131M0x::DATA_WORD_LENGTH; // in bytes
 	typedef ADS131M0x::RawOutput RawOutput;
-	typedef ADS131M0x::HwConfigData HwConfigData;
 
 	void init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset) {}
 	void deinit() {}
@@ -299,10 +287,6 @@ class MockAdc {
 	bool setPowerMode(uint8_t powerMode) { return true; }
 	bool setChannelInputSelection(uint8_t channel, uint16_t input) { return true; }
 	bool setOsr(uint16_t osr) { return true; }
-
-	HwConfigData savedConfig;
-	void stashConfig() {}
-	const HwConfigData *getConfig() const { return &savedConfig; }
 
 	uint16_t readID() { return 0; }
 	uint16_t readSTATUS() { return 0; }
@@ -336,7 +320,5 @@ typedef MockAdc AdcClass;
 #else  // ! (CONFIG_MOCK_ADC == 1)
 typedef ADS131M0x AdcClass;
 #endif // (CONFIG_MOCK_ADC == 1)
-
-void logADS131M0xConfig(const AdcClass::HwConfigData *cfg);
 
 #endif // ADS131M0x_h

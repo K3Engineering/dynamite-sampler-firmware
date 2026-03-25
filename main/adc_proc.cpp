@@ -16,10 +16,23 @@
 
 constexpr char TAG[] = "ADC";
 
+struct ADS131HwConfigData {
+	uint16_t id;
+	uint16_t status;
+	uint16_t mode;
+	uint16_t clock;
+	uint16_t pga;
+};
+
 static DRAM_ATTR AdcClass adc;
+static ADS131HwConfigData savedConfig;
+
+void startAdcAcquisition() { adc.startAcquisition(); }
+
+void stopAdcAcquisition() { adc.stopAcquisition(); }
 
 const AdcConfigNetworkData getAdcConfig() {
-	const AdcClass::HwConfigData *p = adc.getConfig();
+	const ADS131HwConfigData *p = &savedConfig;
 	return AdcConfigNetworkData{
 	    .version = 1,
 	    .id      = htole16(p->id),
@@ -30,9 +43,23 @@ const AdcConfigNetworkData getAdcConfig() {
 	};
 }
 
-void startAdcAcquisition() { adc.startAcquisition(); }
-
-void stopAdcAcquisition() { adc.stopAcquisition(); }
+static void logADS131M0xConfig(const ADS131HwConfigData *cfg) {
+	ESP_LOGI(TAG, "<REGISTERS>");
+	ESP_LOGI(TAG, "ID 131M0x%X", (cfg->id >> 8) & 0x0F);
+	ESP_LOGI(TAG, "STATUS 0x%04X", cfg->status);
+	ESP_LOGI(TAG, "MODE 0x%04X", cfg->mode);
+	const uint16_t clock = cfg->clock;
+	ESP_LOGI(TAG, "CLOCK 0x%04X", cfg->clock);
+	ESP_LOGI(TAG, " POWER MODE %u", clock & ADS131M0x::REGMASK_CLOCK_PWR);
+	ESP_LOGI(TAG, " OSR %u", 128 << ((clock & ADS131M0x::REGMASK_CLOCK_OSR) >> 2));
+	ESP_LOGI(TAG, " Turbo %c", (clock & ADS131M0x::REGMASK_CLOCK_TBM) ? 'Y' : 'N');
+	ESP_LOGI(TAG, " Ch enabled 0x%X", (clock >> 8) & 0xF);
+	uint16_t pga = cfg->pga;
+	for (size_t i = 0; i < 4; ++i) {
+		ESP_LOGI(TAG, "GAIN ch %u = %u", i, 1 << (pga & ADS131M0x::REGMASK_GAIN_PGAGAIN0));
+		pga >>= 4;
+	};
+}
 
 static inline void copyAdcToLE24(void *dst, const void *src) {
 	static_assert(DYNAMITE_NET_BYTE_ORDER != AdcClass::RawOutput::SAMPLE_BYTE_ORDER);
@@ -103,8 +130,14 @@ static void taskSetupAdc(void *setupDone) {
 	adc.setPowerMode(ads131UserConfig.powerMode);
 	adc.setOsr(ads131UserConfig.osr);
 
-	adc.stashConfig();
-	logADS131M0xConfig(adc.getConfig());
+	savedConfig = {
+	    .id     = adc.readID(),
+	    .status = adc.readSTATUS(),
+	    .mode   = adc.readMODE(),
+	    .clock  = adc.readCLOCK(),
+	    .pga    = adc.readPGA(),
+	};
+	logADS131M0xConfig(&savedConfig);
 
 	// TODO figure out if you need to setup wake from sleep for gpio
 
