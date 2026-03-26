@@ -44,7 +44,7 @@ static constexpr uint16_t crc16ccitt(const void *data, size_t count) {
 	return crc;
 }
 
-bool ADS131M0x::writeRegister(uint8_t address, uint16_t value) {
+bool ADS131M04::writeRegister(uint8_t address, uint16_t value) {
 	txSmallBuff->status            = htobe16(ADS131M0xReg::CMD_WRITE_REG | (address << 7));
 	*(uint16_t *)txSmallBuff->data = htobe16(value);
 	spi_device_polling_transmit(spiHandle, &transDescr);
@@ -55,7 +55,7 @@ bool ADS131M0x::writeRegister(uint8_t address, uint16_t value) {
 	return be16toh(rxSmallBuff->status) == (ADS131M0xReg::RSP_WRITE_REG | (address << 7));
 }
 
-uint16_t ADS131M0x::readRegister(uint8_t address) {
+uint16_t ADS131M04::readRegister(uint8_t address) {
 	txSmallBuff->status = htobe16(ADS131M0xReg::CMD_READ_REG | (address << 7));
 	spi_device_polling_transmit(spiHandle, &transDescr);
 
@@ -70,7 +70,7 @@ uint16_t ADS131M0x::readRegister(uint8_t address) {
  * It does not carry out the shift of bits (shift), it is necessary to pass the shifted value to the
  * correct position
  */
-bool ADS131M0x::writeRegisterMasked(uint8_t address, uint16_t value, uint16_t mask) {
+bool ADS131M04::writeRegisterMasked(uint8_t address, uint16_t value, uint16_t mask) {
 	// Read the current content of the register
 	uint16_t registerContents = readRegister(address);
 	// Change the mask bit by bit (it remains 1 in the bits that must not be touched and 0 in the
@@ -84,7 +84,7 @@ bool ADS131M0x::writeRegisterMasked(uint8_t address, uint16_t value, uint16_t ma
 }
 
 /// @brief Hardware reset (reset low activ)
-void ADS131M0x::reset() {
+void ADS131M04::reset() {
 	gpio_set_level(resetPin, 1);
 	delayMSec(100);
 	gpio_set_level(resetPin, 0);
@@ -93,7 +93,7 @@ void ADS131M0x::reset() {
 	delayMSec(10);
 }
 
-void ADS131M0x::init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset) {
+void ADS131M04::init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset) {
 	csPin    = pinCs;
 	drdyPin  = pinDrdy;
 	resetPin = pinReset;
@@ -136,7 +136,7 @@ void ADS131M0x::init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset) 
 	gpio_set_direction(drdyPin, GPIO_MODE_INPUT);
 }
 
-void ADS131M0x::deinit() {
+void ADS131M04::deinit() {
 	heap_caps_free(txSmallBuff);
 	txSmallBuff = nullptr;
 	heap_caps_free(rxSmallBuff);
@@ -147,8 +147,8 @@ void ADS131M0x::deinit() {
 	isrData.rxDescArray = nullptr;
 }
 
-void ADS131M0x::setupAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
-                            gpio_num_t mosiPin) {
+void ADS131M04::setupSpiAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
+                               gpio_num_t mosiPin) {
 	const spi_bus_config_t busCfg = {
 	    .mosi_io_num           = mosiPin,
 	    .miso_io_num           = misoPin,
@@ -186,32 +186,30 @@ void ADS131M0x::setupAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, gpio
 	    .pre_cb           = nullptr,
 	    .post_cb          = nullptr,
 	};
-	spi_device_handle_t handle;
-	ret = spi_bus_add_device(spiDevice, &devcfg, &handle);
+	ret = spi_bus_add_device(spiDevice, &devcfg, &spiHandle);
 	assert(ESP_OK == ret);
-	ret = spi_device_acquire_bus(handle, portMAX_DELAY);
+	ret = spi_device_acquire_bus(spiHandle, portMAX_DELAY);
 	assert(ESP_OK == ret);
 
-	spiHandle     = handle;
 	isrData.spiHw = SPI_LL_GET_HW(spiDevice);
 	assert(isrData.spiHw);
 }
 
-bool ADS131M0x::setPowerMode(uint8_t powerMode) {
+bool ADS131M04::setPowerMode(uint8_t powerMode) {
 	return writeRegisterMasked(ADS131M0xReg::REG_CLOCK, powerMode, ADS131M0xReg::REGMASK_CLOCK_PWR);
 }
 
 /**
  * @brief set OSR digital filter (see datasheet)
  */
-bool ADS131M0x::setOsr(uint16_t osr) {
+bool ADS131M04::setOsr(uint16_t osr) {
 	if (osr > 7) {
 		return false;
 	}
 	return writeRegisterMasked(ADS131M0xReg::REG_CLOCK, osr << 2, ADS131M0xReg::REGMASK_CLOCK_OSR);
 }
 
-bool ADS131M0x::setChannelEnable(uint8_t channel, bool enable) {
+bool ADS131M04::setChannelEnable(uint8_t channel, bool enable) {
 	static_assert(ADS131M0xReg::REGMASK_CLOCK_CH1_EN == (ADS131M0xReg::REGMASK_CLOCK_CH0_EN << 1));
 	static_assert(ADS131M0xReg::REGMASK_CLOCK_CH2_EN == (ADS131M0xReg::REGMASK_CLOCK_CH0_EN << 2));
 	static_assert(ADS131M0xReg::REGMASK_CLOCK_CH3_EN == (ADS131M0xReg::REGMASK_CLOCK_CH0_EN << 3));
@@ -222,21 +220,21 @@ bool ADS131M0x::setChannelEnable(uint8_t channel, bool enable) {
 	                           ADS131M0xReg::REGMASK_CLOCK_CH0_EN << channel);
 }
 
-bool ADS131M0x::setChannelPGA(uint8_t channel, uint16_t pga) {
+bool ADS131M04::setChannelPGA(uint8_t channel, uint16_t pga) {
 	static_assert(ADS131M0xReg::REGMASK_GAIN_PGAGAIN1 ==
 	              (ADS131M0xReg::REGMASK_GAIN_PGAGAIN0 << 4));
 	static_assert(ADS131M0xReg::REGMASK_GAIN_PGAGAIN2 ==
 	              (ADS131M0xReg::REGMASK_GAIN_PGAGAIN0 << 8));
 	static_assert(ADS131M0xReg::REGMASK_GAIN_PGAGAIN3 ==
 	              (ADS131M0xReg::REGMASK_GAIN_PGAGAIN0 << 12));
-	static_assert(ADS131M0xReg::REGMASK_GAIN_PGAGAIN0 == ADS131M0xReg::REGMASK_GAIN_PGAGAIN4);
+	static_assert(ADS131M0xReg::REGMASK_GAIN_PGAGAIN4 == ADS131M0xReg::REGMASK_GAIN_PGAGAIN0);
 
 	return writeRegisterMasked((channel < 4) ? ADS131M0xReg::REG_GAIN1 : ADS131M0xReg::REG_GAIN2,
 	                           pga << ((channel % 4) * 4),
 	                           ADS131M0xReg::REGMASK_GAIN_PGAGAIN0 << ((channel % 4) * 4));
 }
 
-bool ADS131M0x::setChannelInputSelection(uint8_t channel, uint16_t input) {
+bool ADS131M04::setChannelInputSelection(uint8_t channel, uint16_t input) {
 	static_assert(ADS131M0xReg::REG_CH1_CFG == ADS131M0xReg::REG_CH0_CFG + 5);
 	static_assert(ADS131M0xReg::REG_CH2_CFG == ADS131M0xReg::REG_CH0_CFG + 5 * 2);
 	static_assert(ADS131M0xReg::REG_CH3_CFG == ADS131M0xReg::REG_CH0_CFG + 5 * 3);
@@ -246,32 +244,29 @@ bool ADS131M0x::setChannelInputSelection(uint8_t channel, uint16_t input) {
 	                           ADS131M0xReg::REGMASK_CHX_CFG_MUX);
 }
 
-uint16_t ADS131M0x::readID() { return readRegister(ADS131M0xReg::REG_ID); }
+uint16_t ADS131M04::readID() { return readRegister(ADS131M0xReg::REG_ID); }
 
-uint16_t ADS131M0x::readSTATUS() { return readRegister(ADS131M0xReg::REG_STATUS); }
+uint16_t ADS131M04::readSTATUS() { return readRegister(ADS131M0xReg::REG_STATUS); }
 
-uint16_t ADS131M0x::readMODE() { return readRegister(ADS131M0xReg::REG_MODE); }
+uint16_t ADS131M04::readMODE() { return readRegister(ADS131M0xReg::REG_MODE); }
 
-uint16_t ADS131M0x::readCLOCK() { return readRegister(ADS131M0xReg::REG_CLOCK); }
+uint16_t ADS131M04::readCLOCK() { return readRegister(ADS131M0xReg::REG_CLOCK); }
 
-uint16_t ADS131M0x::readPGA() { return readRegister(ADS131M0xReg::REG_GAIN1); }
+uint16_t ADS131M04::readPGA() { return readRegister(ADS131M0xReg::REG_GAIN1); }
 
-bool ADS131M0x::isCrcOk(const RawOutput *data) {
+bool ADS131M04::isCrcOk(const RawOutput *data) {
 	uint16_t crc           = be16toh(data->crc);
 	uint16_t calculatedCrc = crc16ccitt(data, sizeof(*data) - DATA_WORD_LENGTH);
 
 	return crc == calculatedCrc;
 }
 
-const ADS131M0x::RawOutput *IRAM_ATTR ADS131M0x::rawReadADC(size_t idx) const {
+const ADS131M04::RawOutput *IRAM_ATTR ADS131M04::rawReadADC(size_t idx) const {
 	return (RawOutput *)(isrData.rxRingBuff + (idx % RING_BUFF_SZ) * DMA_PADDED_FRAME_SIZE);
 }
 
-// When we flag a piece of code with the IRAM_ATTR attribute, the compiled code
-// is placed in the ESP32’s Internal RAM (IRAM). Otherwise the code is kept in
-// Flash. And Flash on ESP32 is much slower than internal RAM.
-void IRAM_ATTR ADS131M0x::interruptHandlerAdcDrdy(void *param) {
-	ADS131M0x::IsrData *ctrl = (ADS131M0x::IsrData *)param;
+static void IRAM_ATTR interruptHandlerAdcDrdy(void *param) {
+	ADS131M0xIsrData *ctrl = (ADS131M0xIsrData *)param;
 
 	const size_t idx = ctrl->headIndex++;
 
@@ -321,7 +316,7 @@ static inline void clearSpiBuffer(spi_dev_t *hw) {
 	}
 }
 
-void ADS131M0x::startAcquisition() {
+void ADS131M04::startAcquisition() {
 	isrData.headIndex = 0;
 	isrData.tailIndex = 0;
 
@@ -350,12 +345,12 @@ void ADS131M0x::startAcquisition() {
 	gpio_set_intr_type(drdyPin, GPIO_INTR_NEGEDGE);
 }
 
-void ADS131M0x::stopAcquisition() {
+void ADS131M04::stopAcquisition() {
 	gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE);
 	spi_device_polling_end(spiHandle, portMAX_DELAY);
 }
 
-void ADS131M0x::attachISR() {
+void ADS131M04::attachISR() {
 	esp_err_t err = gpio_install_isr_service(ESP_INTR_FLAG_IRAM);
 	if ((err != ESP_OK) && (err != ESP_ERR_INVALID_STATE)) {
 		return;
@@ -364,7 +359,7 @@ void ADS131M0x::attachISR() {
 	gpio_isr_handler_add(drdyPin, interruptHandlerAdcDrdy, &isrData);
 }
 
-void ADS131M0x::setWakeupTask(TaskHandle_t taskToWakeOnDrdy, size_t interval) {
+void ADS131M04::setWakeupTask(TaskHandle_t taskToWakeOnDrdy, size_t interval) {
 	isrData.taskToWake = taskToWakeOnDrdy;
 	assert(interval < RING_BUFF_SZ / 2);
 	isrData.wakeInterval = interval;
@@ -377,17 +372,17 @@ void ADS131M0x::setWakeupTask(TaskHandle_t taskToWakeOnDrdy, size_t interval) {
 static bool IRAM_ATTR interruptHandlerMockTimerCb(gptimer_handle_t timer,
                                                   const gptimer_alarm_event_data_t *edata,
                                                   void *userCtx) {
-	MockAdc *adc         = (MockAdc *)userCtx;
-	BaseType_t taskWoken = pdFALSE;
-	static size_t count  = 0;
-	if (0 == ++count % adc->wakeInterval) {
+	MockAds131xIsrData *ctrl = (MockAds131xIsrData *)userCtx;
+	BaseType_t taskWoken     = pdFALSE;
+	if (++ctrl->headIndex == ctrl->wakeInterval) {
+		ctrl->headIndex = 0;
 		// unblock the task that will read the ADC & handle putting in the buffer
-		vTaskNotifyGiveFromISR(adc->taskToWake, &taskWoken);
+		vTaskNotifyGiveFromISR(ctrl->taskToWake, &taskWoken);
 	}
 	return (taskWoken == pdTRUE);
 }
 
-void MockAdc::attachISR() {
+void MockAds131::attachISR() {
 	static constexpr gptimer_config_t timerConfig = {
 	    .clk_src       = GPTIMER_CLK_SRC_DEFAULT,
 	    .direction     = GPTIMER_COUNT_UP,
@@ -415,21 +410,13 @@ void MockAdc::attachISR() {
 	static constexpr gptimer_event_callbacks_t cbs = {
 	    .on_alarm = interruptHandlerMockTimerCb,
 	};
-	gptimer_register_event_callbacks(gptimer, &cbs, this);
+	gptimer_register_event_callbacks(gptimer, &cbs, &isrData);
 	gptimer_enable(gptimer);
 }
 
-void MockAdc::startAcquisition() {
-	tailIndex = 0;
-	gptimer_start(gptimer);
-}
-
-void MockAdc::stopAcquisition() { gptimer_stop(gptimer); }
-
-const MockAdc::RawOutput *IRAM_ATTR MockAdc::rawReadADC(size_t) const {
+const MockAds131::RawOutput *IRAM_ATTR MockAds131::rawReadADC(size_t) const {
 	static RawOutput a{
-	    .status = htobe16(ADS131M0xReg::REGMASK_STATUS_DRDY0 | ADS131M0xReg::REGMASK_STATUS_DRDY1 |
-	                      ADS131M0xReg::REGMASK_STATUS_DRDY2 | ADS131M0xReg::REGMASK_STATUS_DRDY3),
+	    .status       = htobe16((ADS131M0xReg::REGMASK_STATUS_DRDY0 << NUM_CHANNELS) - 1),
 	    .unusedStatus = 0,
 	    .data         = {},
 	    .crc          = 0,
@@ -438,7 +425,7 @@ const MockAdc::RawOutput *IRAM_ATTR MockAdc::rawReadADC(size_t) const {
 	static uint32_t val[NUM_CHANNELS]{0};
 	for (size_t i = 0; i < NUM_CHANNELS; ++i) {
 		val[i] += i;
-		static_assert(AdcClass::DATA_WORD_LENGTH == 3, "Assumes 24-bit ADC sample");
+		static_assert(DATA_WORD_LENGTH == 3, "Assumes 24-bit ADC sample");
 		static_assert(RawOutput::SAMPLE_BYTE_ORDER != __BYTE_ORDER__);
 		a.data[i * DATA_WORD_LENGTH]     = val[i] >> 16;
 		a.data[i * DATA_WORD_LENGTH + 1] = val[i] >> 8;

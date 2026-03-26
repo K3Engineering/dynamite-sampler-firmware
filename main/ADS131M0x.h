@@ -13,7 +13,18 @@
 #include <esp_rom_lldesc.h>
 #include <soc/spi_struct.h>
 
-class ADS131M0x {
+struct ADS131M0xIsrData {
+	uint8_t *rxRingBuff;
+	lldesc_t *rxDescArray;
+	spi_dev_t *spiHw;
+	int rxChan;
+	size_t headIndex;
+	size_t tailIndex;
+	size_t wakeInterval;
+	TaskHandle_t taskToWake;
+};
+
+class ADS131M04 {
   public:
 	static constexpr size_t NUM_CHANNELS = 4;
 	static_assert(NUM_CHANNELS == 4, "Tested on ADS131M04 only");
@@ -38,8 +49,8 @@ class ADS131M0x {
 
 	void init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset);
 	void deinit();
-	void setupAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
-	                 gpio_num_t mosiPin);
+	void setupSpiAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
+	                    gpio_num_t mosiPin);
 
 	void reset();
 	bool setChannelEnable(uint8_t channel, bool enable);
@@ -66,8 +77,6 @@ class ADS131M0x {
 	static bool isCrcOk(const RawOutput *data);
 
   private:
-	static void interruptHandlerAdcDrdy(void *param);
-
 	uint16_t readRegister(uint8_t address);
 	bool writeRegister(uint8_t address, uint16_t value);
 	bool writeRegisterMasked(uint8_t address, uint16_t value, uint16_t mask);
@@ -82,38 +91,35 @@ class ADS131M0x {
 	RawOutput *txSmallBuff;
 	RawOutput *rxSmallBuff;
 
-	struct IsrData {
-		uint8_t *rxRingBuff;
-		lldesc_t *rxDescArray;
-		int rxChan;
-		size_t headIndex;
-		spi_dev_t *spiHw;
-		size_t tailIndex;
-		size_t wakeInterval;
-		TaskHandle_t taskToWake;
-	};
-	IsrData isrData;
+	ADS131M0xIsrData isrData;
 };
 
 #if (CONFIG_MOCK_ADC == 1)
 
 #include <driver/gptimer.h>
 
-class MockAdc {
+struct MockAds131xIsrData {
+	size_t headIndex;
+	size_t tailIndex;
+	size_t wakeInterval;
+	TaskHandle_t taskToWake;
+};
+
+class MockAds131 {
 	gptimer_handle_t gptimer;
 
   public:
-	static constexpr size_t NUM_CHANNELS     = ADS131M0x::NUM_CHANNELS;
-	static constexpr size_t DATA_WORD_LENGTH = ADS131M0x::DATA_WORD_LENGTH; // in bytes
-	typedef ADS131M0x::RawOutput RawOutput;
+	static constexpr size_t NUM_CHANNELS     = ADS131M04::NUM_CHANNELS;
+	static constexpr size_t DATA_WORD_LENGTH = ADS131M04::DATA_WORD_LENGTH; // in bytes
+	typedef ADS131M04::RawOutput RawOutput;
 
 	void init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset) {}
 	void deinit() {}
-	void setupAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
-	                 gpio_num_t mosiPin) {}
+	void setupSpiAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
+	                    gpio_num_t mosiPin) {}
 	void setWakeupTask(TaskHandle_t taskToWakeOnDrdy, size_t interval) {
-		taskToWake   = taskToWakeOnDrdy;
-		wakeInterval = interval;
+		isrData.taskToWake   = taskToWakeOnDrdy;
+		isrData.wakeInterval = interval;
 	}
 	void reset() {}
 	bool setChannelEnable(uint8_t channel, bool enable) { return true; }
@@ -129,13 +135,16 @@ class MockAdc {
 	uint16_t readPGA() { return 0; }
 
 	void attachISR();
-	void startAcquisition();
-	void stopAcquisition();
+	void startAcquisition() {
+		isrData.headIndex = isrData.tailIndex = 0;
+		gptimer_start(gptimer);
+	}
+	void stopAcquisition() { gptimer_stop(gptimer); }
 
 	size_t getReadyBatchStartIdx() {
-		size_t res = tailIndex;
-		if (++tailIndex >= wakeInterval) {
-			tailIndex = 0;
+		size_t res = isrData.tailIndex;
+		if (++isrData.tailIndex >= isrData.wakeInterval) {
+			isrData.tailIndex = 0;
 		}
 		return res;
 	}
@@ -145,14 +154,15 @@ class MockAdc {
 
 	static bool isCrcOk(const RawOutput *data) { return true; };
 
-	size_t tailIndex;
-	size_t wakeInterval;
-	TaskHandle_t taskToWake;
+	MockAds131xIsrData isrData;
 };
 
-typedef MockAdc AdcClass;
-#else  // ! (CONFIG_MOCK_ADC == 1)
-typedef ADS131M0x AdcClass;
+typedef MockAds131 AdcClass;
+
+#else // ! (CONFIG_MOCK_ADC == 1)
+
+typedef ADS131M04 AdcClass;
+
 #endif // (CONFIG_MOCK_ADC == 1)
 
 #endif // ADS131M0x_h

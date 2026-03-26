@@ -118,7 +118,7 @@ static void taskSetupAdc(void *setupDone) {
 	gpio_set_direction(PIN_DEBUG_BOT, GPIO_MODE_OUTPUT);
 
 	adc.init(PIN_CS_ADC, PIN_DRDY, PIN_ADC_RESET);
-	adc.setupAccess(SPI3_HOST, PIN_NUM_CLK, PIN_NUM_MISO, PIN_NUM_MOSI);
+	adc.setupSpiAccess(SPI3_HOST, PIN_NUM_CLK, PIN_NUM_MISO, PIN_NUM_MOSI);
 	adc.attachISR();
 
 	adc.reset();
