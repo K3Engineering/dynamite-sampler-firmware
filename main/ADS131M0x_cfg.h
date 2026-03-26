@@ -3,16 +3,14 @@
 
 #include "ADS131M0x_reg.h"
 
-template <size_t NCHANNELS>
-struct ADS131UserCfg {
-	bool enable[NCHANNELS];
-	uint16_t input[NCHANNELS];
-	uint16_t pga[NCHANNELS];
+struct ADS131M04UserCfg {
+	static constexpr size_t NCHAN = 4;
+	bool enable[NCHAN];
+	uint16_t input[NCHAN];
+	uint16_t pga[NCHAN];
 	uint16_t powerMode;
 	uint16_t osr;
 };
-
-using ADS131M04UserCfg = ADS131UserCfg<4>;
 
 // V3.0.0 hardware
 constexpr ADS131M04UserCfg ads131UserConfig_boardv300{
