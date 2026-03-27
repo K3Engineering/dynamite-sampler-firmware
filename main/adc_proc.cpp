@@ -12,32 +12,28 @@
 #include "adc_proc.h"
 
 #include "ADS131M0x_cfg.h"
+#include "ADS131M0x_reg.h"
 #include "debug_pin.h"
 
 constexpr char TAG[] = "ADC";
 
-static DRAM_ATTR AdcClass adc;
+struct ADS131HwConfigData {
+	uint16_t id;
+	uint16_t status;
+	uint16_t mode;
+	uint16_t clock;
+	uint16_t pga;
+};
 
-static void logADS131M0xConfig(const AdcClass::ConfigData *cfg) {
-	ESP_LOGI(TAG, "<REGISTERS>");
-	ESP_LOGI(TAG, "ID 0x%X", cfg->id >> 8);
-	ESP_LOGI(TAG, "STATUS 0x%04X", cfg->status);
-	ESP_LOGI(TAG, "MODE 0x%04X", cfg->mode);
-	const uint16_t clock = cfg->clock;
-	ESP_LOGI(TAG, "CLOCK 0x%04X", cfg->clock);
-	ESP_LOGI(TAG, " POWER MODE %u", clock & REGMASK_CLOCK_PWR);
-	ESP_LOGI(TAG, " OSR %u", 128 << ((clock & REGMASK_CLOCK_OSR) >> 2));
-	ESP_LOGI(TAG, " Turbo %c", (clock & REGMASK_CLOCK_TBM) ? 'Y' : 'N');
-	ESP_LOGI(TAG, " Ch enabled 0x%X", (clock >> 8) & 0xF);
-	uint16_t pga = cfg->pga;
-	for (size_t i = 0; i < sizeof(pga) * 2; ++i) {
-		ESP_LOGI(TAG, "GAIN ch %u = %u", i, 1 << (pga & 0x07));
-		pga >>= 4;
-	};
-}
+static DRAM_ATTR AdcClass adc;
+static ADS131HwConfigData savedConfig;
+
+void startAdcAcquisition() { adc.startAcquisition(); }
+
+void stopAdcAcquisition() { adc.stopAcquisition(); }
 
 const AdcConfigNetworkData getAdcConfig() {
-	const AdcClass::ConfigData *p = adc.getConfig();
+	const ADS131HwConfigData *p = &savedConfig;
 	return AdcConfigNetworkData{
 	    .version = 1,
 	    .id      = htole16(p->id),
@@ -48,9 +44,23 @@ const AdcConfigNetworkData getAdcConfig() {
 	};
 }
 
-void startAdcAcquisition() { adc.startAcquisition(); }
-
-void stopAdcAcquisition() { adc.stopAcquisition(); }
+static void logADS131M0xConfig(const ADS131HwConfigData *cfg) {
+	ESP_LOGI(TAG, "<REGISTERS>");
+	ESP_LOGI(TAG, "ID 131M0x%X", (cfg->id >> 8) & 0x0F);
+	ESP_LOGI(TAG, "STATUS 0x%04X", cfg->status);
+	ESP_LOGI(TAG, "MODE 0x%04X", cfg->mode);
+	const uint16_t clock = cfg->clock;
+	ESP_LOGI(TAG, "CLOCK 0x%04X", cfg->clock);
+	ESP_LOGI(TAG, " POWER MODE %u", clock & ADS131M0xReg::REGMASK_CLOCK_PWR);
+	ESP_LOGI(TAG, " OSR %u", 128 << ((clock & ADS131M0xReg::REGMASK_CLOCK_OSR) >> 2));
+	ESP_LOGI(TAG, " Turbo %c", (clock & ADS131M0xReg::REGMASK_CLOCK_TBM) ? 'Y' : 'N');
+	ESP_LOGI(TAG, " Ch enabled 0x%X", (clock >> 8) & 0xF);
+	uint16_t pga = cfg->pga;
+	for (size_t i = 0; i < 4; ++i) {
+		ESP_LOGI(TAG, "GAIN ch %u = %u", i, 1 << (pga & ADS131M0xReg::REGMASK_GAIN_PGAGAIN0));
+		pga >>= 4;
+	};
+}
 
 static inline void copyAdcToLE24(void *dst, const void *src) {
 	static_assert(DYNAMITE_NET_BYTE_ORDER != AdcClass::RawOutput::SAMPLE_BYTE_ORDER);
@@ -108,21 +118,27 @@ static void taskSetupAdc(void *setupDone) {
 	gpio_set_direction(PIN_DEBUG_BOT, GPIO_MODE_OUTPUT);
 
 	adc.init(PIN_CS_ADC, PIN_DRDY, PIN_ADC_RESET);
-	adc.setupAccess(SPI3_HOST, PIN_NUM_CLK, PIN_NUM_MISO, PIN_NUM_MOSI);
+	adc.setupSpiAccess(SPI3_HOST, PIN_NUM_CLK, PIN_NUM_MISO, PIN_NUM_MOSI);
 	adc.attachISR();
 
 	adc.reset();
 
-	for (uint8_t chan = 0; chan < 4; ++chan) {
-		adc.setInputChannelSelection(chan, INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS);
+	for (uint8_t chan = 0; chan < adc.NUM_CHANNELS; ++chan) {
+		adc.setChannelEnable(0, ads131UserConfig.enable[chan]);
+		adc.setChannelInputSelection(chan, ads131UserConfig.input[chan]);
+		adc.setChannelPGA(chan, ads131UserConfig.pga[chan]);
 	}
-	adc.setPGA(ads131UserConfig.pga[0], ads131UserConfig.pga[1], ads131UserConfig.pga[2],
-	           ads131UserConfig.pga[3]);
 	adc.setPowerMode(ads131UserConfig.powerMode);
 	adc.setOsr(ads131UserConfig.osr);
 
-	adc.stashConfig();
-	logADS131M0xConfig(adc.getConfig());
+	savedConfig = {
+	    .id     = adc.readID(),
+	    .status = adc.readSTATUS(),
+	    .mode   = adc.readMODE(),
+	    .clock  = adc.readCLOCK(),
+	    .pga    = adc.readPGA(),
+	};
+	logADS131M0xConfig(&savedConfig);
 
 	// TODO figure out if you need to setup wake from sleep for gpio
 
