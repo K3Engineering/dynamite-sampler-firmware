@@ -1,6 +1,8 @@
 #ifndef ADS131M0x_REG_h
 #define ADS131M0x_REG_h
 
+#include <stdint.h>
+
 struct ADS131M0xReg {
 	static constexpr uint16_t DRDY_STATE_LOGIC_HIGH = 0; // Default
 	static constexpr uint16_t DRDY_STATE_HI_Z       = 1;
