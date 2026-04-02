@@ -86,7 +86,7 @@ bool ADS131M04::writeRegisterMasked(uint8_t address, uint16_t value, uint16_t ma
 }
 
 bool ADS131M04::setPowerMode(uint16_t powerMode) {
-	assert((powerMode >= ADS131M0xReg::POWER_MODE_VERY_LOW_POWER) ||
+	assert((powerMode >= ADS131M0xReg::POWER_MODE_VERY_LOW_POWER) &&
 	       (powerMode <= ADS131M0xReg::POWER_MODE_HIGH_RESOLUTION));
 
 	return writeRegisterMasked(ADS131M0xReg::REG_CLOCK, powerMode, ADS131M0xReg::REGMASK_CLOCK_PWR);
@@ -96,7 +96,7 @@ bool ADS131M04::setPowerMode(uint16_t powerMode) {
  * @brief set OSR digital filter (see datasheet)
  */
 bool ADS131M04::setOsr(uint16_t osr) {
-	assert((osr >= ADS131M0xReg::OSR_128) || (osr <= ADS131M0xReg::OSR_16384));
+	assert((osr >= ADS131M0xReg::OSR_128) && (osr <= ADS131M0xReg::OSR_16384));
 
 	return writeRegisterMasked(ADS131M0xReg::REG_CLOCK, osr << 2, ADS131M0xReg::REGMASK_CLOCK_OSR);
 }
