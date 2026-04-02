@@ -238,5 +238,4 @@ void setupBleOta(NimBLEServer *server) {
 		static OtaDataChrCallbacks cb(&otaControlData);
 		chr->setCallbacks(&cb);
 	}
-	srvc->start();
 }

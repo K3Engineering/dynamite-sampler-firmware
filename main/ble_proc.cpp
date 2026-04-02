@@ -78,7 +78,6 @@ static void setupDeviceInfo(NimBLEServer *server) {
 		static TxPowerPublisherCallbacks cb;
 		chr->setCallbacks(&cb);
 	}
-	srvDeviceInfo->start();
 }
 
 class TxPowerManagerCallbacks : public NimBLECharacteristicCallbacks {
@@ -104,7 +103,6 @@ static void setupPowerManagerInterface(NimBLEServer *server) {
 		static TxPowerManagerCallbacks cb;
 		chr->setCallbacks(&cb);
 	}
-	srvc->start();
 }
 
 class AdcFeedCallbacks : public NimBLECharacteristicCallbacks {
@@ -147,7 +145,6 @@ static void setupAdcFeed(NimBLEServer *server) {
 		static AdcConfigCallbacks cb;
 		chr->setCallbacks(&cb);
 	}
-	srvc->start();
 }
 
 static void setupAdvertising(const char *name) {
