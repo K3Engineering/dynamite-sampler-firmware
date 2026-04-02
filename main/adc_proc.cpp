@@ -124,7 +124,7 @@ static void taskSetupAdc(void *setupDone) {
 	adc.reset();
 
 	for (uint8_t chan = 0; chan < adc.NUM_CHANNELS; ++chan) {
-		adc.setChannelEnable(0, ads131UserConfig.enable[chan]);
+		adc.setChannelEnable(chan, ads131UserConfig.enable[chan]);
 		adc.setChannelInputSelection(chan, ads131UserConfig.input[chan]);
 		adc.setChannelPGA(chan, ads131UserConfig.pga[chan]);
 	}
