@@ -194,7 +194,7 @@ void ADS131M04::init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset) 
 	}
 	transDescr = {
 	    // .flags            = SPI_TRANS_DMA_BUFFER_ALIGN_MANUAL,
-	    .flags            = 0, // Until ESP IDF fixed
+	    .flags            = 0, // Until https://github.com/espressif/esp-idf/issues/18251 fixed
 	    .cmd              = 0,
 	    .addr             = 0,
 	    .length           = sizeof(RawOutput) * 8, // in bits.
@@ -263,7 +263,7 @@ void ADS131M04::setupSpiAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, g
 	    .pre_cb           = nullptr,
 	    .post_cb          = nullptr,
 	};
-	assert(devcfg.clock_speed_hz <= 15625000);
+	assert(devcfg.clock_speed_hz <= 15625000); // Max ADS131 SPI clock
 	ret = spi_bus_add_device(spiDevice, &devcfg, &spiHandle);
 	assert(ESP_OK == ret);
 	ret = spi_device_acquire_bus(spiHandle, portMAX_DELAY);
