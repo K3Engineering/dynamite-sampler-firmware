@@ -51,10 +51,11 @@ class ADS131M04 {
 	void deinit();
 	void setupSpiAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
 	                    gpio_num_t mosiPin);
+	void releaseSpi();
 
 	void reset();
 	bool setChannelEnable(uint8_t channel, bool enable);
-	bool setPowerMode(uint8_t powerMode);
+	bool setPowerMode(uint16_t powerMode);
 	bool setChannelPGA(uint8_t channel, uint16_t pga);
 	bool setChannelInputSelection(uint8_t channel, uint16_t input);
 	bool setOsr(uint16_t osr);
@@ -117,6 +118,7 @@ class MockAds131 {
 	void deinit() {}
 	void setupSpiAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
 	                    gpio_num_t mosiPin) {}
+	void releaseSpi() {}
 	void setWakeupTask(TaskHandle_t taskToWakeOnDrdy, size_t interval) {
 		isrData.taskToWake   = taskToWakeOnDrdy;
 		isrData.wakeInterval = interval;

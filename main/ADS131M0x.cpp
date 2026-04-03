@@ -8,7 +8,9 @@
 
 #include <hal/gdma_ll.h>
 #include <hal/spi_ll.h>
+#ifndef SOC_GDMA_TRIG_PERIPH_SPI2
 #include <soc/gdma_channel.h>
+#endif
 
 #include <endian.h>
 
@@ -83,6 +85,77 @@ bool ADS131M04::writeRegisterMasked(uint8_t address, uint16_t value, uint16_t ma
 	return writeRegister(address, registerContents);
 }
 
+bool ADS131M04::setPowerMode(uint16_t powerMode) {
+	assert((powerMode >= ADS131M0xReg::POWER_MODE_VERY_LOW_POWER) &&
+	       (powerMode <= ADS131M0xReg::POWER_MODE_HIGH_RESOLUTION));
+
+	return writeRegisterMasked(ADS131M0xReg::REG_CLOCK, powerMode, ADS131M0xReg::REGMASK_CLOCK_PWR);
+}
+
+/**
+ * @brief set OSR digital filter (see datasheet)
+ */
+bool ADS131M04::setOsr(uint16_t osr) {
+	assert((osr >= ADS131M0xReg::OSR_128) && (osr <= ADS131M0xReg::OSR_16384));
+
+	return writeRegisterMasked(ADS131M0xReg::REG_CLOCK, osr << 2, ADS131M0xReg::REGMASK_CLOCK_OSR);
+}
+
+bool ADS131M04::setChannelEnable(uint8_t channel, bool enable) {
+	static_assert(ADS131M0xReg::REGMASK_CLOCK_CH1_EN == (ADS131M0xReg::REGMASK_CLOCK_CH0_EN << 1));
+	static_assert(ADS131M0xReg::REGMASK_CLOCK_CH2_EN == (ADS131M0xReg::REGMASK_CLOCK_CH0_EN << 2));
+	static_assert(ADS131M0xReg::REGMASK_CLOCK_CH3_EN == (ADS131M0xReg::REGMASK_CLOCK_CH0_EN << 3));
+	static_assert(ADS131M0xReg::REGMASK_CLOCK_CH7_EN == (ADS131M0xReg::REGMASK_CLOCK_CH0_EN << 7));
+	assert(channel < NUM_CHANNELS);
+
+	return writeRegisterMasked(ADS131M0xReg::REG_CLOCK,
+	                           enable ? (ADS131M0xReg::REGMASK_CLOCK_CH0_EN << channel) : 0,
+	                           ADS131M0xReg::REGMASK_CLOCK_CH0_EN << channel);
+}
+
+bool ADS131M04::setChannelPGA(uint8_t channel, uint16_t pga) {
+	static_assert(ADS131M0xReg::REGMASK_GAIN_PGAGAIN1 ==
+	              (ADS131M0xReg::REGMASK_GAIN_PGAGAIN0 << 4));
+	static_assert(ADS131M0xReg::REGMASK_GAIN_PGAGAIN2 ==
+	              (ADS131M0xReg::REGMASK_GAIN_PGAGAIN0 << 8));
+	static_assert(ADS131M0xReg::REGMASK_GAIN_PGAGAIN3 ==
+	              (ADS131M0xReg::REGMASK_GAIN_PGAGAIN0 << 12));
+	static_assert(ADS131M0xReg::REGMASK_GAIN_PGAGAIN4 == ADS131M0xReg::REGMASK_GAIN_PGAGAIN0);
+	assert(channel < NUM_CHANNELS);
+
+	return writeRegisterMasked((channel < 4) ? ADS131M0xReg::REG_GAIN1 : ADS131M0xReg::REG_GAIN2,
+	                           pga << ((channel % 4) * 4),
+	                           ADS131M0xReg::REGMASK_GAIN_PGAGAIN0 << ((channel % 4) * 4));
+}
+
+bool ADS131M04::setChannelInputSelection(uint8_t channel, uint16_t input) {
+	static_assert(ADS131M0xReg::REG_CH1_CFG == ADS131M0xReg::REG_CH0_CFG + 5);
+	static_assert(ADS131M0xReg::REG_CH2_CFG == ADS131M0xReg::REG_CH0_CFG + 5 * 2);
+	static_assert(ADS131M0xReg::REG_CH3_CFG == ADS131M0xReg::REG_CH0_CFG + 5 * 3);
+	static_assert(ADS131M0xReg::REG_CH7_CFG == ADS131M0xReg::REG_CH0_CFG + 5 * 7);
+	assert(channel < NUM_CHANNELS);
+
+	return writeRegisterMasked(ADS131M0xReg::REG_CH0_CFG + channel * 5, input,
+	                           ADS131M0xReg::REGMASK_CHX_CFG_MUX);
+}
+
+uint16_t ADS131M04::readID() { return readRegister(ADS131M0xReg::REG_ID); }
+
+uint16_t ADS131M04::readSTATUS() { return readRegister(ADS131M0xReg::REG_STATUS); }
+
+uint16_t ADS131M04::readMODE() { return readRegister(ADS131M0xReg::REG_MODE); }
+
+uint16_t ADS131M04::readCLOCK() { return readRegister(ADS131M0xReg::REG_CLOCK); }
+
+uint16_t ADS131M04::readPGA() { return readRegister(ADS131M0xReg::REG_GAIN1); }
+
+bool ADS131M04::isCrcOk(const RawOutput *data) {
+	uint16_t crc           = be16toh(data->crc);
+	uint16_t calculatedCrc = crc16ccitt(data, sizeof(*data) - DATA_WORD_LENGTH);
+
+	return crc == calculatedCrc;
+}
+
 /// @brief Hardware reset (reset low activ)
 void ADS131M04::reset() {
 	gpio_set_level(resetPin, 1);
@@ -97,6 +170,8 @@ void ADS131M04::init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset) 
 	csPin    = pinCs;
 	drdyPin  = pinDrdy;
 	resetPin = pinReset;
+
+	spiHandle = 0;
 
 	txSmallBuff = (RawOutput *)heap_caps_malloc(DMA_PADDED_FRAME_SIZE, MALLOC_CAP_DMA);
 	rxSmallBuff = (RawOutput *)heap_caps_malloc(DMA_PADDED_FRAME_SIZE, MALLOC_CAP_DMA);
@@ -118,7 +193,8 @@ void ADS131M04::init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset) 
 		};
 	}
 	transDescr = {
-	    .flags            = SPI_TRANS_DMA_BUFFER_ALIGN_MANUAL,
+	    // .flags            = SPI_TRANS_DMA_BUFFER_ALIGN_MANUAL,
+	    .flags            = 0, // Until https://github.com/espressif/esp-idf/issues/18251 fixed
 	    .cmd              = 0,
 	    .addr             = 0,
 	    .length           = sizeof(RawOutput) * 8, // in bits.
@@ -149,6 +225,7 @@ void ADS131M04::deinit() {
 
 void ADS131M04::setupSpiAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
                                gpio_num_t mosiPin) {
+	assert(!spiHandle);
 	const spi_bus_config_t busCfg = {
 	    .mosi_io_num           = mosiPin,
 	    .miso_io_num           = misoPin,
@@ -186,6 +263,7 @@ void ADS131M04::setupSpiAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, g
 	    .pre_cb           = nullptr,
 	    .post_cb          = nullptr,
 	};
+	assert(devcfg.clock_speed_hz <= 15625000); // Max ADS131 SPI clock
 	ret = spi_bus_add_device(spiDevice, &devcfg, &spiHandle);
 	assert(ESP_OK == ret);
 	ret = spi_device_acquire_bus(spiHandle, portMAX_DELAY);
@@ -195,70 +273,12 @@ void ADS131M04::setupSpiAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, g
 	assert(isrData.spiHw);
 }
 
-bool ADS131M04::setPowerMode(uint8_t powerMode) {
-	return writeRegisterMasked(ADS131M0xReg::REG_CLOCK, powerMode, ADS131M0xReg::REGMASK_CLOCK_PWR);
-}
-
-/**
- * @brief set OSR digital filter (see datasheet)
- */
-bool ADS131M04::setOsr(uint16_t osr) {
-	if (osr > 7) {
-		return false;
+void ADS131M04::releaseSpi() {
+	if (spiHandle) {
+		spi_device_release_bus(spiHandle);
+		spi_bus_remove_device(spiHandle);
+		spiHandle = 0;
 	}
-	return writeRegisterMasked(ADS131M0xReg::REG_CLOCK, osr << 2, ADS131M0xReg::REGMASK_CLOCK_OSR);
-}
-
-bool ADS131M04::setChannelEnable(uint8_t channel, bool enable) {
-	static_assert(ADS131M0xReg::REGMASK_CLOCK_CH1_EN == (ADS131M0xReg::REGMASK_CLOCK_CH0_EN << 1));
-	static_assert(ADS131M0xReg::REGMASK_CLOCK_CH2_EN == (ADS131M0xReg::REGMASK_CLOCK_CH0_EN << 2));
-	static_assert(ADS131M0xReg::REGMASK_CLOCK_CH3_EN == (ADS131M0xReg::REGMASK_CLOCK_CH0_EN << 3));
-	static_assert(ADS131M0xReg::REGMASK_CLOCK_CH7_EN == (ADS131M0xReg::REGMASK_CLOCK_CH0_EN << 7));
-
-	return writeRegisterMasked(ADS131M0xReg::REG_CLOCK,
-	                           enable ? (ADS131M0xReg::REGMASK_CLOCK_CH0_EN << channel) : 0,
-	                           ADS131M0xReg::REGMASK_CLOCK_CH0_EN << channel);
-}
-
-bool ADS131M04::setChannelPGA(uint8_t channel, uint16_t pga) {
-	static_assert(ADS131M0xReg::REGMASK_GAIN_PGAGAIN1 ==
-	              (ADS131M0xReg::REGMASK_GAIN_PGAGAIN0 << 4));
-	static_assert(ADS131M0xReg::REGMASK_GAIN_PGAGAIN2 ==
-	              (ADS131M0xReg::REGMASK_GAIN_PGAGAIN0 << 8));
-	static_assert(ADS131M0xReg::REGMASK_GAIN_PGAGAIN3 ==
-	              (ADS131M0xReg::REGMASK_GAIN_PGAGAIN0 << 12));
-	static_assert(ADS131M0xReg::REGMASK_GAIN_PGAGAIN4 == ADS131M0xReg::REGMASK_GAIN_PGAGAIN0);
-
-	return writeRegisterMasked((channel < 4) ? ADS131M0xReg::REG_GAIN1 : ADS131M0xReg::REG_GAIN2,
-	                           pga << ((channel % 4) * 4),
-	                           ADS131M0xReg::REGMASK_GAIN_PGAGAIN0 << ((channel % 4) * 4));
-}
-
-bool ADS131M04::setChannelInputSelection(uint8_t channel, uint16_t input) {
-	static_assert(ADS131M0xReg::REG_CH1_CFG == ADS131M0xReg::REG_CH0_CFG + 5);
-	static_assert(ADS131M0xReg::REG_CH2_CFG == ADS131M0xReg::REG_CH0_CFG + 5 * 2);
-	static_assert(ADS131M0xReg::REG_CH3_CFG == ADS131M0xReg::REG_CH0_CFG + 5 * 3);
-	static_assert(ADS131M0xReg::REG_CH7_CFG == ADS131M0xReg::REG_CH0_CFG + 5 * 7);
-
-	return writeRegisterMasked(ADS131M0xReg::REG_CH0_CFG + channel * 5, input,
-	                           ADS131M0xReg::REGMASK_CHX_CFG_MUX);
-}
-
-uint16_t ADS131M04::readID() { return readRegister(ADS131M0xReg::REG_ID); }
-
-uint16_t ADS131M04::readSTATUS() { return readRegister(ADS131M0xReg::REG_STATUS); }
-
-uint16_t ADS131M04::readMODE() { return readRegister(ADS131M0xReg::REG_MODE); }
-
-uint16_t ADS131M04::readCLOCK() { return readRegister(ADS131M0xReg::REG_CLOCK); }
-
-uint16_t ADS131M04::readPGA() { return readRegister(ADS131M0xReg::REG_GAIN1); }
-
-bool ADS131M04::isCrcOk(const RawOutput *data) {
-	uint16_t crc           = be16toh(data->crc);
-	uint16_t calculatedCrc = crc16ccitt(data, sizeof(*data) - DATA_WORD_LENGTH);
-
-	return crc == calculatedCrc;
 }
 
 const ADS131M04::RawOutput *IRAM_ATTR ADS131M04::rawReadADC(size_t idx) const {
@@ -316,31 +336,32 @@ static inline void clearSpiBuffer(spi_dev_t *hw) {
 	}
 }
 
-void ADS131M04::startAcquisition() {
-	isrData.headIndex = 0;
-	isrData.tailIndex = 0;
+static void hijackDmaSpi(ADS131M0xIsrData *ctrl) {
+	ctrl->headIndex = 0;
+	ctrl->tailIndex = 0;
+	// Wait for transfer to finish
+	while (!spi_ll_usr_is_done(ctrl->spiHw))
+		;
+	ctrl->rxChan = findDmaRxChan(ctrl->spiHw);
+	assert(ctrl->rxChan >= 0);
 
+	// TX will read form SPI register buffer, fill it with 0 and disable DMA
+	clearSpiBuffer(ctrl->spiHw);
+	spi_ll_dma_tx_enable(ctrl->spiHw, false);
+
+	// RX will use DMA, clear FIFO and enable DMA.
+	spi_ll_dma_rx_fifo_reset(ctrl->spiHw);
+	spi_ll_dma_rx_enable(ctrl->spiHw, true);
+}
+
+void ADS131M04::startAcquisition() {
 	txSmallBuff->status = 0;
 	if (ESP_OK != spi_device_polling_start(spiHandle, &transDescr, portMAX_DELAY)) {
 		return;
 	}
 	// spi_device_polling_end() at stopAcquisition()
 
-	// ------- Hijacking DMA/SPI hardware -------
-	// Wait for transfer to finish
-	while (!spi_ll_usr_is_done(isrData.spiHw))
-		;
-	isrData.rxChan = findDmaRxChan(isrData.spiHw);
-	assert(isrData.rxChan >= 0);
-
-	// TX will read form SPI register buffer, fill it with 0 and disable DMA
-	clearSpiBuffer(isrData.spiHw);
-	spi_ll_dma_tx_enable(isrData.spiHw, false);
-
-	// RX will use DMA, clear FIFO and enable DMA.
-	spi_ll_dma_rx_fifo_reset(isrData.spiHw);
-	spi_ll_dma_rx_enable(isrData.spiHw, true);
-	// ------- Hijacking done -------
+	hijackDmaSpi(&isrData);
 
 	gpio_set_intr_type(drdyPin, GPIO_INTR_NEGEDGE);
 }

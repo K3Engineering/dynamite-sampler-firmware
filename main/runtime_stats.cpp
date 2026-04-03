@@ -48,8 +48,8 @@ static void printTaskRuntimeStatsDelta() {
 	prevSnapshotSize = currentSnapshotSize;
 	prevTotalRuntime = currentTotalRuntime;
 
-	ESP_LOGI(TAG, "Free Heap: MALLOC_CAP_DMA %u, MALLOC_CAP_DEFAULT %u",
-	         heap_caps_get_free_size(MALLOC_CAP_DMA), heap_caps_get_free_size(MALLOC_CAP_DEFAULT));
+	ESP_LOGI(TAG, "Free Heap: DMA %zu, INTERNAL %zu", heap_caps_get_free_size(MALLOC_CAP_DMA),
+	         heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
 }
 
 static void taskPrintRuntimeStats(void *) {
@@ -61,7 +61,8 @@ static void taskPrintRuntimeStats(void *) {
 }
 
 void setupStats(int core) {
-	xTaskCreatePinnedToCore(taskPrintRuntimeStats, "task_stats", 1024 * 3, NULL, 0, NULL, core);
+	xTaskCreatePinnedToCore(taskPrintRuntimeStats, "task_stats", 1024 * 3, nullptr, 0, nullptr,
+	                        core);
 }
 
 #else // ! CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS
