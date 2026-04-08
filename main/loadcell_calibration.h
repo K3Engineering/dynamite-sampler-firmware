@@ -5,4 +5,7 @@
 
 bool readLoadcellCalibration(CalibrationNetworkData *calibration);
 
+bool writeLoadcellStr2(const char *keyVal);
+bool readLoadcellCalibration2(CalibrationNetworkData *calibration);
+
 #endif // _LOADCELL_CALIBRATION_H
