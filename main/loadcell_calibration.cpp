@@ -33,56 +33,78 @@ bool readLoadcellCalibration(CalibrationNetworkData *calibration) {
 constexpr char LOADCELL_NSPACE[]      = "loadcell";
 constexpr size_t LOADCELL_MAX_VAL_LEN = 32;
 
-bool writeLoadcellStr2(const char *keyVal) {
-	nvs_handle_t h;
-	if (ESP_OK != nvs_open(LOADCELL_NSPACE, NVS_READWRITE, &h)) {
-		return false;
-	}
+static const char *splitKeyVal(const char *keyVal) {
 	const char *delim = strchr(keyVal, '=');
-	if ((delim == nullptr) || (delim == keyVal)) {
-		return false;
+	if ((delim == nullptr) || (delim == keyVal) || (delim - keyVal > NVS_KEY_NAME_MAX_SIZE - 1)) {
+		return nullptr;
 	}
-	if (delim - keyVal >= NVS_KEY_NAME_MAX_SIZE) {
-		return false;
+	if (strlen(delim + 1) > LOADCELL_MAX_VAL_LEN - 1) {
+		return nullptr;
 	}
-	if (strlen(delim) >= LOADCELL_MAX_VAL_LEN) {
+	return delim;
+}
+
+bool writeLoadcellStr2(const char *keyVal) {
+	const char *delim = splitKeyVal(keyVal);
+	if (!delim) {
 		return false;
 	}
 	char key[NVS_KEY_NAME_MAX_SIZE] = {0};
 	memcpy(key, keyVal, delim - keyVal);
-	++delim;
-	if (*delim) {
-		nvs_set_str(h, key, delim);
-	} else {
-		nvs_erase_key(h, key);
+
+	nvs_handle_t handle;
+	if (ESP_OK != nvs_open(LOADCELL_NSPACE, NVS_READWRITE, &handle)) {
+		return false;
 	}
-	nvs_commit(h);
-	nvs_close(h);
+	const char *val = delim + 1;
+	if (*val) {
+		nvs_set_str(handle, key, val);
+	} else {
+		nvs_erase_key(handle, key);
+	}
+	nvs_commit(handle);
+	nvs_close(handle);
 	return true;
 }
 
+static size_t compose_one_pair(nvs_handle_t handle, char *dst, const char *key) {
+	size_t sz = strlen(key);
+	memcpy(dst, key, sz);
+	dst[sz++]     = '=';
+	size_t length = LOADCELL_MAX_VAL_LEN;
+	if (ESP_OK != nvs_get_str(handle, key, dst + sz, &length)) {
+		return 0;
+	}
+	sz += length - 1;
+	dst[sz++] = '\n';
+	return sz;
+}
+
 bool readLoadcellCalibration2(CalibrationNetworkData *calibration) {
-	nvs_handle_t h;
-	if (ESP_OK != nvs_open(LOADCELL_NSPACE, NVS_READONLY, &h)) {
+	nvs_handle_t handle;
+	if (ESP_OK != nvs_open(LOADCELL_NSPACE, NVS_READONLY, &handle)) {
 		return false;
 	}
-	nvs_iterator_t it = NULL;
-	if (ESP_OK != nvs_entry_find_in_handle(h, NVS_TYPE_STR, &it)) {
+	nvs_iterator_t it;
+	if (ESP_OK != nvs_entry_find_in_handle(handle, NVS_TYPE_STR, &it)) {
+		nvs_close(handle);
 		return false;
 	}
-	*calibration->data = 0;
+	size_t recordOffset = 0;
 	do {
 		nvs_entry_info_t info;
-		nvs_entry_info(it, &info);
-		char s[LOADCELL_MAX_VAL_LEN];
-		size_t length = sizeof(s);
-		nvs_get_str(h, info.key, s, &length);
-		strcat((char *)calibration->data, info.key);
-		strcat((char *)calibration->data, "=");
-		strcat((char *)calibration->data, s);
+		if (ESP_OK == nvs_entry_info(it, &info)) {
+			char record[NVS_KEY_NAME_MAX_SIZE + LOADCELL_MAX_VAL_LEN + 1];
+			size_t sz = compose_one_pair(handle, record, info.key);
+			if (sz && (recordOffset + sz < sizeof(calibration->data))) {
+				memcpy(calibration->data + recordOffset, record, sz);
+				recordOffset += sz;
+			}
+		}
 	} while (ESP_OK == nvs_entry_next(&it));
 	nvs_release_iterator(it);
-	nvs_close(h);
+	nvs_close(handle);
+	calibration->data[recordOffset] = 0;
 	ESP_LOGI(TAG, "'%s'", calibration->data);
 	return true;
 }
