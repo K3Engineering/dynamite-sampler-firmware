@@ -134,7 +134,7 @@ class LoadcellConfigCallbacks : public NimBLECharacteristicCallbacks {
 	}
 	void onRead(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
 		CalibrationNetworkData calibrData;
-		if (readLoadcellCalibration2(&calibrData)) {
+		if (readLoadcellCalibration(&calibrData)) {
 			pCharacteristic->setValue((const char *)calibrData.data);
 		}
 	}
