@@ -85,7 +85,7 @@ class TxPowerManagerCallbacks : public NimBLECharacteristicCallbacks {
 		// Value written to the characteristic by a client.
 		const NimBLEAttValue val = pCharacteristic->getValue();
 		if (val.length() != sizeof(TxPowerNetworkData)) {
-			ESP_LOGW(TAG, "TX power onWrite, recieved %u bytes", val.length());
+			ESP_LOGW(TAG, "TX power onWrite, receieved %u bytes", val.length());
 			return;
 		}
 		TxPowerNetworkData power = *(TxPowerNetworkData *)val.data();

@@ -14,7 +14,7 @@ constexpr size_t LOADCELL_MAX_KEY_LEN = 15; // does not incude terminating 0
 static_assert(LOADCELL_MAX_KEY_LEN < NVS_KEY_NAME_MAX_SIZE);
 constexpr size_t LOADCELL_MAX_VAL_LEN = 31; // does not incude terminating 0
 
-static constexpr size_t splitKeyVal(const char *str) {
+static size_t splitKeyVal(const char *str) {
 	const char *delim = strchr(str, '=');
 	if ((delim == nullptr) || (delim == str) || (delim - str > LOADCELL_MAX_KEY_LEN)) {
 		return 0;
@@ -44,14 +44,12 @@ bool writeLoadcellVal(const uint8_t *data, size_t len) {
 	if (ESP_OK != nvs_open(LOADCELL_NSPACE, NVS_READWRITE, &handle)) {
 		return false;
 	}
-	if (*val) {
-		nvs_set_str(handle, key, val);
-	} else {
-		nvs_erase_key(handle, key);
+	esp_err_t err = (*val) ? nvs_set_str(handle, key, val) : nvs_erase_key(handle, key);
+	if (ESP_OK == err) {
+		err = nvs_commit(handle);
 	}
-	nvs_commit(handle);
 	nvs_close(handle);
-	return true;
+	return ESP_OK == err;
 }
 
 static size_t compose_one_pair(nvs_handle_t handle, char *dst, const char *key) {
@@ -68,14 +66,16 @@ static size_t compose_one_pair(nvs_handle_t handle, char *dst, const char *key) 
 }
 
 bool readLoadcellCalibration(CalibrationNetworkData *calibration) {
+	calibration->data[0] = 0;
 	nvs_handle_t handle;
 	if (ESP_OK != nvs_open(LOADCELL_NSPACE, NVS_READONLY, &handle)) {
 		return false;
-	}
+	};
 	nvs_iterator_t it;
-	if (ESP_OK != nvs_entry_find_in_handle(handle, NVS_TYPE_STR, &it)) {
+	esp_err_t err = nvs_entry_find_in_handle(handle, NVS_TYPE_STR, &it);
+	if (err != ESP_OK) {
 		nvs_close(handle);
-		return false;
+		return err == ESP_ERR_NVS_NOT_FOUND;
 	}
 	size_t recordOffset = 0;
 	do {
