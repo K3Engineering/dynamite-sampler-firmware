@@ -8,25 +8,25 @@
 
 constexpr char TAG[] = "CALIBR";
 
-constexpr char LOADCELL_NSPACE[] = "loadcell";
-static_assert(sizeof(LOADCELL_NSPACE) <= NVS_NS_NAME_MAX_SIZE);
-constexpr size_t LOADCELL_MAX_KEY_LEN = 15; // does not incude terminating 0
-static_assert(LOADCELL_MAX_KEY_LEN < NVS_KEY_NAME_MAX_SIZE);
-constexpr size_t LOADCELL_MAX_VAL_LEN = 31; // does not incude terminating 0
+constexpr char CALIBRATION_NSPACE[] = "K3calibration";
+static_assert(sizeof(CALIBRATION_NSPACE) <= NVS_NS_NAME_MAX_SIZE);
+constexpr size_t CALIBRATION_MAX_KEY_LEN = 15; // does not incude terminating 0
+static_assert(CALIBRATION_MAX_KEY_LEN < NVS_KEY_NAME_MAX_SIZE);
+constexpr size_t CALIBRATION_MAX_VAL_LEN = 31; // does not incude terminating 0
 
 static size_t splitKeyVal(const char *str) {
 	const char *delim = strchr(str, '=');
-	if ((delim == nullptr) || (delim == str) || (delim - str > LOADCELL_MAX_KEY_LEN)) {
+	if ((delim == nullptr) || (delim == str) || (delim - str > CALIBRATION_MAX_KEY_LEN)) {
 		return 0;
 	}
-	if (strlen(delim + 1) > LOADCELL_MAX_VAL_LEN) {
+	if (strlen(delim + 1) > CALIBRATION_MAX_VAL_LEN) {
 		return 0;
 	}
 	return delim - str;
 }
 
-bool writeLoadcellVal(const uint8_t *data, size_t len) {
-	char keyVal[LOADCELL_MAX_KEY_LEN + LOADCELL_MAX_VAL_LEN + 2];
+bool writeCalibrationlKeyVal(const uint8_t *data, size_t len) {
+	char keyVal[CALIBRATION_MAX_KEY_LEN + CALIBRATION_MAX_VAL_LEN + 2];
 	if (len >= sizeof(keyVal)) {
 		return false;
 	}
@@ -41,7 +41,7 @@ bool writeLoadcellVal(const uint8_t *data, size_t len) {
 	const char *val      = keyVal + delimiterIdx + 1;
 
 	nvs_handle_t handle;
-	if (ESP_OK != nvs_open(LOADCELL_NSPACE, NVS_READWRITE, &handle)) {
+	if (ESP_OK != nvs_open(CALIBRATION_NSPACE, NVS_READWRITE, &handle)) {
 		return false;
 	}
 	esp_err_t err = (*val) ? nvs_set_str(handle, key, val) : nvs_erase_key(handle, key);
@@ -56,7 +56,7 @@ static size_t compose_one_pair(nvs_handle_t handle, char *dst, const char *key) 
 	size_t sz = strlen(key);
 	memcpy(dst, key, sz);
 	dst[sz++]     = '=';
-	size_t length = LOADCELL_MAX_VAL_LEN + 1;
+	size_t length = CALIBRATION_MAX_VAL_LEN + 1;
 	if (ESP_OK != nvs_get_str(handle, key, dst + sz, &length)) {
 		return 0;
 	}
@@ -65,10 +65,10 @@ static size_t compose_one_pair(nvs_handle_t handle, char *dst, const char *key) 
 	return sz;
 }
 
-bool readLoadcellCalibration(CalibrationNetworkData *calibration) {
+bool readCalibrationAll(CalibrationNetworkData *calibration) {
 	calibration->data[0] = 0;
 	nvs_handle_t handle;
-	if (ESP_OK != nvs_open(LOADCELL_NSPACE, NVS_READONLY, &handle)) {
+	if (ESP_OK != nvs_open(CALIBRATION_NSPACE, NVS_READONLY, &handle)) {
 		return false;
 	};
 	nvs_iterator_t it;
@@ -81,7 +81,7 @@ bool readLoadcellCalibration(CalibrationNetworkData *calibration) {
 	do {
 		nvs_entry_info_t info;
 		if (ESP_OK == nvs_entry_info(it, &info)) {
-			char record[LOADCELL_MAX_KEY_LEN + LOADCELL_MAX_VAL_LEN + 3];
+			char record[CALIBRATION_MAX_KEY_LEN + CALIBRATION_MAX_VAL_LEN + 3];
 			size_t sz = compose_one_pair(handle, record, info.key);
 			if (sz && (recordOffset + sz < sizeof(calibration->data))) {
 				memcpy(calibration->data + recordOffset, record, sz);

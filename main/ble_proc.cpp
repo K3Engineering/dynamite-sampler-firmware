@@ -124,17 +124,17 @@ class AdcConfigCallbacks : public NimBLECharacteristicCallbacks {
 	}
 };
 
-class LoadcellConfigCallbacks : public NimBLECharacteristicCallbacks {
+class CalibrationConfigCallbacks : public NimBLECharacteristicCallbacks {
 	void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
 		// Value written to the characteristic by a client.
 		const NimBLEAttValue val = pCharacteristic->getValue();
-		if (!writeLoadcellVal(val.data(), val.length())) {
-			ESP_LOGW(TAG, "LoadcellConfig onWrite(%u bytes) failed", val.length());
+		if (!writeCalibrationlKeyVal(val.data(), val.length())) {
+			ESP_LOGW(TAG, "CalibrationConfig onWrite(%u bytes) failed", val.length());
 		}
 	}
 	void onRead(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
 		CalibrationNetworkData calibrData;
-		if (readLoadcellCalibration(&calibrData)) {
+		if (readCalibrationAll(&calibrData)) {
 			pCharacteristic->setValue((const char *)calibrData.data);
 		}
 	}
@@ -150,7 +150,7 @@ static void setupAdcFeed(NimBLEServer *server) {
 	{ // Calibration data
 		NimBLECharacteristic *chr = srvc->createCharacteristic(
 		    &LC_CALIB_CHR_UUID128, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE);
-		static LoadcellConfigCallbacks cb;
+		static CalibrationConfigCallbacks cb;
 		chr->setCallbacks(&cb);
 	}
 	{ // ADC config
