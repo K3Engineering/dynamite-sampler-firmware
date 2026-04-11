@@ -85,7 +85,7 @@ class TxPowerManagerCallbacks : public NimBLECharacteristicCallbacks {
 		// Value written to the characteristic by a client.
 		const NimBLEAttValue val = pCharacteristic->getValue();
 		if (val.length() != sizeof(TxPowerNetworkData)) {
-			ESP_LOGW(TAG, "TX power onWrite, receieved %u bytes", val.length());
+			ESP_LOGW(TAG, "TX power onWrite, received %u bytes", val.length());
 			return;
 		}
 		TxPowerNetworkData power = *(TxPowerNetworkData *)val.data();
@@ -128,7 +128,7 @@ class CalibrationConfigCallbacks : public NimBLECharacteristicCallbacks {
 	void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
 		// Value written to the characteristic by a client.
 		const NimBLEAttValue val = pCharacteristic->getValue();
-		if (!writeCalibrationlKeyVal(val.data(), val.length())) {
+		if (!writeCalibrationKeyVal(val.data(), val.length())) {
 			ESP_LOGW(TAG, "CalibrationConfig onWrite(%u bytes) failed", val.length());
 		}
 	}

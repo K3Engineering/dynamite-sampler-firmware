@@ -25,7 +25,7 @@ static size_t splitKeyVal(const char *str) {
 	return delim - str;
 }
 
-bool writeCalibrationlKeyVal(const uint8_t *data, size_t len) {
+bool writeCalibrationKeyVal(const uint8_t *data, size_t len) {
 	char keyVal[CALIBRATION_MAX_KEY_LEN + CALIBRATION_MAX_VAL_LEN + 2];
 	if (len >= sizeof(keyVal)) {
 		return false;

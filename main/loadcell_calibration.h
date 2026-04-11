@@ -4,6 +4,6 @@
 #include "dynamite_sampler_api.h"
 
 bool readCalibrationAll(CalibrationNetworkData *calibration);
-bool writeCalibrationlKeyVal(const uint8_t *data, size_t len);
+bool writeCalibrationKeyVal(const uint8_t *data, size_t len);
 
 #endif // _LOADCELL_CALIBRATION_H
