@@ -5,5 +5,6 @@
 
 bool readCalibrationAll(CalibrationNetworkData *calibration);
 bool writeCalibrationKeyVal(const uint8_t *data, size_t len);
+bool deleteCalibrationKey(const uint8_t *data, size_t len);
 
 #endif // _LOADCELL_CALIBRATION_H

@@ -39,12 +39,35 @@ bool writeCalibrationKeyVal(const uint8_t *data, size_t len) {
 	keyVal[delimiterIdx] = 0;
 	const char *key      = keyVal;
 	const char *val      = keyVal + delimiterIdx + 1;
+	if (0 == *val) {
+		return false;
+	}
 
 	nvs_handle_t handle;
 	if (ESP_OK != nvs_open(CALIBRATION_NSPACE, NVS_READWRITE, &handle)) {
 		return false;
 	}
-	esp_err_t err = (*val) ? nvs_set_str(handle, key, val) : nvs_erase_key(handle, key);
+	esp_err_t err = nvs_set_str(handle, key, val);
+	if (ESP_OK == err) {
+		err = nvs_commit(handle);
+	}
+	nvs_close(handle);
+	return ESP_OK == err;
+}
+
+bool deleteCalibrationKey(const uint8_t *data, size_t len) {
+	char key[CALIBRATION_MAX_KEY_LEN];
+	if (len >= sizeof(key)) {
+		return false;
+	}
+	memcpy(key, data, len);
+	key[len] = 0;
+
+	nvs_handle_t handle;
+	if (ESP_OK != nvs_open(CALIBRATION_NSPACE, NVS_READWRITE, &handle)) {
+		return false;
+	}
+	esp_err_t err = nvs_erase_key(handle, key);
 	if (ESP_OK == err) {
 		err = nvs_commit(handle);
 	}

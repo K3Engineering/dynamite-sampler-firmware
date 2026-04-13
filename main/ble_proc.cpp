@@ -124,13 +124,28 @@ class AdcConfigCallbacks : public NimBLECharacteristicCallbacks {
 	}
 };
 
+static void processWrite(const uint8_t *data, size_t len) {
+	// Only processing "W key val" and "D key"
+	if (len < 2)
+		return;
+	if (' ' != data[1])
+		return;
+	if ('W' == data[0]) {
+		if (!writeCalibrationKeyVal(data + 2, len - 2)) {
+			ESP_LOGW(TAG, "CalibrationConfig write(%u bytes) failed", len);
+		}
+	} else if ('D' == data[0]) {
+		if (!deleteCalibrationKey(data + 2, len - 2)) {
+			ESP_LOGW(TAG, "CalibrationConfig delete(%u bytes) failed", len);
+		}
+	}
+}
+
 class CalibrationConfigCallbacks : public NimBLECharacteristicCallbacks {
 	void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
 		// Value written to the characteristic by a client.
 		const NimBLEAttValue val = pCharacteristic->getValue();
-		if (!writeCalibrationKeyVal(val.data(), val.length())) {
-			ESP_LOGW(TAG, "CalibrationConfig onWrite(%u bytes) failed", val.length());
-		}
+		processWrite(val.data(), val.length());
 	}
 	void onRead(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
 		CalibrationNetworkData calibrData;
