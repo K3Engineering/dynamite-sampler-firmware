@@ -125,7 +125,7 @@ class AdcConfigCallbacks : public NimBLECharacteristicCallbacks {
 };
 
 static void processWrite(const uint8_t *data, size_t len) {
-	// Only processing "W key val" and "D key"
+	// Only processing "W key=val" and "D key"
 	if (len < 2)
 		return;
 	if (' ' != data[1])
