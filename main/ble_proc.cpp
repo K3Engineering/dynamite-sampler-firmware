@@ -164,7 +164,7 @@ static void setupAdcFeed(NimBLEServer *server) {
 	}
 	{ // Calibration data
 		NimBLECharacteristic *chr = srvc->createCharacteristic(
-		    &LC_CALIB_CHR_UUID128, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE);
+		    &CALIB_CFG_CHR_UUID128, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE);
 		static CalibrationConfigCallbacks cb;
 		chr->setCallbacks(&cb);
 	}
