@@ -68,6 +68,35 @@ constexpr ADS131M04UserCfg ads131UserConfig_boardv400{
     .osr       = ADS131M0xReg::OSR_4096,
 };
 
+// V5.0.0 hardware
+constexpr ADS131M04UserCfg ads131UserConfig_boardv500{
+    .enable =
+        {
+            true,
+            true,
+            true,
+            false,
+        },
+    .input =
+        {
+            ADS131M0xReg::INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS,
+            ADS131M0xReg::INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS,
+            ADS131M0xReg::INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS,
+            ADS131M0xReg::INPUT_CHANNEL_MUX_INPUT_SHORTED,
+        },
+    .pga =
+        {
+            // NOTE - on this hardware revision, DIRECT gain
+            // should be within 1x-4x to be within datasheet max allowed V requirements
+            ADS131M0xReg::CHANNEL_PGA_1, // DIRECT, bottom connector
+            ADS131M0xReg::CHANNEL_PGA_1, // OP AMP, bottom connector
+            ADS131M0xReg::CHANNEL_PGA_1, // DIRECT, top connector
+            ADS131M0xReg::CHANNEL_PGA_1, // OP AMP, top connector
+        },
+    .powerMode = ADS131M0xReg::POWER_MODE_HIGH_RESOLUTION,
+    .osr       = ADS131M0xReg::OSR_4096,
+};
+
 constexpr ADS131M04UserCfg ads131UserConfig{ads131UserConfig_boardv400};
 
 #endif // ADS131M0x_CFG_h
