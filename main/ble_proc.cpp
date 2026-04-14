@@ -85,7 +85,7 @@ class TxPowerManagerCallbacks : public NimBLECharacteristicCallbacks {
 		// Value written to the characteristic by a client.
 		const NimBLEAttValue val = pCharacteristic->getValue();
 		if (val.length() != sizeof(TxPowerNetworkData)) {
-			ESP_LOGW(TAG, "TX power onWrite, recieved value of length %u", val.length());
+			ESP_LOGW(TAG, "TX power onWrite, received %u bytes", val.length());
 			return;
 		}
 		TxPowerNetworkData power = *(TxPowerNetworkData *)val.data();
@@ -124,6 +124,37 @@ class AdcConfigCallbacks : public NimBLECharacteristicCallbacks {
 	}
 };
 
+static void processWrite(const uint8_t *data, size_t len) {
+	// Only processing "W key=val" and "D key"
+	if (len < 2)
+		return;
+	if (' ' != data[1])
+		return;
+	if ('W' == data[0]) {
+		if (!writeCalibrationKeyVal(data + 2, len - 2)) {
+			ESP_LOGW(TAG, "CalibrationConfig write(%u bytes) failed", len);
+		}
+	} else if ('D' == data[0]) {
+		if (!deleteCalibrationKey(data + 2, len - 2)) {
+			ESP_LOGW(TAG, "CalibrationConfig delete(%u bytes) failed", len);
+		}
+	}
+}
+
+class CalibrationConfigCallbacks : public NimBLECharacteristicCallbacks {
+	void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
+		// Value written to the characteristic by a client.
+		const NimBLEAttValue val = pCharacteristic->getValue();
+		processWrite(val.data(), val.length());
+	}
+	void onRead(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
+		CalibrationNetworkData calibrData;
+		if (readCalibrationAll(&calibrData)) {
+			pCharacteristic->setValue((const char *)calibrData.data);
+		}
+	}
+};
+
 static void setupAdcFeed(NimBLEServer *server) {
 	NimBLEService *srvc = server->createService(&DYNAMITE_SAMPLER_SVC_UUID128);
 	{ // ADC feed
@@ -132,12 +163,10 @@ static void setupAdcFeed(NimBLEServer *server) {
 		chrAdcFeed->setCallbacks(&cb);
 	}
 	{ // Calibration data
-		NimBLECharacteristic *chr =
-		    srvc->createCharacteristic(&LC_CALIB_CHR_UUID128, NIMBLE_PROPERTY::READ);
-		CalibrationNetworkData calibrData;
-		if (readLoadcellCalibration(&calibrData)) {
-			chr->setValue(calibrData);
-		}
+		NimBLECharacteristic *chr = srvc->createCharacteristic(
+		    &LC_CALIB_CHR_UUID128, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE);
+		static CalibrationConfigCallbacks cb;
+		chr->setCallbacks(&cb);
 	}
 	{ // ADC config
 		NimBLECharacteristic *chr =
