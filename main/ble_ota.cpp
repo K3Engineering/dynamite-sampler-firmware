@@ -115,7 +115,7 @@ static void conditionalRestart(const OtaControlData *control) {
 }
 
 static bool processOtaFileSize(OtaControlData *control, OtaFileSizeType sz) {
-	if (deviceLock != DeviceLock::Ota) {
+	if (deviceLock != DeviceLock::Open) {
 		return false;
 	}
 	control->fileSize         = sz;
