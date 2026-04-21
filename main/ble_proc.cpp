@@ -16,10 +16,12 @@
 
 constexpr char TAG[] = "BLE";
 
-static NimBLECharacteristic *chrAdcFeed = NULL;
+static NimBLECharacteristic *chrAdcFeed = nullptr;
 static uint16_t adcFeedConnectionHandle = BLE_HS_CONN_HANDLE_NONE; // TODO: rename
 
-StreamBufferHandle_t adcStreamBufferHandle = NULL;
+StreamBufferHandle_t adcStreamBufferHandle = nullptr;
+
+DeviceLock deviceLock = DeviceLock::Open;
 
 class MyServerCallbacks : public NimBLEServerCallbacks {
 	void onConnect(NimBLEServer *server, NimBLEConnInfo &connInfo) override {
@@ -47,12 +49,11 @@ class TxPowerPublisherCallbacks : public NimBLECharacteristicCallbacks {
 	void onRead(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
 		// Read by a client.
 		int power = NimBLEDevice::getPower();
-
 		TxPowerNetworkData rPwr{
 		    .val = static_cast<int8_t>(power),
 		};
 		pCharacteristic->setValue(rPwr);
-		ESP_LOGD(TAG, "Updated TX power chr with value: x%x (getPower=x%x)", rPwr.val, power);
+		ESP_LOGD(TAG, "TX power: x%x (getPower=x%x)", rPwr.val, power);
 	}
 };
 
@@ -64,13 +65,13 @@ static void setupDeviceInfo(NimBLEServer *server) {
 		    DEVICE_MAKE_NAME_CHR_UUID16.value, NIMBLE_PROPERTY::READ,
 		    sizeof(DEVICE_MANUFACTURER_NAME));
 		chr->setValue(DEVICE_MANUFACTURER_NAME);
-		ESP_LOGI(TAG, "Set Device manufacturer name to: %s", DEVICE_MANUFACTURER_NAME);
+		ESP_LOGI(TAG, "Set Device manufacturer name to: '%s'", DEVICE_MANUFACTURER_NAME);
 	}
 	{ // Firmware version
 		NimBLECharacteristic *chr = srvDeviceInfo->createCharacteristic(
 		    DEVICE_FIRMWARE_VER_CHR_UUID16.value, NIMBLE_PROPERTY::READ, sizeof(GIT_DESCRIBE));
 		chr->setValue(GIT_DESCRIBE);
-		ESP_LOGI(TAG, "Set Device Firmware version to: %s", GIT_DESCRIBE);
+		ESP_LOGI(TAG, "Set Device Firmware version to: '%s'", GIT_DESCRIBE);
 	}
 	{ // Transmitter power
 		NimBLECharacteristic *chr = srvDeviceInfo->createCharacteristic(
@@ -97,23 +98,30 @@ class TxPowerManagerCallbacks : public NimBLECharacteristicCallbacks {
 
 static void setupPowerManagerInterface(NimBLEServer *server) {
 	NimBLEService *srvc = server->createService(&TX_PWR_SVC_UUID128);
-	{ // Set transmitter power - write
-		NimBLECharacteristic *chr = srvc->createCharacteristic(
-		    &TX_PWR_CHR_UUID128, NIMBLE_PROPERTY::WRITE, sizeof(TxPowerNetworkData));
-		static TxPowerManagerCallbacks cb;
-		chr->setCallbacks(&cb);
-	}
+	// Set transmitter power - write
+	NimBLECharacteristic *chr = srvc->createCharacteristic(
+	    &TX_PWR_CHR_UUID128, NIMBLE_PROPERTY::WRITE, sizeof(TxPowerNetworkData));
+	static TxPowerManagerCallbacks cb;
+	chr->setCallbacks(&cb);
 }
 
 class AdcFeedCallbacks : public NimBLECharacteristicCallbacks {
 	void onSubscribe(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo,
 	                 uint16_t subValue) override {
 		if (subValue & 1) {
+			if (deviceLock != DeviceLock::Open) {
+				return;
+			}
+			deviceLock              = DeviceLock::Streaming;
 			adcFeedConnectionHandle = connInfo.getConnHandle();
 			startAdcAcquisition();
 		} else {
+			if (deviceLock != DeviceLock::Streaming) {
+				return;
+			}
 			stopAdcAcquisition();
 			adcFeedConnectionHandle = BLE_HS_CONN_HANDLE_NONE;
+			deviceLock              = DeviceLock::Open;
 		}
 	}
 };
@@ -125,11 +133,13 @@ class AdcConfigCallbacks : public NimBLECharacteristicCallbacks {
 };
 
 static void processWrite(const uint8_t *data, size_t len) {
+	if (deviceLock != DeviceLock::Open) {
+		return;
+	}
 	// Only processing "W key=val" and "D key"
-	if (len < 2)
+	if ((len < 2) || (' ' != data[1])) {
 		return;
-	if (' ' != data[1])
-		return;
+	}
 	if ('W' == data[0]) {
 		if (!writeCalibrationKeyVal(data + 2, len - 2)) {
 			ESP_LOGW(TAG, "CalibrationConfig write(%u bytes) failed", len);
