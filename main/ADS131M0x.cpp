@@ -354,16 +354,17 @@ static void hijackDmaSpi(ADS131M0xIsrData *ctrl) {
 	spi_ll_dma_rx_enable(ctrl->spiHw, true);
 }
 
-void ADS131M04::startAcquisition() {
+bool ADS131M04::startAcquisition() {
 	txSmallBuff->status = 0;
 	if (ESP_OK != spi_device_polling_start(spiHandle, &transDescr, portMAX_DELAY)) {
-		return;
+		return false;
 	}
 	// spi_device_polling_end() at stopAcquisition()
 
 	hijackDmaSpi(&isrData);
 
 	gpio_set_intr_type(drdyPin, GPIO_INTR_NEGEDGE);
+	return true;
 }
 
 void ADS131M04::stopAcquisition() {

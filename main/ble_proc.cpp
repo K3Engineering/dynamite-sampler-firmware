@@ -112,9 +112,13 @@ class AdcFeedCallbacks : public NimBLECharacteristicCallbacks {
 			if (deviceLock != DeviceLock::Open) {
 				return;
 			}
-			deviceLock              = DeviceLock::Streaming;
+			deviceLock = DeviceLock::Streaming;
+			// handle should be assigned before ADC starts
 			adcFeedConnectionHandle = connInfo.getConnHandle();
-			startAdcAcquisition();
+			if (!startAdcAcquisition()) {
+				adcFeedConnectionHandle = BLE_HS_CONN_HANDLE_NONE;
+				deviceLock              = DeviceLock::Open;
+			}
 		} else {
 			if (deviceLock != DeviceLock::Streaming) {
 				return;
