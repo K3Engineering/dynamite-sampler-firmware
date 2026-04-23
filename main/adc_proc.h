@@ -4,7 +4,7 @@
 #include "dynamite_sampler_api.h"
 
 void setupAdc(int core);
-void startAdcAcquisition();
+bool startAdcAcquisition();
 void stopAdcAcquisition();
 
 const AdcConfigNetworkData getAdcConfig();

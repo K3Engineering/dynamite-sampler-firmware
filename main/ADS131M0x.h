@@ -69,7 +69,7 @@ class ADS131M04 {
 	void attachISR();
 	void setWakeupTask(TaskHandle_t taskToWakeOnDrdy, size_t interval);
 
-	void startAcquisition();
+	bool startAcquisition();
 	void stopAcquisition();
 
 	size_t getReadyBatchStartIdx() const { return isrData.tailIndex - isrData.wakeInterval; }
@@ -137,9 +137,10 @@ class MockAds131 {
 	uint16_t readPGA() { return 0; }
 
 	void attachISR();
-	void startAcquisition() {
+	bool startAcquisition() {
 		isrData.headIndex = isrData.tailIndex = 0;
 		gptimer_start(gptimer);
+		return true;
 	}
 	void stopAcquisition() { gptimer_stop(gptimer); }
 
