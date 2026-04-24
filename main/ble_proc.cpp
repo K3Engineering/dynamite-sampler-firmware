@@ -17,7 +17,6 @@
 constexpr char TAG[] = "BLE";
 
 static NimBLECharacteristic *chrAdcFeed = nullptr;
-static uint16_t adcFeedConnectionHandle = BLE_HS_CONN_HANDLE_NONE; // TODO: rename
 
 StreamBufferHandle_t adcStreamBufferHandle = nullptr;
 
@@ -53,7 +52,9 @@ class TxPowerPublisherCallbacks : public NimBLECharacteristicCallbacks {
 		    .val = static_cast<int8_t>(power),
 		};
 		pCharacteristic->setValue(rPwr);
-		ESP_LOGD(TAG, "TX power: x%x (getPower=x%x)", rPwr.val, power);
+		if (rPwr.val != power) {
+			ESP_LOGE(TAG, "TX power (x%X) != getPower (x%X)", rPwr.val, power);
+		}
 	}
 };
 
@@ -109,23 +110,17 @@ class AdcFeedCallbacks : public NimBLECharacteristicCallbacks {
 	void onSubscribe(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo,
 	                 uint16_t subValue) override {
 		if (subValue & 1) {
-			if (deviceLock != DeviceLock::Open) {
-				return;
-			}
-			deviceLock = DeviceLock::Streaming;
-			// handle should be assigned before ADC starts
-			adcFeedConnectionHandle = connInfo.getConnHandle();
-			if (!startAdcAcquisition()) {
-				adcFeedConnectionHandle = BLE_HS_CONN_HANDLE_NONE;
-				deviceLock              = DeviceLock::Open;
+			if (deviceLock == DeviceLock::Open) {
+				deviceLock = DeviceLock::Streaming;
+				if (!startAdcAcquisition()) {
+					deviceLock = DeviceLock::Open;
+				}
 			}
 		} else {
-			if (deviceLock != DeviceLock::Streaming) {
-				return;
+			if (deviceLock == DeviceLock::Streaming) {
+				stopAdcAcquisition();
+				deviceLock = DeviceLock::Open;
 			}
-			stopAdcAcquisition();
-			adcFeedConnectionHandle = BLE_HS_CONN_HANDLE_NONE;
-			deviceLock              = DeviceLock::Open;
 		}
 	}
 };
@@ -136,37 +131,31 @@ class AdcConfigCallbacks : public NimBLECharacteristicCallbacks {
 	}
 };
 
-static void processWrite(const uint8_t *data, size_t len) {
-	if (deviceLock != DeviceLock::Open) {
-		return;
-	}
-	// Only processing "W key=val" and "D key"
-	if ((len < 2) || (' ' != data[1])) {
-		return;
-	}
-	if ('W' == data[0]) {
-		if (!writeCalibrationKeyVal(data + 2, len - 2)) {
-			ESP_LOGW(TAG, "CalibrationConfig write(%u bytes) failed", len);
-		}
-	} else if ('D' == data[0]) {
-		if (!deleteCalibrationKey(data + 2, len - 2)) {
-			ESP_LOGW(TAG, "CalibrationConfig delete(%u bytes) failed", len);
-		}
-	}
-}
-
 class CalibrationConfigCallbacks : public NimBLECharacteristicCallbacks {
 	void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
-		// Value written to the characteristic by a client.
+		if (deviceLock != DeviceLock::Open) {
+			return;
+		}
 		const NimBLEAttValue val = pCharacteristic->getValue();
-		processWrite(val.data(), val.length());
-	}
-	void onRead(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
-		CalibrationNetworkData calibrData;
-		if (readCalibrationAll(&calibrData)) {
-			pCharacteristic->setValue((const char *)calibrData.data);
+		const uint8_t *data      = val.data();
+		size_t len               = val.length();
+		if (len < 2) {
+			return;
+		}
+		if (('W' == data[0]) && (' ' == data[1])) {
+			pCharacteristic->setValue(writeCalibrationKeyVal(data + 2, len - 2) ? "OK" : "X");
+			// pCharacteristic->notify(pCharacteristic->getValue());
+		} else if (('D' == data[0]) && (' ' == data[1])) {
+			pCharacteristic->setValue(deleteCalibrationKey(data + 2, len - 2) ? "OK" : "X");
+			// pCharacteristic->notify(pCharacteristic->getValue());
+		} else if (('R' == data[0]) && (' ' == data[1])) {
+			CalibrationNetworkData calibrData;
+			pCharacteristic->setValue(
+			    readCalibrationAll(&calibrData) ? (const char *)calibrData.data : "X");
+			// pCharacteristic->notify(pCharacteristic->getValue());
 		}
 	}
+	// void onRead(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {}
 };
 
 static void setupAdcFeed(NimBLEServer *server) {
@@ -217,7 +206,7 @@ static void IRAM_ATTR taskBlePublishAdcBuffer(void *) {
 		                                        sizeof(packet.adc), portMAX_DELAY);
 		if (bytesRead == sizeof(packet.adc)) [[likely]] {
 			packet.hdr.sample_sequence_number = htole16(count);
-			chrAdcFeed->notify(packet, adcFeedConnectionHandle);
+			chrAdcFeed->notify(packet);
 			count += sizeof(packet.adc) / sizeof(*packet.adc);
 		} else {
 			assert(0);
