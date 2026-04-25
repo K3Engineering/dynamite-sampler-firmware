@@ -54,9 +54,7 @@ class TxPowerPublisherCallbacks : public NimBLECharacteristicCallbacks {
 		    .val = static_cast<int8_t>(power),
 		};
 		pCharacteristic->setValue(rPwr);
-		if (rPwr.val != power) {
-			ESP_LOGE(TAG, "TX power (x%X) != getPower (x%X)", rPwr.val, power);
-		}
+		assert(rPwr.val == power); // power should fit int8_t
 	}
 };
 
@@ -154,11 +152,12 @@ class CalibrationConfigCallbacks : public NimBLECharacteristicCallbacks {
 				res = deleteCalibrationKey(data + 2, len - 2);
 			}
 		}
-		calibrData.data[0] = res ? '0' : 'E';
-		const size_t sz    = std::min(len, sizeof(calibrData.data) - 2);
-		memcpy(calibrData.data + 1, data, sz);
+		calibrData.data[0] = res ? '0' : '1';
+		calibrData.data[1] = ' ';
+		const size_t sz    = std::min(len, sizeof(calibrData.data) - 3);
+		memcpy(calibrData.data + 2, data, sz);
 		calibrData.data[sz + 1] = 0;
-		pCharacteristic->notify(calibrData.data, sz + 2);
+		pCharacteristic->notify(calibrData.data, sz + 3);
 	}
 	void onRead(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
 		CalibrationNetworkData calibrData;
