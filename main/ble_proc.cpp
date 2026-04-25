@@ -4,6 +4,7 @@
 #include <freertos/stream_buffer.h>
 
 #include <NimBLEDevice.h>
+#include <algorithm>
 
 #include "adc_ble_interface.h"
 #include "adc_proc.h"
@@ -17,6 +18,7 @@
 constexpr char TAG[] = "BLE";
 
 static NimBLECharacteristic *chrAdcFeed = nullptr;
+static uint16_t adcFeedConnectionHandle = BLE_HS_CONN_HANDLE_NONE; // TODO: remove
 
 StreamBufferHandle_t adcStreamBufferHandle = nullptr;
 
@@ -111,15 +113,18 @@ class AdcFeedCallbacks : public NimBLECharacteristicCallbacks {
 	                 uint16_t subValue) override {
 		if (subValue & 1) {
 			if (deviceLock == DeviceLock::Open) {
-				deviceLock = DeviceLock::Streaming;
+				deviceLock              = DeviceLock::Streaming;
+				adcFeedConnectionHandle = connInfo.getConnHandle();
 				if (!startAdcAcquisition()) {
-					deviceLock = DeviceLock::Open;
+					adcFeedConnectionHandle = BLE_HS_CONN_HANDLE_NONE;
+					deviceLock              = DeviceLock::Open;
 				}
 			}
 		} else {
 			if (deviceLock == DeviceLock::Streaming) {
 				stopAdcAcquisition();
-				deviceLock = DeviceLock::Open;
+				adcFeedConnectionHandle = BLE_HS_CONN_HANDLE_NONE;
+				deviceLock              = DeviceLock::Open;
 			}
 		}
 	}
@@ -134,28 +139,33 @@ class AdcConfigCallbacks : public NimBLECharacteristicCallbacks {
 class CalibrationConfigCallbacks : public NimBLECharacteristicCallbacks {
 	void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
 		if (deviceLock != DeviceLock::Open) {
+			ESP_LOGI(TAG, "CC command: Device locked(%u)", deviceLock);
 			return;
 		}
-		const NimBLEAttValue val = pCharacteristic->getValue();
-		const uint8_t *data      = val.data();
-		size_t len               = val.length();
-		if (len < 2) {
-			return;
+		const NimBLEAttValue val{pCharacteristic->getValue()};
+		const uint8_t *data = val.data();
+		const size_t len    = val.length();
+		CalibrationNetworkData calibrData;
+		bool res = false;
+		if (len > 1 && len < sizeof(calibrData.data)) {
+			if (('W' == data[0]) && (' ' == data[1])) {
+				res = writeCalibrationKeyVal(data + 2, len - 2);
+			} else if (('D' == data[0]) && (' ' == data[1])) {
+				res = deleteCalibrationKey(data + 2, len - 2);
+			}
 		}
-		if (('W' == data[0]) && (' ' == data[1])) {
-			pCharacteristic->setValue(writeCalibrationKeyVal(data + 2, len - 2) ? "OK" : "X");
-			// pCharacteristic->notify(pCharacteristic->getValue());
-		} else if (('D' == data[0]) && (' ' == data[1])) {
-			pCharacteristic->setValue(deleteCalibrationKey(data + 2, len - 2) ? "OK" : "X");
-			// pCharacteristic->notify(pCharacteristic->getValue());
-		} else if (('R' == data[0]) && (' ' == data[1])) {
-			CalibrationNetworkData calibrData;
-			pCharacteristic->setValue(
-			    readCalibrationAll(&calibrData) ? (const char *)calibrData.data : "X");
-			// pCharacteristic->notify(pCharacteristic->getValue());
+		calibrData.data[0] = res ? '0' : 'E';
+		const size_t sz    = std::min(len, sizeof(calibrData.data) - 2);
+		memcpy(calibrData.data + 1, data, sz);
+		calibrData.data[sz + 1] = 0;
+		pCharacteristic->notify(calibrData.data, sz + 2);
+	}
+	void onRead(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
+		CalibrationNetworkData calibrData;
+		if (readCalibrationAll(&calibrData)) {
+			pCharacteristic->setValue((const char *)calibrData.data);
 		}
 	}
-	// void onRead(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {}
 };
 
 static void setupAdcFeed(NimBLEServer *server) {
@@ -206,7 +216,7 @@ static void IRAM_ATTR taskBlePublishAdcBuffer(void *) {
 		                                        sizeof(packet.adc), portMAX_DELAY);
 		if (bytesRead == sizeof(packet.adc)) [[likely]] {
 			packet.hdr.sample_sequence_number = htole16(count);
-			chrAdcFeed->notify(packet);
+			chrAdcFeed->notify(packet, adcFeedConnectionHandle);
 			count += sizeof(packet.adc) / sizeof(*packet.adc);
 		} else {
 			assert(0);
