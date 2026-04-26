@@ -155,10 +155,9 @@ class CalibrationConfigCallbacks : public NimBLECharacteristicCallbacks {
 		size_t idx             = 0;
 		calibrData.data[idx++] = res ? '0' : '1';
 		calibrData.data[idx++] = ' ';
-		const size_t sz        = std::min(len, sizeof(calibrData.data) - idx - 1);
+		const size_t sz        = std::min(len, sizeof(calibrData.data) - idx);
 		memcpy(calibrData.data + idx, data, sz);
-		calibrData.data[idx + sz] = 0;
-		pCharacteristic->notify(calibrData.data, sz + idx + 1);
+		pCharacteristic->notify(calibrData.data, sz + idx);
 	}
 	void onRead(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
 		CalibrationNetworkData calibrData;
