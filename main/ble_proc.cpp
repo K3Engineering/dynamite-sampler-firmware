@@ -4,6 +4,7 @@
 #include <freertos/stream_buffer.h>
 
 #include <NimBLEDevice.h>
+#include <algorithm>
 
 #include "adc_ble_interface.h"
 #include "adc_proc.h"
@@ -17,7 +18,7 @@
 constexpr char TAG[] = "BLE";
 
 static NimBLECharacteristic *chrAdcFeed = nullptr;
-static uint16_t adcFeedConnectionHandle = BLE_HS_CONN_HANDLE_NONE; // TODO: rename
+static uint16_t adcFeedConnectionHandle = BLE_HS_CONN_HANDLE_NONE; // TODO: remove
 
 StreamBufferHandle_t adcStreamBufferHandle = nullptr;
 
@@ -53,7 +54,7 @@ class TxPowerPublisherCallbacks : public NimBLECharacteristicCallbacks {
 		    .val = static_cast<int8_t>(power),
 		};
 		pCharacteristic->setValue(rPwr);
-		ESP_LOGD(TAG, "TX power: x%x (getPower=x%x)", rPwr.val, power);
+		assert(rPwr.val == power); // power should fit int8_t
 	}
 };
 
@@ -109,23 +110,20 @@ class AdcFeedCallbacks : public NimBLECharacteristicCallbacks {
 	void onSubscribe(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo,
 	                 uint16_t subValue) override {
 		if (subValue & 1) {
-			if (deviceLock != DeviceLock::Open) {
-				return;
+			if (deviceLock == DeviceLock::Open) {
+				deviceLock              = DeviceLock::Streaming;
+				adcFeedConnectionHandle = connInfo.getConnHandle();
+				if (!startAdcAcquisition()) {
+					adcFeedConnectionHandle = BLE_HS_CONN_HANDLE_NONE;
+					deviceLock              = DeviceLock::Open;
+				}
 			}
-			deviceLock = DeviceLock::Streaming;
-			// handle should be assigned before ADC starts
-			adcFeedConnectionHandle = connInfo.getConnHandle();
-			if (!startAdcAcquisition()) {
+		} else {
+			if (deviceLock == DeviceLock::Streaming) {
+				stopAdcAcquisition();
 				adcFeedConnectionHandle = BLE_HS_CONN_HANDLE_NONE;
 				deviceLock              = DeviceLock::Open;
 			}
-		} else {
-			if (deviceLock != DeviceLock::Streaming) {
-				return;
-			}
-			stopAdcAcquisition();
-			adcFeedConnectionHandle = BLE_HS_CONN_HANDLE_NONE;
-			deviceLock              = DeviceLock::Open;
 		}
 	}
 };
@@ -136,30 +134,30 @@ class AdcConfigCallbacks : public NimBLECharacteristicCallbacks {
 	}
 };
 
-static void processWrite(const uint8_t *data, size_t len) {
-	if (deviceLock != DeviceLock::Open) {
-		return;
-	}
-	// Only processing "W key=val" and "D key"
-	if ((len < 2) || (' ' != data[1])) {
-		return;
-	}
-	if ('W' == data[0]) {
-		if (!writeCalibrationKeyVal(data + 2, len - 2)) {
-			ESP_LOGW(TAG, "CalibrationConfig write(%u bytes) failed", len);
-		}
-	} else if ('D' == data[0]) {
-		if (!deleteCalibrationKey(data + 2, len - 2)) {
-			ESP_LOGW(TAG, "CalibrationConfig delete(%u bytes) failed", len);
-		}
-	}
-}
-
 class CalibrationConfigCallbacks : public NimBLECharacteristicCallbacks {
 	void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
-		// Value written to the characteristic by a client.
-		const NimBLEAttValue val = pCharacteristic->getValue();
-		processWrite(val.data(), val.length());
+		if (deviceLock != DeviceLock::Open) {
+			ESP_LOGI(TAG, "CC command: Device locked(%u)", deviceLock);
+			return;
+		}
+		const NimBLEAttValue val{pCharacteristic->getValue()};
+		const uint8_t *data = val.data();
+		const size_t len    = val.length();
+		CalibrationNetworkData calibrData;
+		bool res = false;
+		if (len > 1 && len < sizeof(calibrData.data)) {
+			if (('W' == data[0]) && (' ' == data[1])) {
+				res = writeCalibrationKeyVal(data + 2, len - 2);
+			} else if (('D' == data[0]) && (' ' == data[1])) {
+				res = deleteCalibrationKey(data + 2, len - 2);
+			}
+		}
+		size_t idx             = 0;
+		calibrData.data[idx++] = res ? '0' : '1';
+		calibrData.data[idx++] = ' ';
+		const size_t sz        = std::min(len, sizeof(calibrData.data) - idx);
+		memcpy(calibrData.data + idx, data, sz);
+		pCharacteristic->notify(calibrData.data, sz + idx);
 	}
 	void onRead(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
 		CalibrationNetworkData calibrData;
@@ -178,7 +176,8 @@ static void setupAdcFeed(NimBLEServer *server) {
 	}
 	{ // Calibration data
 		NimBLECharacteristic *chr = srvc->createCharacteristic(
-		    &CALIB_CFG_CHR_UUID128, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE);
+		    &CALIB_CFG_CHR_UUID128,
+		    NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::NOTIFY);
 		static CalibrationConfigCallbacks cb;
 		chr->setCallbacks(&cb);
 	}
