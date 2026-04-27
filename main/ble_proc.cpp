@@ -18,7 +18,6 @@
 constexpr char TAG[] = "BLE";
 
 static NimBLECharacteristic *chrAdcFeed = nullptr;
-static uint16_t adcFeedConnectionHandle = BLE_HS_CONN_HANDLE_NONE; // TODO: remove
 
 StreamBufferHandle_t adcStreamBufferHandle = nullptr;
 
@@ -111,18 +110,15 @@ class AdcFeedCallbacks : public NimBLECharacteristicCallbacks {
 	                 uint16_t subValue) override {
 		if (subValue & 1) {
 			if (deviceLock == DeviceLock::Open) {
-				deviceLock              = DeviceLock::Streaming;
-				adcFeedConnectionHandle = connInfo.getConnHandle();
+				deviceLock = DeviceLock::Streaming;
 				if (!startAdcAcquisition()) {
-					adcFeedConnectionHandle = BLE_HS_CONN_HANDLE_NONE;
-					deviceLock              = DeviceLock::Open;
+					deviceLock = DeviceLock::Open;
 				}
 			}
 		} else {
 			if (deviceLock == DeviceLock::Streaming) {
 				stopAdcAcquisition();
-				adcFeedConnectionHandle = BLE_HS_CONN_HANDLE_NONE;
-				deviceLock              = DeviceLock::Open;
+				deviceLock = DeviceLock::Open;
 			}
 		}
 	}
@@ -216,7 +212,7 @@ static void IRAM_ATTR taskBlePublishAdcBuffer(void *) {
 		                                        sizeof(packet.adc), portMAX_DELAY);
 		if (bytesRead == sizeof(packet.adc)) [[likely]] {
 			packet.hdr.sample_sequence_number = htole16(count);
-			chrAdcFeed->notify(packet, adcFeedConnectionHandle);
+			chrAdcFeed->notify(packet);
 			count += sizeof(packet.adc) / sizeof(*packet.adc);
 		} else {
 			assert(0);
