@@ -55,6 +55,17 @@ class TxPowerPublisherCallbacks : public NimBLECharacteristicCallbacks {
 		pCharacteristic->setValue(rPwr);
 		assert(rPwr.val == power); // power should fit int8_t
 	}
+	void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
+		const NimBLEAttValue val = pCharacteristic->getValue();
+		if (val.length() != sizeof(TxPowerNetworkData)) {
+			ESP_LOGW(TAG, "TX power onWrite, received %u bytes", val.length());
+			return;
+		}
+		TxPowerNetworkData power = *(TxPowerNetworkData *)val.data();
+		if (!NimBLEDevice::setPower(power.val)) {
+			ESP_LOGE(TAG, "Set TX power failed");
+		}
+	}
 };
 
 // Set the BLE standardized device info
@@ -75,34 +86,11 @@ static void setupDeviceInfo(NimBLEServer *server) {
 	}
 	{ // Transmitter power
 		NimBLECharacteristic *chr = srvDeviceInfo->createCharacteristic(
-		    DEVICE_TX_POWER_CHR_UUID16.value, NIMBLE_PROPERTY::READ, sizeof(TxPowerNetworkData));
+		    DEVICE_TX_POWER_CHR_UUID16.value, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE,
+		    sizeof(TxPowerNetworkData));
 		static TxPowerPublisherCallbacks cb;
 		chr->setCallbacks(&cb);
 	}
-}
-
-class TxPowerManagerCallbacks : public NimBLECharacteristicCallbacks {
-	void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
-		// Value written to the characteristic by a client.
-		const NimBLEAttValue val = pCharacteristic->getValue();
-		if (val.length() != sizeof(TxPowerNetworkData)) {
-			ESP_LOGW(TAG, "TX power onWrite, received %u bytes", val.length());
-			return;
-		}
-		TxPowerNetworkData power = *(TxPowerNetworkData *)val.data();
-		if (!NimBLEDevice::setPower(power.val)) {
-			ESP_LOGE(TAG, "Set TX power failed");
-		}
-	}
-};
-
-static void setupPowerManagerInterface(NimBLEServer *server) {
-	NimBLEService *srvc = server->createService(&TX_PWR_SVC_UUID128);
-	// Set transmitter power - write
-	NimBLECharacteristic *chr = srvc->createCharacteristic(
-	    &TX_PWR_CHR_UUID128, NIMBLE_PROPERTY::WRITE, sizeof(TxPowerNetworkData));
-	static TxPowerManagerCallbacks cb;
-	chr->setCallbacks(&cb);
 }
 
 class AdcFeedCallbacks : public NimBLECharacteristicCallbacks {
@@ -242,7 +230,6 @@ static void taskSetupBle(void *setupDone) {
 
 	setupAdcFeed(bleServer);
 	setupDeviceInfo(bleServer);
-	setupPowerManagerInterface(bleServer);
 	setupBleOta(bleServer);
 
 	setupAdvertising(bleName);
