@@ -207,10 +207,11 @@ void ADS131M04::init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset) 
 
 	gpio_set_direction(resetPin, GPIO_MODE_OUTPUT);
 	gpio_set_direction(csPin, GPIO_MODE_OUTPUT);
-	gpio_set_direction(drdyPin, GPIO_MODE_INPUT);
 }
 
 void ADS131M04::deinit() {
+	// TODO: ensure data acquisition is off,
+	// remove interrupt handler
 	heap_caps_free(txSmallBuff);
 	txSmallBuff = nullptr;
 	heap_caps_free(rxSmallBuff);
@@ -220,7 +221,6 @@ void ADS131M04::deinit() {
 	heap_caps_free(isrData.rxDescArray);
 	isrData.rxDescArray = nullptr;
 
-	gpio_set_direction(drdyPin, GPIO_MODE_DISABLE);
 	gpio_set_direction(resetPin, GPIO_MODE_DISABLE);
 	gpio_set_direction(csPin, GPIO_MODE_DISABLE);
 }
@@ -365,12 +365,14 @@ bool ADS131M04::startAcquisition() {
 
 	hijackDmaSpi(&isrData);
 
+	gpio_set_direction(drdyPin, GPIO_MODE_INPUT);
 	gpio_set_intr_type(drdyPin, GPIO_INTR_NEGEDGE);
 	return true;
 }
 
 void ADS131M04::stopAcquisition() {
 	gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE);
+	gpio_set_direction(drdyPin, GPIO_MODE_DISABLE);
 	spi_device_polling_end(spiHandle, portMAX_DELAY);
 }
 
