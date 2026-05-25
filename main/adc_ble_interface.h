@@ -6,6 +6,7 @@
 #include "dynamite_sampler_api.h"
 
 extern StreamBufferHandle_t adcStreamBufferHandle;
+extern bool startupDiagnosticIsOk;
 
 // Nimble creates a GATT connection, which has some overhead.
 constexpr uint16_t BLE_PUBL_DATA_DLE         = 251;
