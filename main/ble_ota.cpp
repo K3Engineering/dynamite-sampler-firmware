@@ -11,6 +11,8 @@
 
 constexpr char TAG[] = "OTA";
 
+bool startupDiagnosticIsOk = true;
+
 typedef struct {
 	const esp_partition_t *updatePartition;
 	esp_ota_handle_t updateHandle;
@@ -214,12 +216,11 @@ void otaConditionalRollback() {
 	esp_ota_img_states_t otaState;
 	if (esp_ota_get_state_partition(running, &otaState) == ESP_OK) {
 		if (otaState == ESP_OTA_IMG_PENDING_VERIFY) {
-			bool diagnosticIsOk = true; // TODO: run diagnostic function
-			if (diagnosticIsOk) {
-				ESP_LOGI(TAG, "Diagnostics completed successfully! Continuing execution ...");
+			if (startupDiagnosticIsOk) {
+				ESP_LOGI(TAG, "Diagnostics OK! OTA rollforward...");
 				esp_ota_mark_app_valid_cancel_rollback();
 			} else {
-				ESP_LOGE(TAG, "Diagnostics failed! Start rollback to the previous version ...");
+				ESP_LOGE(TAG, "Diagnostics failed! OTA rollback...");
 				esp_ota_mark_app_invalid_rollback_and_reboot();
 			}
 		}

@@ -46,7 +46,7 @@ static constexpr uint16_t crc16ccitt(const void *data, size_t count) {
 	return crc;
 }
 
-bool ADS131M04::writeRegister(uint8_t address, uint16_t value) {
+bool ADS131M0x::writeRegister(uint8_t address, uint16_t value) {
 	txSmallBuff->status            = htobe16(ADS131M0xReg::CMD_WRITE_REG | (address << 7));
 	*(uint16_t *)txSmallBuff->data = htobe16(value);
 	spi_device_polling_transmit(spiHandle, &transDescr);
@@ -54,10 +54,10 @@ bool ADS131M04::writeRegister(uint8_t address, uint16_t value) {
 	txSmallBuff->status = 0;
 	spi_device_polling_transmit(spiHandle, &transDescr);
 
-	return be16toh(rxSmallBuff->status) == (ADS131M0xReg::RSP_WRITE_REG | (address << 7));
+	return rxSmallBuff->status == htobe16(ADS131M0xReg::RSP_WRITE_REG | (address << 7));
 }
 
-uint16_t ADS131M04::readRegister(uint8_t address) {
+uint16_t ADS131M0x::readRegister(uint8_t address) {
 	txSmallBuff->status = htobe16(ADS131M0xReg::CMD_READ_REG | (address << 7));
 	spi_device_polling_transmit(spiHandle, &transDescr);
 
@@ -72,7 +72,7 @@ uint16_t ADS131M04::readRegister(uint8_t address) {
  * It does not carry out the shift of bits (shift), it is necessary to pass the shifted value to the
  * correct position
  */
-bool ADS131M04::writeRegisterMasked(uint8_t address, uint16_t value, uint16_t mask) {
+bool ADS131M0x::writeRegisterMasked(uint8_t address, uint16_t value, uint16_t mask) {
 	// Read the current content of the register
 	uint16_t registerContents = readRegister(address);
 	// Change the mask bit by bit (it remains 1 in the bits that must not be touched and 0 in the
@@ -85,7 +85,7 @@ bool ADS131M04::writeRegisterMasked(uint8_t address, uint16_t value, uint16_t ma
 	return writeRegister(address, registerContents);
 }
 
-bool ADS131M04::setPowerMode(uint16_t powerMode) {
+bool ADS131M0x::setPowerMode(uint16_t powerMode) {
 	assert((powerMode >= ADS131M0xReg::POWER_MODE_VERY_LOW_POWER) &&
 	       (powerMode <= ADS131M0xReg::POWER_MODE_HIGH_RESOLUTION));
 
@@ -95,13 +95,13 @@ bool ADS131M04::setPowerMode(uint16_t powerMode) {
 /**
  * @brief set OSR digital filter (see datasheet)
  */
-bool ADS131M04::setOsr(uint16_t osr) {
+bool ADS131M0x::setOsr(uint16_t osr) {
 	assert((osr >= ADS131M0xReg::OSR_128) && (osr <= ADS131M0xReg::OSR_16384));
 
 	return writeRegisterMasked(ADS131M0xReg::REG_CLOCK, osr << 2, ADS131M0xReg::REGMASK_CLOCK_OSR);
 }
 
-bool ADS131M04::setChannelEnable(uint8_t channel, bool enable) {
+bool ADS131M0x::setChannelEnable(uint8_t channel, bool enable) {
 	static_assert(ADS131M0xReg::REGMASK_CLOCK_CH1_EN == (ADS131M0xReg::REGMASK_CLOCK_CH0_EN << 1));
 	static_assert(ADS131M0xReg::REGMASK_CLOCK_CH2_EN == (ADS131M0xReg::REGMASK_CLOCK_CH0_EN << 2));
 	static_assert(ADS131M0xReg::REGMASK_CLOCK_CH3_EN == (ADS131M0xReg::REGMASK_CLOCK_CH0_EN << 3));
@@ -113,7 +113,7 @@ bool ADS131M04::setChannelEnable(uint8_t channel, bool enable) {
 	                           ADS131M0xReg::REGMASK_CLOCK_CH0_EN << channel);
 }
 
-bool ADS131M04::setChannelPGA(uint8_t channel, uint16_t pga) {
+bool ADS131M0x::setChannelPGA(uint8_t channel, uint16_t pga) {
 	static_assert(ADS131M0xReg::REGMASK_GAIN_PGAGAIN1 ==
 	              (ADS131M0xReg::REGMASK_GAIN_PGAGAIN0 << 4));
 	static_assert(ADS131M0xReg::REGMASK_GAIN_PGAGAIN2 ==
@@ -128,7 +128,7 @@ bool ADS131M04::setChannelPGA(uint8_t channel, uint16_t pga) {
 	                           ADS131M0xReg::REGMASK_GAIN_PGAGAIN0 << ((channel % 4) * 4));
 }
 
-bool ADS131M04::setChannelInputSelection(uint8_t channel, uint16_t input) {
+bool ADS131M0x::setChannelInputSelection(uint8_t channel, uint16_t input) {
 	static_assert(ADS131M0xReg::REG_CH1_CFG == ADS131M0xReg::REG_CH0_CFG + 5);
 	static_assert(ADS131M0xReg::REG_CH2_CFG == ADS131M0xReg::REG_CH0_CFG + 5 * 2);
 	static_assert(ADS131M0xReg::REG_CH3_CFG == ADS131M0xReg::REG_CH0_CFG + 5 * 3);
@@ -139,17 +139,17 @@ bool ADS131M04::setChannelInputSelection(uint8_t channel, uint16_t input) {
 	                           ADS131M0xReg::REGMASK_CHX_CFG_MUX);
 }
 
-uint16_t ADS131M04::readID() { return readRegister(ADS131M0xReg::REG_ID); }
+uint16_t ADS131M0x::readID() { return readRegister(ADS131M0xReg::REG_ID); }
 
-uint16_t ADS131M04::readSTATUS() { return readRegister(ADS131M0xReg::REG_STATUS); }
+uint16_t ADS131M0x::readSTATUS() { return readRegister(ADS131M0xReg::REG_STATUS); }
 
-uint16_t ADS131M04::readMODE() { return readRegister(ADS131M0xReg::REG_MODE); }
+uint16_t ADS131M0x::readMODE() { return readRegister(ADS131M0xReg::REG_MODE); }
 
-uint16_t ADS131M04::readCLOCK() { return readRegister(ADS131M0xReg::REG_CLOCK); }
+uint16_t ADS131M0x::readCLOCK() { return readRegister(ADS131M0xReg::REG_CLOCK); }
 
-uint16_t ADS131M04::readPGA() { return readRegister(ADS131M0xReg::REG_GAIN1); }
+uint16_t ADS131M0x::readPGA() { return readRegister(ADS131M0xReg::REG_GAIN1); }
 
-bool ADS131M04::isCrcOk(const RawOutput *data) {
+bool ADS131M0x::isCrcOk(const RawOutput *data) {
 	uint16_t crc           = be16toh(data->crc);
 	uint16_t calculatedCrc = crc16ccitt(data, sizeof(*data) - DATA_WORD_LENGTH);
 
@@ -157,20 +157,39 @@ bool ADS131M04::isCrcOk(const RawOutput *data) {
 }
 
 /// @brief Hardware reset (reset low activ)
-void ADS131M04::reset() {
+bool ADS131M0x::resetAdcHw() {
 	gpio_set_level(resetPin, 0);
 	delayMSec(100);
 	gpio_set_level(resetPin, 1);
 	delayMSec(10);
+
+	// check reset was ok, and ADS131 has exactly NUM_CHANNELS
+	rxSmallBuff->status = txSmallBuff->status = 0;
+	spi_device_polling_transmit(spiHandle, &transDescr);
+	return rxSmallBuff->status == htobe16(RSP_RESET_OK);
 }
 
-void ADS131M04::init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset) {
+void ADS131M0x::init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset) {
 	csPin    = pinCs;
 	drdyPin  = pinDrdy;
 	resetPin = pinReset;
 
 	spiHandle = 0;
 
+	gpio_set_level(resetPin, 0);
+	gpio_set_level(csPin, 0);
+
+	gpio_set_direction(resetPin, GPIO_MODE_OUTPUT);
+	gpio_set_direction(csPin, GPIO_MODE_OUTPUT);
+}
+
+void ADS131M0x::deinit() {
+	gpio_set_direction(resetPin, GPIO_MODE_DISABLE);
+	gpio_set_direction(csPin, GPIO_MODE_DISABLE);
+}
+
+void ADS131M0x::setupSpiAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
+                               gpio_num_t mosiPin) {
 	txSmallBuff = (RawOutput *)heap_caps_malloc(DMA_PADDED_FRAME_SIZE, MALLOC_CAP_DMA);
 	rxSmallBuff = (RawOutput *)heap_caps_malloc(DMA_PADDED_FRAME_SIZE, MALLOC_CAP_DMA);
 
@@ -195,38 +214,14 @@ void ADS131M04::init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset) 
 	    .flags            = 0, // Until https://github.com/espressif/esp-idf/issues/18251 fixed
 	    .cmd              = 0,
 	    .addr             = 0,
-	    .length           = sizeof(RawOutput) * 8, // in bits.
-	    .rxlength         = sizeof(RawOutput) * 8,
+	    .length           = SPI_FRAME_SIZE * 8, // in bits.
+	    .rxlength         = SPI_FRAME_SIZE * 8,
 	    .override_freq_hz = 0,
 	    .user             = nullptr,
 	    .tx_buffer        = txSmallBuff,
 	    .rx_buffer        = rxSmallBuff,
 	};
-	gpio_set_level(resetPin, 0);
-	gpio_set_level(csPin, 0);
 
-	gpio_set_direction(resetPin, GPIO_MODE_OUTPUT);
-	gpio_set_direction(csPin, GPIO_MODE_OUTPUT);
-}
-
-void ADS131M04::deinit() {
-	// TODO: ensure data acquisition is off,
-	// remove interrupt handler
-	heap_caps_free(txSmallBuff);
-	txSmallBuff = nullptr;
-	heap_caps_free(rxSmallBuff);
-	rxSmallBuff = nullptr;
-	heap_caps_free(isrData.rxRingBuff);
-	isrData.rxRingBuff = nullptr;
-	heap_caps_free(isrData.rxDescArray);
-	isrData.rxDescArray = nullptr;
-
-	gpio_set_direction(resetPin, GPIO_MODE_DISABLE);
-	gpio_set_direction(csPin, GPIO_MODE_DISABLE);
-}
-
-void ADS131M04::setupSpiAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
-                               gpio_num_t mosiPin) {
 	assert(!spiHandle);
 	const spi_bus_config_t busCfg = {
 	    .mosi_io_num           = mosiPin,
@@ -239,7 +234,7 @@ void ADS131M04::setupSpiAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, g
 	    .data6_io_num          = -1,
 	    .data7_io_num          = -1,
 	    .data_io_default_level = 0,
-	    .max_transfer_sz       = sizeof(RawOutput),
+	    .max_transfer_sz       = SPI_FRAME_SIZE,
 	    .flags                 = SPICOMMON_BUSFLAG_MASTER,
 	    .isr_cpu_id            = ESP_INTR_CPU_AFFINITY_AUTO,
 	    .intr_flags            = 0,
@@ -275,15 +270,25 @@ void ADS131M04::setupSpiAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, g
 	assert(isrData.spiHw);
 }
 
-void ADS131M04::releaseSpi() {
+void ADS131M0x::releaseSpi() {
+	// TODO: ensure data acquisition is off,
+	// remove interrupt handler
 	if (spiHandle) {
 		spi_device_release_bus(spiHandle);
 		spi_bus_remove_device(spiHandle);
 		spiHandle = 0;
 	}
+	heap_caps_free(txSmallBuff);
+	txSmallBuff = nullptr;
+	heap_caps_free(rxSmallBuff);
+	rxSmallBuff = nullptr;
+	heap_caps_free(isrData.rxRingBuff);
+	isrData.rxRingBuff = nullptr;
+	heap_caps_free(isrData.rxDescArray);
+	isrData.rxDescArray = nullptr;
 }
 
-const ADS131M04::RawOutput *IRAM_ATTR ADS131M04::rawReadADC(size_t idx) const {
+const ADS131M0x::RawOutput *IRAM_ATTR ADS131M0x::rawReadADC(size_t idx) const {
 	return (RawOutput *)(isrData.rxRingBuff + (idx % RING_BUFF_SZ) * DMA_PADDED_FRAME_SIZE);
 }
 
@@ -356,7 +361,7 @@ static void hijackDmaSpi(ADS131M0xIsrData *ctrl) {
 	spi_ll_dma_rx_enable(ctrl->spiHw, true);
 }
 
-bool ADS131M04::startAcquisition() {
+bool ADS131M0x::startAcquisition() {
 	txSmallBuff->status = 0;
 	if (ESP_OK != spi_device_polling_start(spiHandle, &transDescr, portMAX_DELAY)) {
 		return false;
@@ -370,13 +375,13 @@ bool ADS131M04::startAcquisition() {
 	return true;
 }
 
-void ADS131M04::stopAcquisition() {
+void ADS131M0x::stopAcquisition() {
 	gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE);
 	gpio_set_direction(drdyPin, GPIO_MODE_DISABLE);
 	spi_device_polling_end(spiHandle, portMAX_DELAY);
 }
 
-void ADS131M04::attachISR() {
+void ADS131M0x::attachISR() {
 	esp_err_t err = gpio_install_isr_service(ESP_INTR_FLAG_IRAM);
 	if ((err != ESP_OK) && (err != ESP_ERR_INVALID_STATE)) {
 		return;
@@ -385,7 +390,7 @@ void ADS131M04::attachISR() {
 	gpio_isr_handler_add(drdyPin, interruptHandlerAdcDrdy, &isrData);
 }
 
-void ADS131M04::setWakeupTask(TaskHandle_t taskToWakeOnDrdy, size_t interval) {
+void ADS131M0x::setWakeupTask(TaskHandle_t taskToWakeOnDrdy, size_t interval) {
 	isrData.taskToWake = taskToWakeOnDrdy;
 	assert(interval < RING_BUFF_SZ / 2);
 	isrData.wakeInterval = interval;

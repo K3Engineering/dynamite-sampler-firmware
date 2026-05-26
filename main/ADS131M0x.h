@@ -24,13 +24,12 @@ struct ADS131M0xIsrData {
 	TaskHandle_t taskToWake;
 };
 
-class ADS131M04 {
+class ADS131M0x {
   public:
 	static constexpr size_t NUM_CHANNELS = 4;
-	static_assert(NUM_CHANNELS == 4, "Tested on ADS131M04 only");
+	static_assert((NUM_CHANNELS <= 8) && (0 == NUM_CHANNELS % 2));
 	static constexpr size_t DATA_WORD_LENGTH = 3; // in bytes
-
-	static constexpr uint16_t RSP_RESET_OK = 0xFF20 + NUM_CHANNELS;
+	static constexpr uint16_t RSP_RESET_OK   = 0xFF20 + NUM_CHANNELS;
 
 #pragma pack(push, 1)
 	struct RawOutput {
@@ -45,7 +44,8 @@ class ADS131M04 {
 #pragma pack(pop)
 	static_assert(sizeof(RawOutput) == (1 + NUM_CHANNELS + 1) * DATA_WORD_LENGTH,
 	              "status, channels, CRC");
-	static constexpr size_t DMA_PADDED_FRAME_SIZE = (sizeof(RawOutput) + 3) & ~3; // multiple of 4
+	static constexpr size_t SPI_FRAME_SIZE        = sizeof(RawOutput);
+	static constexpr size_t DMA_PADDED_FRAME_SIZE = (SPI_FRAME_SIZE + 3) & ~3; // multiple of 4
 
 	void init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset);
 	void deinit();
@@ -53,7 +53,7 @@ class ADS131M04 {
 	                    gpio_num_t mosiPin);
 	void releaseSpi();
 
-	void reset();
+	bool resetAdcHw();
 	bool setChannelEnable(uint8_t channel, bool enable);
 	bool setPowerMode(uint16_t powerMode);
 	bool setChannelPGA(uint8_t channel, uint16_t pga);
@@ -110,9 +110,9 @@ class MockAds131 {
 	gptimer_handle_t gptimer;
 
   public:
-	static constexpr size_t NUM_CHANNELS     = ADS131M04::NUM_CHANNELS;
-	static constexpr size_t DATA_WORD_LENGTH = ADS131M04::DATA_WORD_LENGTH; // in bytes
-	typedef ADS131M04::RawOutput RawOutput;
+	static constexpr size_t NUM_CHANNELS     = ADS131M0x::NUM_CHANNELS;
+	static constexpr size_t DATA_WORD_LENGTH = ADS131M0x::DATA_WORD_LENGTH; // in bytes
+	typedef ADS131M0x::RawOutput RawOutput;
 
 	void init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset) {}
 	void deinit() {}
@@ -123,7 +123,7 @@ class MockAds131 {
 		isrData.taskToWake   = taskToWakeOnDrdy;
 		isrData.wakeInterval = interval;
 	}
-	void reset() {}
+	bool resetAdcHw() { return true; }
 	bool setChannelEnable(uint8_t channel, bool enable) { return true; }
 	bool setChannelPGA(uint8_t channel, uint16_t pga) { return true; }
 	bool setPowerMode(uint8_t powerMode) { return true; }
@@ -160,12 +160,12 @@ class MockAds131 {
 	MockAds131xIsrData isrData;
 };
 
+#endif // (CONFIG_MOCK_ADC == 1)
+
+#if (CONFIG_MOCK_ADC == 1)
 typedef MockAds131 AdcClass;
-
-#else // ! (CONFIG_MOCK_ADC == 1)
-
-typedef ADS131M04 AdcClass;
-
+#else
+typedef ADS131M0x AdcClass;
 #endif // (CONFIG_MOCK_ADC == 1)
 
 #endif // ADS131M0x_h

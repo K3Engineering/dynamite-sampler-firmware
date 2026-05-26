@@ -3,8 +3,9 @@
 
 #include "ADS131M0x_reg.h"
 
-struct ADS131M04UserCfg {
-	static constexpr size_t NCHAN = 4;
+template <size_t N>
+struct ADS131M0xUserCfg {
+	static constexpr size_t NCHAN = N;
 	bool enable[NCHAN];
 	uint16_t input[NCHAN];
 	uint16_t pga[NCHAN];
@@ -13,7 +14,7 @@ struct ADS131M04UserCfg {
 };
 
 // V3.0.0 hardware
-constexpr ADS131M04UserCfg ads131UserConfig_boardv300{
+constexpr ADS131M0xUserCfg<4> ads131UserConfig_boardv300{
     .enable =
         {
             false,
@@ -40,7 +41,7 @@ constexpr ADS131M04UserCfg ads131UserConfig_boardv300{
 };
 
 // V4.0.0 hardware
-constexpr ADS131M04UserCfg ads131UserConfig_boardv400{
+constexpr ADS131M0xUserCfg<4> ads131UserConfig_boardv400{
     .enable =
         {
             false,
@@ -69,7 +70,7 @@ constexpr ADS131M04UserCfg ads131UserConfig_boardv400{
 };
 
 // V5.0.0 hardware
-constexpr ADS131M04UserCfg ads131UserConfig_boardv500{
+constexpr ADS131M0xUserCfg<4> ads131UserConfig_boardv500{
     .enable =
         {
             true,
@@ -97,6 +98,6 @@ constexpr ADS131M04UserCfg ads131UserConfig_boardv500{
     .osr       = ADS131M0xReg::OSR_4096,
 };
 
-constexpr ADS131M04UserCfg ads131UserConfig{ads131UserConfig_boardv400};
+constexpr auto ads131UserConfig{ads131UserConfig_boardv400};
 
 #endif // ADS131M0x_CFG_h
