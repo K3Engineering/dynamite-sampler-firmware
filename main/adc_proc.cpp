@@ -44,6 +44,22 @@ const AdcConfigNetworkData getAdcConfig() {
 	};
 }
 
+const AdcMuxNetworkData getAdcMux() {
+	AdcMuxNetworkData net;
+	for (size_t i = 0; i < 4; ++i) {
+		net.mux[i] = ads131UserConfig.input[i];
+	}
+	return net;
+}
+
+bool setAdcMux(uint8_t channel, uint8_t mux) {
+	if (channel >= 4) {
+		return false;
+	}
+	// Note: ads131UserConfig is const, so we don't modify it. The adc object handles its state.
+	return adc.setChannelInputSelection(channel, mux);
+}
+
 static void logADS131M0xConfig(const ADS131HwConfigData *cfg) {
 	ESP_LOGI(TAG, "<REGISTERS>");
 	ESP_LOGI(TAG, "ID 131M0x%X", (cfg->id >> 8) & 0x0F);

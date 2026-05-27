@@ -118,6 +118,26 @@ class AdcConfigCallbacks : public NimBLECharacteristicCallbacks {
 	}
 };
 
+class AdcMuxCallbacks : public NimBLECharacteristicCallbacks {
+	void onRead(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
+		pCharacteristic->setValue(getAdcMux());
+	}
+	void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
+		const NimBLEAttValue val = pCharacteristic->getValue();
+		if (val.length() != sizeof(AdcMuxNetworkData)) {
+			ESP_LOGW(TAG, "ADC mux onWrite, received %u bytes (expected %u)", val.length(),
+			         sizeof(AdcMuxNetworkData));
+			return;
+		}
+		AdcMuxNetworkData muxData = *(AdcMuxNetworkData *)val.data();
+		for (size_t i = 0; i < 4; ++i) {
+			if (!setAdcMux(i, muxData.mux[i])) {
+				ESP_LOGE(TAG, "Failed to set ADC mux for channel %u", i);
+			}
+		}
+	}
+};
+
 class CalibrationConfigCallbacks : public NimBLECharacteristicCallbacks {
 	void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
 		if (deviceLock != DeviceLock::Open) {
@@ -169,6 +189,12 @@ static void setupAdcFeed(NimBLEServer *server) {
 		NimBLECharacteristic *chr =
 		    srvc->createCharacteristic(&ADC_CONF_CHR_UUID128, NIMBLE_PROPERTY::READ);
 		static AdcConfigCallbacks cb;
+		chr->setCallbacks(&cb);
+	}
+	{ // ADC mux
+		NimBLECharacteristic *chr = srvc->createCharacteristic(
+		    &ADC_MUX_CHR_UUID128, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE);
+		static AdcMuxCallbacks cb;
 		chr->setCallbacks(&cb);
 	}
 }

@@ -8,5 +8,7 @@ bool startAdcAcquisition();
 void stopAdcAcquisition();
 
 const AdcConfigNetworkData getAdcConfig();
+const AdcMuxNetworkData getAdcMux();
+bool setAdcMux(uint8_t channel, uint8_t mux);
 
 #endif // _ADC_PROC_H
