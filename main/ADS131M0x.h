@@ -48,8 +48,8 @@ class ADS131M0x {
 	static constexpr size_t dmaPaddedSize(size_t sz) { return (sz + 3) & ~3; }
 
 	void init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset,
-	                    spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
-	                    gpio_num_t mosiPin);
+	          spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
+	          gpio_num_t mosiPin);
 	void deinit();
 
 	bool resetAdcHw();

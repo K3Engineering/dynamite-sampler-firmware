@@ -171,8 +171,8 @@ bool ADS131M0x::resetAdcHw() {
 }
 
 void ADS131M0x::init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset,
-                               spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
-                               gpio_num_t mosiPin) {
+                     spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
+                     gpio_num_t mosiPin) {
 	csPin    = pinCs;
 	drdyPin  = pinDrdy;
 	resetPin = pinReset;
