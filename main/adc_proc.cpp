@@ -140,7 +140,6 @@ static void taskSetupAdc(void *setupDone) {
 
 	adc.init(PIN_CS_ADC, PIN_DRDY, PIN_ADC_RESET);
 	adc.setupSpiAccess(SPI3_HOST, PIN_NUM_CLK, PIN_NUM_MISO, PIN_NUM_MOSI);
-	adc.attachISR();
 
 	if (adc.resetAdcHw()) {
 		configureAdc();
