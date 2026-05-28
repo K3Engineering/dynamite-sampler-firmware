@@ -170,29 +170,21 @@ bool ADS131M0x::resetAdcHw() {
 	return rxSmallBuff->status == htobe16(RSP_RESET_OK);
 }
 
-void ADS131M0x::init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset) {
+void ADS131M0x::init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset,
+                               spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
+                               gpio_num_t mosiPin) {
 	csPin    = pinCs;
 	drdyPin  = pinDrdy;
 	resetPin = pinReset;
 
 	spiHandle     = 0;
-	spiHostDevice = SPI_HOST_MAX;
+	spiHostDevice = spiDevice;
 
 	gpio_set_level(resetPin, 0);
 	gpio_set_level(csPin, 0);
 
 	gpio_set_direction(resetPin, GPIO_MODE_OUTPUT);
 	gpio_set_direction(csPin, GPIO_MODE_OUTPUT);
-}
-
-void ADS131M0x::deinit() {
-	gpio_set_direction(resetPin, GPIO_MODE_DISABLE);
-	gpio_set_direction(csPin, GPIO_MODE_DISABLE);
-}
-
-void ADS131M0x::setupSpiAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
-                               gpio_num_t mosiPin) {
-	spiHostDevice = spiDevice;
 
 	txSmallBuff = (RawOutput *)heap_caps_malloc(dmaPaddedSize(SPI_FRAME_SIZE), MALLOC_CAP_DMA);
 	rxSmallBuff = (RawOutput *)heap_caps_malloc(dmaPaddedSize(SPI_FRAME_SIZE), MALLOC_CAP_DMA);
@@ -281,9 +273,12 @@ void ADS131M0x::setupSpiAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, g
 	}
 }
 
-void ADS131M0x::releaseSpi() {
+void ADS131M0x::deinit() {
+	gpio_set_direction(resetPin, GPIO_MODE_DISABLE);
+	gpio_set_direction(csPin, GPIO_MODE_DISABLE);
 	gpio_set_direction(drdyPin, GPIO_MODE_DISABLE);
 	gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE);
+
 	gpio_isr_handler_remove(drdyPin);
 
 	if (spiHandle) {

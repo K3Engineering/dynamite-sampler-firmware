@@ -47,11 +47,10 @@ class ADS131M0x {
 	static constexpr size_t SPI_FRAME_SIZE = sizeof(RawOutput);
 	static constexpr size_t dmaPaddedSize(size_t sz) { return (sz + 3) & ~3; }
 
-	void init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset);
-	void deinit();
-	void setupSpiAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
+	void init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset,
+	                    spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
 	                    gpio_num_t mosiPin);
-	void releaseSpi();
+	void deinit();
 
 	bool resetAdcHw();
 	bool setChannelEnable(uint8_t channel, bool enable);
@@ -114,11 +113,10 @@ class MockAds131 {
 	static constexpr size_t DATA_WORD_LENGTH = ADS131M0x::DATA_WORD_LENGTH; // in bytes
 	typedef ADS131M0x::RawOutput RawOutput;
 
-	void init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset) {}
-	void deinit() {}
-	void setupSpiAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
+	void setupSpiAccess(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset,
+	                    spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
 	                    gpio_num_t mosiPin) {}
-	void releaseSpi() {}
+	void deinit() {}
 	void setWakeupTask(TaskHandle_t taskToWakeOnDrdy, size_t interval) {
 		isrData.taskToWake   = taskToWakeOnDrdy;
 		isrData.wakeInterval = interval;
