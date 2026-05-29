@@ -267,9 +267,10 @@ void ADS131M0x::init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset,
 
 	esp_err_t err = gpio_install_isr_service(ESP_INTR_FLAG_IRAM);
 	if ((err == ESP_OK) || (err == ESP_ERR_INVALID_STATE)) {
-
 		gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE);
 		gpio_isr_handler_add(drdyPin, interruptHandlerAdcDrdy, &isrData);
+	} else {
+		assert(0);
 	}
 }
 
@@ -415,7 +416,9 @@ static bool IRAM_ATTR interruptHandlerMockTimerCb(gptimer_handle_t timer,
 	return (taskWoken == pdTRUE);
 }
 
-void MockAds131::attachISR() {
+void MockAds131::init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset,
+                      spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
+                      gpio_num_t mosiPin) {
 	static constexpr gptimer_config_t timerConfig = {
 	    .clk_src       = GPTIMER_CLK_SRC_DEFAULT,
 	    .direction     = GPTIMER_COUNT_UP,
@@ -423,9 +426,9 @@ void MockAds131::attachISR() {
 	    .intr_priority = 0,
 	    .flags =
 	        {
-	            .intr_shared         = 0,
-	            .allow_pd            = 0,
-	            .backup_before_sleep = 0,
+	            .intr_shared = 0,
+	            .allow_pd    = 0,
+	            //.backup_before_sleep = 0,
 	        },
 	};
 	gptimer_new_timer(&timerConfig, &gptimer);
