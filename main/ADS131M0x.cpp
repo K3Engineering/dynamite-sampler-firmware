@@ -428,7 +428,6 @@ void MockAds131::init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset,
 	        {
 	            .intr_shared = 0,
 	            .allow_pd    = 0,
-	            //.backup_before_sleep = 0,
 	        },
 	};
 	gptimer_new_timer(&timerConfig, &gptimer);
