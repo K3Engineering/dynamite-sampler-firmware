@@ -22,6 +22,7 @@ constexpr size_t RING_BUFF_SZ = 64;
 static_assert((RING_BUFF_SZ & (RING_BUFF_SZ - 1)) == 0, "RING_BUFF_SZ must be a power of 2");
 
 static inline void delayMSec(uint32_t ms) { vTaskDelay(ms / portTICK_PERIOD_MS); }
+static void interruptHandlerAdcDrdy(void *param);
 
 static constexpr uint16_t crc16ccitt(const void *data, size_t count) {
 	static constexpr uint16_t CRC_INIT_VAL = 0xFFFF;
@@ -156,7 +157,7 @@ bool ADS131M0x::isCrcOk(const RawOutput *data) {
 	return crc == calculatedCrc;
 }
 
-/// @brief Hardware reset (reset low activ)
+/// @brief Hardware reset (reset low active)
 bool ADS131M0x::resetAdcHw() {
 	gpio_set_level(resetPin, 0);
 	delayMSec(100);
@@ -169,43 +170,38 @@ bool ADS131M0x::resetAdcHw() {
 	return rxSmallBuff->status == htobe16(RSP_RESET_OK);
 }
 
-void ADS131M0x::init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset) {
+void ADS131M0x::init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset,
+                     spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
+                     gpio_num_t mosiPin) {
 	csPin    = pinCs;
 	drdyPin  = pinDrdy;
 	resetPin = pinReset;
 
-	spiHandle = 0;
+	spiHandle     = 0;
+	spiHostDevice = spiDevice;
 
 	gpio_set_level(resetPin, 0);
 	gpio_set_level(csPin, 0);
 
 	gpio_set_direction(resetPin, GPIO_MODE_OUTPUT);
 	gpio_set_direction(csPin, GPIO_MODE_OUTPUT);
-}
 
-void ADS131M0x::deinit() {
-	gpio_set_direction(resetPin, GPIO_MODE_DISABLE);
-	gpio_set_direction(csPin, GPIO_MODE_DISABLE);
-}
-
-void ADS131M0x::setupSpiAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
-                               gpio_num_t mosiPin) {
-	txSmallBuff = (RawOutput *)heap_caps_malloc(DMA_PADDED_FRAME_SIZE, MALLOC_CAP_DMA);
-	rxSmallBuff = (RawOutput *)heap_caps_malloc(DMA_PADDED_FRAME_SIZE, MALLOC_CAP_DMA);
+	txSmallBuff = (RawOutput *)heap_caps_malloc(dmaPaddedSize(SPI_FRAME_SIZE), MALLOC_CAP_DMA);
+	rxSmallBuff = (RawOutput *)heap_caps_malloc(dmaPaddedSize(SPI_FRAME_SIZE), MALLOC_CAP_DMA);
 
 	isrData.rxRingBuff =
-	    (uint8_t *)heap_caps_malloc(DMA_PADDED_FRAME_SIZE * RING_BUFF_SZ, MALLOC_CAP_DMA);
+	    (uint8_t *)heap_caps_malloc(dmaPaddedSize(SPI_FRAME_SIZE) * RING_BUFF_SZ, MALLOC_CAP_DMA);
 	isrData.rxDescArray =
 	    (lldesc_t *)heap_caps_malloc(sizeof(lldesc_t) * RING_BUFF_SZ, MALLOC_CAP_DMA);
 	for (size_t i = 0; i < RING_BUFF_SZ; i++) {
 		isrData.rxDescArray[i] = {
-		    .size   = DMA_PADDED_FRAME_SIZE, // Buffer capacity
-		    .length = 0,                     // to be updated by the hw
+		    .size   = dmaPaddedSize(SPI_FRAME_SIZE), // Buffer capacity
+		    .length = 0,                             // to be updated by the hw
 		    .offset = 0,
 		    .sosf   = 0, // Start of sub-frame (unused)
 		    .eof    = 1, // End of Frame: DMA stops after this descriptor
 		    .owner  = 1, // 1 = Hardware (DMA) owns this
-		    .buf    = isrData.rxRingBuff + DMA_PADDED_FRAME_SIZE * i, // Point to data buff
+		    .buf    = isrData.rxRingBuff + dmaPaddedSize(SPI_FRAME_SIZE) * i, // Point to data buff
 		    .empty  = 0,
 		};
 	}
@@ -239,7 +235,7 @@ void ADS131M0x::setupSpiAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, g
 	    .isr_cpu_id            = ESP_INTR_CPU_AFFINITY_AUTO,
 	    .intr_flags            = 0,
 	};
-	esp_err_t ret = spi_bus_initialize(spiDevice, &busCfg, SPI_DMA_CH_AUTO);
+	esp_err_t ret = spi_bus_initialize(spiHostDevice, &busCfg, SPI_DMA_CH_AUTO);
 	assert(ESP_OK == ret);
 
 	const spi_device_interface_config_t devcfg = {
@@ -261,23 +257,42 @@ void ADS131M0x::setupSpiAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, g
 	    .post_cb          = nullptr,
 	};
 	assert(devcfg.clock_speed_hz <= 15625000); // Max ADS131 SPI clock
-	ret = spi_bus_add_device(spiDevice, &devcfg, &spiHandle);
+	ret = spi_bus_add_device(spiHostDevice, &devcfg, &spiHandle);
 	assert(ESP_OK == ret);
+	// We are not going to share this SPI device with other tasks
 	ret = spi_device_acquire_bus(spiHandle, portMAX_DELAY);
 	assert(ESP_OK == ret);
 
-	isrData.spiHw = SPI_LL_GET_HW(spiDevice);
+	isrData.spiHw = SPI_LL_GET_HW(spiHostDevice);
 	assert(isrData.spiHw);
+
+	// Install global ISR service and attach DRDY handler.
+	// Global service may be already installed (ret code ESP_ERR_INVALID_STATE).
+	esp_err_t err = gpio_install_isr_service(ESP_INTR_FLAG_IRAM);
+	if ((err == ESP_OK) || (err == ESP_ERR_INVALID_STATE)) {
+		gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE);
+		gpio_isr_handler_add(drdyPin, interruptHandlerAdcDrdy, &isrData);
+	} else {
+		assert(0);
+	}
 }
 
-void ADS131M0x::releaseSpi() {
-	// TODO: ensure data acquisition is off,
-	// remove interrupt handler
+void ADS131M0x::deinit() {
+	gpio_set_direction(resetPin, GPIO_MODE_DISABLE);
+	gpio_set_direction(csPin, GPIO_MODE_DISABLE);
+	gpio_set_direction(drdyPin, GPIO_MODE_DISABLE);
+	gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE);
+
+	gpio_isr_handler_remove(drdyPin);
+
 	if (spiHandle) {
 		spi_device_release_bus(spiHandle);
 		spi_bus_remove_device(spiHandle);
 		spiHandle = 0;
 	}
+	spi_bus_free(spiHostDevice);
+	spiHostDevice = SPI_HOST_MAX;
+
 	heap_caps_free(txSmallBuff);
 	txSmallBuff = nullptr;
 	heap_caps_free(rxSmallBuff);
@@ -286,10 +301,12 @@ void ADS131M0x::releaseSpi() {
 	isrData.rxRingBuff = nullptr;
 	heap_caps_free(isrData.rxDescArray);
 	isrData.rxDescArray = nullptr;
+	// Do not call gpio_uninstall_isr_service(),
+	// The service may be used by other tasks.
 }
 
 const ADS131M0x::RawOutput *IRAM_ATTR ADS131M0x::rawReadADC(size_t idx) const {
-	return (RawOutput *)(isrData.rxRingBuff + (idx % RING_BUFF_SZ) * DMA_PADDED_FRAME_SIZE);
+	return (RawOutput *)(isrData.rxRingBuff + (idx % RING_BUFF_SZ) * dmaPaddedSize(SPI_FRAME_SIZE));
 }
 
 static void IRAM_ATTR interruptHandlerAdcDrdy(void *param) {
@@ -381,15 +398,6 @@ void ADS131M0x::stopAcquisition() {
 	spi_device_polling_end(spiHandle, portMAX_DELAY);
 }
 
-void ADS131M0x::attachISR() {
-	esp_err_t err = gpio_install_isr_service(ESP_INTR_FLAG_IRAM);
-	if ((err != ESP_OK) && (err != ESP_ERR_INVALID_STATE)) {
-		return;
-	}
-	gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE);
-	gpio_isr_handler_add(drdyPin, interruptHandlerAdcDrdy, &isrData);
-}
-
 void ADS131M0x::setWakeupTask(TaskHandle_t taskToWakeOnDrdy, size_t interval) {
 	isrData.taskToWake = taskToWakeOnDrdy;
 	assert(interval < RING_BUFF_SZ / 2);
@@ -413,7 +421,9 @@ static bool IRAM_ATTR interruptHandlerMockTimerCb(gptimer_handle_t timer,
 	return (taskWoken == pdTRUE);
 }
 
-void MockAds131::attachISR() {
+void MockAds131::init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset,
+                      spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
+                      gpio_num_t mosiPin) {
 	static constexpr gptimer_config_t timerConfig = {
 	    .clk_src       = GPTIMER_CLK_SRC_DEFAULT,
 	    .direction     = GPTIMER_COUNT_UP,
@@ -421,9 +431,8 @@ void MockAds131::attachISR() {
 	    .intr_priority = 0,
 	    .flags =
 	        {
-	            .intr_shared         = 0,
-	            .allow_pd            = 0,
-	            .backup_before_sleep = 0,
+	            .intr_shared = 0,
+	            .allow_pd    = 0,
 	        },
 	};
 	gptimer_new_timer(&timerConfig, &gptimer);

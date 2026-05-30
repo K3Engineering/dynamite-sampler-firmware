@@ -44,14 +44,13 @@ class ADS131M0x {
 #pragma pack(pop)
 	static_assert(sizeof(RawOutput) == (1 + NUM_CHANNELS + 1) * DATA_WORD_LENGTH,
 	              "status, channels, CRC");
-	static constexpr size_t SPI_FRAME_SIZE        = sizeof(RawOutput);
-	static constexpr size_t DMA_PADDED_FRAME_SIZE = (SPI_FRAME_SIZE + 3) & ~3; // multiple of 4
+	static constexpr size_t SPI_FRAME_SIZE = sizeof(RawOutput);
+	static constexpr size_t dmaPaddedSize(size_t sz) { return (sz + 3) & ~3; }
 
-	void init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset);
+	void init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset,
+	          spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
+	          gpio_num_t mosiPin);
 	void deinit();
-	void setupSpiAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
-	                    gpio_num_t mosiPin);
-	void releaseSpi();
 
 	bool resetAdcHw();
 	bool setChannelEnable(uint8_t channel, bool enable);
@@ -66,7 +65,6 @@ class ADS131M0x {
 	uint16_t readCLOCK();
 	uint16_t readPGA();
 
-	void attachISR();
 	void setWakeupTask(TaskHandle_t taskToWakeOnDrdy, size_t interval);
 
 	bool startAcquisition();
@@ -82,7 +80,8 @@ class ADS131M0x {
 	bool writeRegister(uint8_t address, uint16_t value);
 	bool writeRegisterMasked(uint8_t address, uint16_t value, uint16_t mask);
 
-	spi_device_handle_t spiHandle;
+	spi_host_device_t spiHostDevice{SPI_HOST_MAX};
+	spi_device_handle_t spiHandle{0};
 	spi_transaction_t transDescr;
 
 	gpio_num_t csPin;
@@ -114,11 +113,10 @@ class MockAds131 {
 	static constexpr size_t DATA_WORD_LENGTH = ADS131M0x::DATA_WORD_LENGTH; // in bytes
 	typedef ADS131M0x::RawOutput RawOutput;
 
-	void init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset) {}
+	void init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset,
+	          spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
+	          gpio_num_t mosiPin);
 	void deinit() {}
-	void setupSpiAccess(spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
-	                    gpio_num_t mosiPin) {}
-	void releaseSpi() {}
 	void setWakeupTask(TaskHandle_t taskToWakeOnDrdy, size_t interval) {
 		isrData.taskToWake   = taskToWakeOnDrdy;
 		isrData.wakeInterval = interval;
@@ -136,7 +134,6 @@ class MockAds131 {
 	uint16_t readCLOCK() { return 0; }
 	uint16_t readPGA() { return 0; }
 
-	void attachISR();
 	bool startAcquisition() {
 		isrData.headIndex = isrData.tailIndex = 0;
 		gptimer_start(gptimer);
