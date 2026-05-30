@@ -259,12 +259,15 @@ void ADS131M0x::init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset,
 	assert(devcfg.clock_speed_hz <= 15625000); // Max ADS131 SPI clock
 	ret = spi_bus_add_device(spiHostDevice, &devcfg, &spiHandle);
 	assert(ESP_OK == ret);
+	// We are not going to share this SPI device with other tasks
 	ret = spi_device_acquire_bus(spiHandle, portMAX_DELAY);
 	assert(ESP_OK == ret);
 
 	isrData.spiHw = SPI_LL_GET_HW(spiHostDevice);
 	assert(isrData.spiHw);
 
+	// Install global ISR service and attach DRDY handler.
+	// Global service may be already installed (ret code ESP_ERR_INVALID_STATE).
 	esp_err_t err = gpio_install_isr_service(ESP_INTR_FLAG_IRAM);
 	if ((err == ESP_OK) || (err == ESP_ERR_INVALID_STATE)) {
 		gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE);
@@ -298,6 +301,8 @@ void ADS131M0x::deinit() {
 	isrData.rxRingBuff = nullptr;
 	heap_caps_free(isrData.rxDescArray);
 	isrData.rxDescArray = nullptr;
+	// Do not call gpio_uninstall_isr_service(),
+	// The service may be used by other tasks.
 }
 
 const ADS131M0x::RawOutput *IRAM_ATTR ADS131M0x::rawReadADC(size_t idx) const {
