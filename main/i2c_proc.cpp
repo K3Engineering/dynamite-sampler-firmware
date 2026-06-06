@@ -17,16 +17,15 @@ static constexpr uint8_t TEMP_RESULT_REG       = 0x00;
 static inline void delayMSec(uint32_t ms) { vTaskDelay(ms / portTICK_PERIOD_MS); }
 
 static void readTemperature(i2c_master_dev_handle_t devHandle) {
-	uint8_t writeConfig[3] = {CONFIG_REG, 0xE1, 0xB0};
-	i2c_master_transmit(devHandle, writeConfig, sizeof(writeConfig), -1);
-
-	// Wait for conversion to finish (TMP118 typical conversion time)
-	delayMSec(30);
-
 	// Read Temperature (Write Register Pointer, then read 2 bytes)
 	uint8_t regPtr    = TEMP_RESULT_REG;
 	uint8_t rxData[2] = {0};
-	i2c_master_transmit_receive(devHandle, &regPtr, 1, rxData, sizeof(rxData), -1);
+	esp_err_t err =
+	    i2c_master_transmit_receive(devHandle, &regPtr, 1, rxData, sizeof(rxData), 1000);
+	if (err != ESP_OK) {
+		ESP_LOGE(TAG, "I2C read failed: %d", err);
+		return;
+	}
 
 	// Calculate Temperature (16-bit resolution, 0.0078125°C per LSB)
 	int16_t raw = (int16_t)((rxData[0] << 8) | rxData[1]);
@@ -72,6 +71,9 @@ static void taskSetupI2C(void *setupDone) {
 		ESP_LOGE(TAG, "add device failed");
 		vTaskDelete(NULL);
 	}
+
+	uint8_t writeConfig[3] = {CONFIG_REG, 0x60, 0xB0};
+	i2c_master_transmit(devHandle, writeConfig, sizeof(writeConfig), 1000);
 
 	*(volatile bool *)setupDone = true;
 
