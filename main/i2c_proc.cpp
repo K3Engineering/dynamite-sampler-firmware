@@ -5,8 +5,6 @@
 #include <driver/i2c_master.h>
 #include <esp_log.h>
 
-#include <endian.h>
-
 constexpr char TAG[] = "I2C";
 
 static constexpr gpio_num_t I2C_MASTER_SDA_IO  = GPIO_NUM_4;
@@ -19,7 +17,7 @@ static constexpr uint8_t TEMP_RESULT_REG       = 0x00;
 static inline void delayMSec(uint32_t ms) { vTaskDelay(ms / portTICK_PERIOD_MS); }
 
 static void readTemperature(i2c_master_dev_handle_t devHandle) {
-	uint8_t writeConfig[2] = {CONFIG_REG, 0x81};
+	uint8_t writeConfig[3] = {CONFIG_REG, 0xE1, 0xB0};
 	i2c_master_transmit(devHandle, writeConfig, sizeof(writeConfig), -1);
 
 	// Wait for conversion to finish (TMP118 typical conversion time)
@@ -31,8 +29,9 @@ static void readTemperature(i2c_master_dev_handle_t devHandle) {
 	i2c_master_transmit_receive(devHandle, &regPtr, 1, rxData, sizeof(rxData), -1);
 
 	// Calculate Temperature (16-bit resolution, 0.0078125°C per LSB)
-	int16_t raw = be16toh(*(int16_t *)rxData);
-	ESP_LOGW(TAG, "Temperature: x%0X", raw);
+	int16_t raw = (int16_t)((rxData[0] << 8) | rxData[1]);
+	float tempC = raw * 0.0078125f;
+	ESP_LOGW(TAG, "Raw: 0x%04X, Temp: %.3f C", (uint16_t)raw, tempC);
 }
 
 static void taskSetupI2C(void *setupDone) {
