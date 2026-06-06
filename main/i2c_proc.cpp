@@ -53,7 +53,10 @@ static void taskSetupI2C(void *setupDone) {
 	        },
 	};
 	i2c_master_bus_handle_t busHandle;
-	i2c_new_master_bus(&busConfig, &busHandle);
+	if (ESP_OK != i2c_new_master_bus(&busConfig, &busHandle)) {
+		ESP_LOGE(TAG, "new bus failed");
+		vTaskDelete(NULL);
+	}
 
 	static constexpr i2c_device_config_t devConfig = {
 	    .dev_addr_length = I2C_ADDR_BIT_LEN_7,
@@ -66,7 +69,10 @@ static void taskSetupI2C(void *setupDone) {
 	        },
 	};
 	i2c_master_dev_handle_t devHandle;
-	i2c_master_bus_add_device(busHandle, &devConfig, &devHandle);
+	if (ESP_OK != i2c_master_bus_add_device(busHandle, &devConfig, &devHandle)) {
+		ESP_LOGE(TAG, "add device failed");
+		vTaskDelete(NULL);
+	}
 
 	*(volatile bool *)setupDone = true;
 
