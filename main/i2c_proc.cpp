@@ -53,7 +53,9 @@ static void taskSetupI2C(void *setupDone) {
 	i2c_master_bus_handle_t busHandle;
 	if (ESP_OK != i2c_new_master_bus(&busConfig, &busHandle)) {
 		ESP_LOGE(TAG, "new bus failed");
+		*(volatile bool *)setupDone = true;
 		vTaskDelete(NULL);
+		return;
 	}
 
 	static constexpr i2c_device_config_t devConfig = {
@@ -69,11 +71,16 @@ static void taskSetupI2C(void *setupDone) {
 	i2c_master_dev_handle_t devHandle;
 	if (ESP_OK != i2c_master_bus_add_device(busHandle, &devConfig, &devHandle)) {
 		ESP_LOGE(TAG, "add device failed");
+		*(volatile bool *)setupDone = true;
 		vTaskDelete(NULL);
+		return;
 	}
 
 	uint8_t writeConfig[3] = {CONFIG_REG, 0x60, 0xB0};
-	i2c_master_transmit(devHandle, writeConfig, sizeof(writeConfig), 1000);
+	esp_err_t cfgErr       = i2c_master_transmit(devHandle, writeConfig, sizeof(writeConfig), 1000);
+	if (cfgErr != ESP_OK) {
+		ESP_LOGE(TAG, "config write failed: %d", cfgErr);
+	}
 
 	*(volatile bool *)setupDone = true;
 
@@ -87,7 +94,10 @@ static void taskSetupI2C(void *setupDone) {
 
 void setupI2C(int core) {
 	volatile bool done = false;
-	xTaskCreatePinnedToCore(taskSetupI2C, "task_I2C_setup", 1024 * 2, (void *)&done, 1, NULL, core);
+	if (pdPASS != xTaskCreatePinnedToCore(taskSetupI2C, "task_I2C_setup", 1024 * 2, (void *)&done, 1, NULL, core)) {
+		ESP_LOGE(TAG, "I2C setup task create failed");
+		return;
+	}
 	while (!done)
 		vTaskDelay(10);
 }
