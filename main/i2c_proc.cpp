@@ -7,8 +7,8 @@
 
 constexpr char TAG[] = "I2C";
 
-static constexpr gpio_num_t I2C_MASTER_SDA_IO  = GPIO_NUM_4;
-static constexpr gpio_num_t I2C_MASTER_SCL_IO  = GPIO_NUM_5;
+static constexpr gpio_num_t I2C_MASTER_SDA_IO  = GPIO_NUM_46;
+static constexpr gpio_num_t I2C_MASTER_SCL_IO  = GPIO_NUM_3;
 static constexpr i2c_port_num_t I2C_MASTER_NUM = I2C_NUM_0;
 static constexpr uint16_t TMP118_ADDR          = 0x48; // Sensor Address
 static constexpr uint8_t CONFIG_REG            = 0x01;
