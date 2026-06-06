@@ -74,8 +74,10 @@ static inline void copyAdcToLE24(void *dst, const void *src) {
 
 static AdcFeedNetworkData IRAM_ATTR adcToNetwork(const AdcClass::RawOutput *adc) {
 	AdcFeedNetworkData net;
+	static constexpr size_t translate[AdcFeedNetworkData::NUM_CHAN]{1, 3, 5, 7};
+	static_assert(AdcFeedNetworkData::NUM_CHAN <= AdcClass::NUM_CHANNELS);
 	for (size_t i = 0; i < AdcFeedNetworkData::NUM_CHAN; ++i) {
-		copyAdcToLE24(net.chan + i, adc->data + AdcClass::DATA_WORD_LENGTH * i);
+		copyAdcToLE24(net.chan + i, adc->data + AdcClass::DATA_WORD_LENGTH * translate[i]);
 	}
 	return net;
 }

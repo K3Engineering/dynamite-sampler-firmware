@@ -127,6 +127,47 @@ constexpr ADS131M0xUserCfg<4> ads131UserConfig_boardv600_lite{
     .osr       = ADS131M0xReg::OSR_4096,
 };
 
-constexpr auto ads131UserConfig{ads131UserConfig_boardv400};
+// V6 Pro hardware
+constexpr ADS131M0xUserCfg<8> ads131UserConfig_boardv600_Pro{
+    .enable =
+        {
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+        },
+    .input =
+        {
+            ADS131M0xReg::INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS,
+            ADS131M0xReg::INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS,
+            ADS131M0xReg::INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS,
+            ADS131M0xReg::INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS,
+            ADS131M0xReg::INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS,
+            ADS131M0xReg::INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS,
+            ADS131M0xReg::INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS,
+            ADS131M0xReg::INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS,
+        },
+    .pga =
+        {
+            // NOTE - on this hardware revision, DIRECT gain
+            // should be within 1x-4x to be within datasheet max allowed V requirements
+            ADS131M0xReg::CHANNEL_PGA_1,
+            ADS131M0xReg::CHANNEL_PGA_1,
+            ADS131M0xReg::CHANNEL_PGA_1,
+            ADS131M0xReg::CHANNEL_PGA_1,
+            ADS131M0xReg::CHANNEL_PGA_1,
+            ADS131M0xReg::CHANNEL_PGA_1,
+            ADS131M0xReg::CHANNEL_PGA_1,
+            ADS131M0xReg::CHANNEL_PGA_1,
+        },
+    .powerMode = ADS131M0xReg::POWER_MODE_HIGH_RESOLUTION,
+    .osr       = ADS131M0xReg::OSR_4096,
+};
+
+constexpr auto ads131UserConfig{ads131UserConfig_boardv600_Pro};
 
 #endif // ADS131M0x_CFG_h
