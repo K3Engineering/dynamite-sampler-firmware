@@ -12,57 +12,53 @@ constexpr char TAG[] = "I2C";
 static constexpr gpio_num_t I2C_MASTER_SDA_IO  = GPIO_NUM_46;
 static constexpr gpio_num_t I2C_MASTER_SCL_IO  = GPIO_NUM_3;
 static constexpr i2c_port_num_t I2C_MASTER_NUM = I2C_NUM_0;
+static constexpr uint16_t TMP118_ADDR          = 0x48; // Sensor Address
 
-static constexpr uint16_t TMP118_ADDR    = 0x48; // Sensor Address
-static constexpr uint8_t CONFIG_REG      = 0x01;
-static constexpr uint8_t TEMP_RESULT_REG = 0x00;
+class I2CMasterBus {
+	i2c_master_bus_handle_t busHandle;
 
-static constexpr uint16_t CFG_RESERVED_DEFAULTS = 0x6030;
+  public:
+	bool setup();
+	void release();
 
-static constexpr uint16_t CFG_CONV_RATE_4S    = 0x0000;
-static constexpr uint16_t CFG_CONV_RATE_1S    = 0x0040;
-static constexpr uint16_t CFG_CONV_RATE_250MS = 0x0080;
-static constexpr uint16_t CFG_CONV_RATE_125MS = 0x00C0;
+	i2c_master_bus_handle_t handle() const { return busHandle; }
+};
 
-static constexpr uint16_t CFG_AVG_NONE      = 0;
-static constexpr uint16_t CFG_AVG_4X_B2B    = 0x01 << 2;
-static constexpr uint16_t CFG_AVG_8X_B2B    = 0x02 << 2;
-static constexpr uint16_t CFG_AVG_MOVING_4X = 0x03 << 2;
+class TMP118 {
+	static constexpr uint8_t CONFIG_REG      = 0x01;
+	static constexpr uint8_t TEMP_RESULT_REG = 0x00;
 
+	static constexpr uint16_t CFG_RESERVED_DEFAULTS = 0x6030;
+
+	static constexpr uint16_t CFG_CONV_RATE_4S    = 0x0000;
+	static constexpr uint16_t CFG_CONV_RATE_1S    = 0x0040;
+	static constexpr uint16_t CFG_CONV_RATE_250MS = 0x0080;
+	static constexpr uint16_t CFG_CONV_RATE_125MS = 0x00C0;
+
+	static constexpr uint16_t CFG_AVG_NONE      = 0;
+	static constexpr uint16_t CFG_AVG_4X_B2B    = 0x01 << 2;
+	static constexpr uint16_t CFG_AVG_8X_B2B    = 0x02 << 2;
+	static constexpr uint16_t CFG_AVG_MOVING_4X = 0x03 << 2;
+
+	i2c_master_dev_handle_t devHandle;
 #pragma pack(push, 1)
-struct ReadTMP118 {
-	uint8_t regPtr;
-};
-
-struct WriteTMP118 {
-	uint8_t regPtr;
-	uint16_t regVal;
-};
+	struct ReadCommand {
+		uint8_t regPtr;
+	};
+	struct WriteCommand {
+		uint8_t regPtr;
+		uint16_t regVal;
+	};
 #pragma pack(pop)
+  public:
+	void setup(i2c_master_bus_handle_t busHandle);
+	void release();
+	void readTemperature();
+};
 
 static inline void delayMSec(uint32_t ms) { vTaskDelay(ms / portTICK_PERIOD_MS); }
 
-static void readTemperature(i2c_master_dev_handle_t devHandle) {
-	ReadTMP118 command = {
-	    .regPtr = TEMP_RESULT_REG,
-	};
-	uint16_t rxBuff = 0;
-	esp_err_t err   = i2c_master_transmit_receive(devHandle, (uint8_t *)&command, sizeof(command),
-	                                              (uint8_t *)&rxBuff, sizeof(rxBuff), 1000);
-	if (err != ESP_OK) {
-		ESP_LOGE(TAG, "I2C read failed: %d", err);
-		return;
-	}
-
-	// Calculate Temperature (16-bit resolution, 0.0078125°C per LSB)
-	int16_t raw = be16toh(rxBuff);
-	float tempC = raw * 0.0078125f;
-	ESP_LOGW(TAG, "Temp: %d mC, %.3f C", (raw * 125) / 16, tempC);
-}
-
-static void taskSetupI2C(void *setupDone) {
-	ESP_LOGI(TAG, "setting up I2C on core: %u", esp_cpu_get_core_id());
-
+bool I2CMasterBus::setup() {
 	static constexpr i2c_master_bus_config_t busConfig = {
 	    .i2c_port          = I2C_MASTER_NUM,
 	    .sda_io_num        = I2C_MASTER_SDA_IO,
@@ -78,11 +74,12 @@ static void taskSetupI2C(void *setupDone) {
 	        },
 	};
 	i2c_master_bus_handle_t busHandle;
-	if (ESP_OK != i2c_new_master_bus(&busConfig, &busHandle)) {
-		ESP_LOGE(TAG, "new bus failed");
-		vTaskDelete(NULL);
-	}
+	return (ESP_OK == i2c_new_master_bus(&busConfig, &busHandle));
+}
 
+void I2CMasterBus::release() { i2c_del_master_bus(busHandle); }
+
+void TMP118::setup(i2c_master_bus_handle_t busHandle) {
 	static constexpr i2c_device_config_t devConfig = {
 	    .dev_addr_length = I2C_ADDR_BIT_LEN_7,
 	    .device_address  = TMP118_ADDR,
@@ -99,21 +96,50 @@ static void taskSetupI2C(void *setupDone) {
 		vTaskDelete(NULL);
 	}
 
-	const WriteTMP118 writeConfig = {
+	const WriteCommand config = {
 	    .regPtr = CONFIG_REG,
 	    .regVal = htobe16(CFG_RESERVED_DEFAULTS | CFG_CONV_RATE_1S | CFG_AVG_8X_B2B),
 	};
-	esp_err_t cfgErr =
-	    i2c_master_transmit(devHandle, (uint8_t *)&writeConfig, sizeof(writeConfig), 1000);
+	esp_err_t cfgErr = i2c_master_transmit(devHandle, (uint8_t *)&config, sizeof(config), 1000);
 	if (cfgErr != ESP_OK) {
 		ESP_LOGE(TAG, "config write failed: %d", cfgErr);
 	}
+}
+
+void TMP118::release() { i2c_master_bus_rm_device(devHandle); }
+
+void TMP118::readTemperature() {
+	const ReadCommand cmdGetVal = {
+	    .regPtr = TEMP_RESULT_REG,
+	};
+	uint16_t rxBuff = 0;
+	esp_err_t err = i2c_master_transmit_receive(devHandle, (uint8_t *)&cmdGetVal, sizeof(cmdGetVal),
+	                                            (uint8_t *)&rxBuff, sizeof(rxBuff), 1000);
+	if (err == ESP_OK) {
+		int16_t raw = be16toh(rxBuff);
+		// Calculate Temperature (16-bit resolution, 0.0078125°C per LSB)
+		ESP_LOGW(TAG, "Temp: %d mC, %.3f C", (raw * 125) / 16, raw * 0.0078125f);
+	} else {
+		ESP_LOGE(TAG, "I2C read failed: %d", err);
+	}
+}
+
+static void taskSetupI2C(void *setupDone) {
+	ESP_LOGI(TAG, "setting up I2C on core: %u", esp_cpu_get_core_id());
+
+	I2CMasterBus bus;
+	if (!bus.setup()) {
+		ESP_LOGE(TAG, "Bus setup failed");
+		vTaskDelete(NULL);
+	}
+	TMP118 sensor;
+	sensor.setup(bus.handle());
 
 	*(volatile bool *)setupDone = true;
 
 	while (true) {
-		readTemperature(devHandle);
-		delayMSec(5000);
+		delayMSec(1000);
+		sensor.readTemperature();
 	}
 
 	vTaskDelete(NULL);
