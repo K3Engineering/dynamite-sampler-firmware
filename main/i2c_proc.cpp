@@ -9,22 +9,25 @@
 
 constexpr char TAG[] = "I2C";
 
-static constexpr gpio_num_t I2C_MASTER_SDA_IO  = GPIO_NUM_46;
-static constexpr gpio_num_t I2C_MASTER_SCL_IO  = GPIO_NUM_3;
-static constexpr i2c_port_num_t I2C_MASTER_NUM = I2C_NUM_0;
-static constexpr uint16_t TMP118_ADDR          = 0x48; // Sensor Address
-
 class I2CMasterBus {
+	static constexpr gpio_num_t I2C_MASTER_SDA_IO  = GPIO_NUM_46;
+	static constexpr gpio_num_t I2C_MASTER_SCL_IO  = GPIO_NUM_3;
+	static constexpr i2c_port_num_t I2C_MASTER_NUM = I2C_NUM_0;
+
 	i2c_master_bus_handle_t busHandle;
 
   public:
 	bool setup();
-	void release();
-
-	i2c_master_bus_handle_t handle() const { return busHandle; }
+	void release() { i2c_del_master_bus(busHandle); }
+	i2c_master_dev_handle_t addDevice(uint16_t addr);
 };
 
 class TMP118 {
+	static constexpr uint16_t TMP118A_I2C_ADDR = 0x48;
+	static constexpr uint16_t TMP118B_I2C_ADDR = 0x49;
+	static constexpr uint16_t TMP118C_I2C_ADDR = 0x4A;
+	static constexpr uint16_t TMP118D_I2C_ADDR = 0x4B;
+
 	static constexpr uint8_t CONFIG_REG      = 0x01;
 	static constexpr uint8_t TEMP_RESULT_REG = 0x00;
 
@@ -51,8 +54,8 @@ class TMP118 {
 	};
 #pragma pack(pop)
   public:
-	void setup(i2c_master_bus_handle_t busHandle);
-	void release();
+	bool config(I2CMasterBus &bus);
+	void remove() { i2c_master_bus_rm_device(devHandle); }
 	void readTemperature();
 };
 
@@ -74,15 +77,17 @@ bool I2CMasterBus::setup() {
 	        },
 	};
 	i2c_master_bus_handle_t busHandle;
-	return (ESP_OK == i2c_new_master_bus(&busConfig, &busHandle));
+	esp_err_t res = i2c_new_master_bus(&busConfig, &busHandle);
+	if (res != ESP_OK) {
+		ESP_LOGE(TAG, "Bus setup failed");
+	}
+	return ESP_OK == res;
 }
 
-void I2CMasterBus::release() { i2c_del_master_bus(busHandle); }
-
-void TMP118::setup(i2c_master_bus_handle_t busHandle) {
-	static constexpr i2c_device_config_t devConfig = {
+i2c_master_dev_handle_t I2CMasterBus::addDevice(uint16_t addr) {
+	const i2c_device_config_t devConfig = {
 	    .dev_addr_length = I2C_ADDR_BIT_LEN_7,
-	    .device_address  = TMP118_ADDR,
+	    .device_address  = addr,
 	    .scl_speed_hz    = 100000, // 100 kHz Standard Mode
 	    .scl_wait_us     = 0,
 	    .flags =
@@ -91,22 +96,27 @@ void TMP118::setup(i2c_master_bus_handle_t busHandle) {
 	        },
 	};
 	i2c_master_dev_handle_t devHandle;
-	if (ESP_OK != i2c_master_bus_add_device(busHandle, &devConfig, &devHandle)) {
-		ESP_LOGE(TAG, "add device failed");
-		vTaskDelete(NULL);
+	if (ESP_OK == i2c_master_bus_add_device(busHandle, &devConfig, &devHandle)) {
+		return devHandle;
 	}
+	return nullptr;
+}
 
-	const WriteCommand config = {
+bool TMP118::config(I2CMasterBus &bus) {
+	devHandle = bus.addDevice(TMP118A_I2C_ADDR);
+	if (!devHandle) {
+		return false;
+	}
+	const WriteCommand cfg = {
 	    .regPtr = CONFIG_REG,
 	    .regVal = htobe16(CFG_RESERVED_DEFAULTS | CFG_CONV_RATE_1S | CFG_AVG_8X_B2B),
 	};
-	esp_err_t cfgErr = i2c_master_transmit(devHandle, (uint8_t *)&config, sizeof(config), 1000);
+	esp_err_t cfgErr = i2c_master_transmit(devHandle, (uint8_t *)&cfg, sizeof(cfg), 1000);
 	if (cfgErr != ESP_OK) {
 		ESP_LOGE(TAG, "config write failed: %d", cfgErr);
 	}
+	return true;
 }
-
-void TMP118::release() { i2c_master_bus_rm_device(devHandle); }
 
 void TMP118::readTemperature() {
 	const ReadCommand cmdGetVal = {
@@ -126,14 +136,14 @@ void TMP118::readTemperature() {
 
 static void taskSetupI2C(void *setupDone) {
 	ESP_LOGI(TAG, "setting up I2C on core: %u", esp_cpu_get_core_id());
-
 	I2CMasterBus bus;
 	if (!bus.setup()) {
-		ESP_LOGE(TAG, "Bus setup failed");
 		vTaskDelete(NULL);
 	}
 	TMP118 sensor;
-	sensor.setup(bus.handle());
+	if (!sensor.config(bus)) {
+		vTaskDelete(NULL);
+	}
 
 	*(volatile bool *)setupDone = true;
 
