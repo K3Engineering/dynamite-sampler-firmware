@@ -82,10 +82,18 @@ static AdcFeedNetworkData IRAM_ATTR adcToNetwork(const AdcClass::RawOutput *adc)
 	return net;
 }
 
+extern volatile float g_latest_i2c_temp;
+
+static int32_t parseAdc24(const uint8_t* data) {
+	int32_t val = (int32_t)(((uint32_t)data[0] << 24) | ((uint32_t)data[1] << 16) | ((uint32_t)data[2] << 8));
+	return val >> 8;
+}
+
 // Task that handles calling the read adc function and placing the values in the buffer.
 static void IRAM_ATTR taskAdcReadAndBuffer(void *) {
 	static constexpr size_t N_SAMPLES = AdcFeedNetworkPacket::NUM_SAMPLES;
 	AdcFeedNetworkData toSend[N_SAMPLES];
+	uint32_t sampleCounter = 0;
 
 	while (true) {
 		// Wait until ISR notifies this task. Normally numNotifications == 1,
@@ -97,7 +105,19 @@ static void IRAM_ATTR taskAdcReadAndBuffer(void *) {
 		// Read ADC values. Place them in StreamBuffer. Notify the BLE task
 		const size_t idx = adc.getReadyBatchStartIdx();
 		for (size_t n = 0; n < N_SAMPLES; ++n) {
-			toSend[n] = adcToNetwork(adc.rawReadADC(idx + n));
+			auto rawAdc = adc.rawReadADC(idx + n);
+			toSend[n] = adcToNetwork(rawAdc);
+			
+			sampleCounter++;
+			if (sampleCounter >= 1000) {
+				sampleCounter -= 1000;
+				int32_t ch[8];
+				for (int i = 0; i < 8; ++i) {
+					ch[i] = parseAdc24(rawAdc->data + i * AdcClass::DATA_WORD_LENGTH);
+				}
+				printf("CSV_DATA,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%.3f\n", 
+				       ch[0], ch[1], ch[2], ch[3], ch[4], ch[5], ch[6], ch[7], g_latest_i2c_temp);
+			}
 		}
 		if (sizeof(toSend) != xStreamBufferSend(adcStreamBufferHandle, toSend, sizeof(toSend), 0))
 		    [[unlikely]] {
