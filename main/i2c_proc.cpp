@@ -76,7 +76,6 @@ bool I2CMasterBus::setup() {
 	            .allow_pd               = false,
 	        },
 	};
-	i2c_master_bus_handle_t busHandle;
 	esp_err_t res = i2c_new_master_bus(&busConfig, &busHandle);
 	if (res != ESP_OK) {
 		ESP_LOGE(TAG, "Bus setup failed");
