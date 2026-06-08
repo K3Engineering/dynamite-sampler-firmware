@@ -120,6 +120,8 @@ bool TMP118::config(I2CMasterBus &bus) {
 	return true;
 }
 
+volatile float g_latest_i2c_temp = 0.0f;
+
 void TMP118::readTemperature() {
 	const ReadCommand cmdGetVal = {
 	    .regPtr = TEMP_RESULT_REG,
@@ -129,8 +131,9 @@ void TMP118::readTemperature() {
 	                                            (uint8_t *)&rxBuff, sizeof(rxBuff), 1000);
 	if (err == ESP_OK) {
 		int16_t raw = be16toh(rxBuff);
-		// Calculate Temperature (16-bit resolution, 0.0078125°C per LSB)
-		ESP_LOGW(TAG, "Temp: %d mC, %.3f C", (raw * 125) / 16, raw * 0.0078125f);
+		// Calculate Temperature (16-bit resolution, 0.0078125AC per LSB)
+		g_latest_i2c_temp = raw * 0.0078125f;
+		ESP_LOGW(TAG, "Temp: %d mC, %.3f C", (raw * 125) / 16, g_latest_i2c_temp);
 	} else {
 		ESP_LOGE(TAG, "I2C read failed: %d", err);
 	}
