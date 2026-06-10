@@ -156,11 +156,7 @@ static void taskSetupI2C(void *setupDone) {
 
 void setupI2C(int core) {
 	volatile bool done = false;
-	if (pdPASS != xTaskCreatePinnedToCore(taskSetupI2C, "task_I2C_setup", 1024 * 2, (void *)&done,
-	                                      1, NULL, core)) {
-		ESP_LOGE(TAG, "I2C setup task create failed");
-		return;
-	}
+	xTaskCreatePinnedToCore(taskSetupI2C, "task_I2C_setup", 1024 * 2, (void *)&done, 1, NULL, core);
 	while (!done) {
 		vTaskDelay(10);
 	}

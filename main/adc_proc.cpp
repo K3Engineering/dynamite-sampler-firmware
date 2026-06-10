@@ -145,10 +145,10 @@ static void taskSetupAdc(void *setupDone) {
 
 	if (adc.resetAdcHw()) {
 		configureAdc();
+		*(volatile bool *)setupDone = true;
 	} else {
 		startupDiagnosticIsOk = false;
 	}
-	*(volatile bool *)setupDone = true;
 	vTaskDelete(NULL);
 }
 
