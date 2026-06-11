@@ -96,6 +96,8 @@ static void setupDeviceInfo(NimBLEServer *server) {
 class AdcFeedCallbacks : public NimBLECharacteristicCallbacks {
 	void onSubscribe(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo,
 	                 uint16_t subValue) override {
+		ESP_LOGW(TAG, "onSubscribe ENTRY sub=%u lock=%u core=%u", subValue,
+		         (unsigned)deviceLock, xPortGetCoreID());
 		if (subValue & 1) {
 			if (deviceLock == DeviceLock::Open) {
 				deviceLock = DeviceLock::Streaming;
@@ -200,6 +202,9 @@ static void IRAM_ATTR taskBlePublishAdcBuffer(void *) {
 		                                        sizeof(packet.adc), portMAX_DELAY);
 		if (bytesRead == sizeof(packet.adc)) [[likely]] {
 			packet.hdr.sample_sequence_number = htole16(count);
+			if ((count % 256) == 0) {
+				ESP_LOGW(TAG, "publish: pre-notify #%u core=%u", count, xPortGetCoreID());
+			}
 			chrAdcFeed->notify(packet);
 			count += sizeof(packet.adc) / sizeof(*packet.adc);
 		} else {

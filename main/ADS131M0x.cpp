@@ -380,12 +380,16 @@ static void hijackDmaSpi(ADS131M0xIsrData *ctrl) {
 
 bool ADS131M0x::startAcquisition() {
 	txSmallBuff->status = 0;
+	ESP_LOGW("DYNA", "startAcq: before polling_start");
 	if (ESP_OK != spi_device_polling_start(spiHandle, &transDescr, portMAX_DELAY)) {
 		return false;
 	}
+	ESP_LOGW("DYNA", "startAcq: before hijack");
 	// spi_device_polling_end() at stopAcquisition()
 
 	hijackDmaSpi(&isrData);
+
+	ESP_LOGW("DYNA", "startAcq: after hijack");
 
 	gpio_set_direction(drdyPin, GPIO_MODE_INPUT);
 	gpio_set_intr_type(drdyPin, GPIO_INTR_NEGEDGE);
@@ -395,7 +399,9 @@ bool ADS131M0x::startAcquisition() {
 void ADS131M0x::stopAcquisition() {
 	gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE);
 	gpio_set_direction(drdyPin, GPIO_MODE_DISABLE);
+	ESP_LOGW(TAG, "stopAcq: before polling_end, core %u", xPortGetCoreID());
 	spi_device_polling_end(spiHandle, portMAX_DELAY);
+	ESP_LOGW(TAG, "stopAcq: after polling_end, core %u", xPortGetCoreID());
 }
 
 void ADS131M0x::setWakeupTask(TaskHandle_t taskToWakeOnDrdy, size_t interval) {
