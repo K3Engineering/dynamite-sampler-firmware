@@ -206,7 +206,15 @@ static void IRAM_ATTR taskBlePublishAdcBuffer(void *) {
 			if ((count % 256) == 0) {
 				ESP_LOGW(TAG, "publish: pre-notify #%u core=%u", count, xPortGetCoreID());
 			}
+			
+			uint32_t start_tick = xTaskGetTickCount();
 			bool notify_ok = chrAdcFeed->notify(packet);
+			uint32_t duration = xTaskGetTickCount() - start_tick;
+			
+			if (duration > pdMS_TO_TICKS(20)) {
+				ESP_LOGE(TAG, "publish: notify took %u ticks! count=%u", duration, count);
+			}
+			
 			if (!notify_ok) {
 				ESP_LOGE(TAG, "publish: notify FAILED count=%u", count);
 			} else if ((count % 256) == 0) {
