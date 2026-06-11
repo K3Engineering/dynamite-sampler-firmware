@@ -130,7 +130,7 @@ void TMP118::readTemperature() {
 		int16_t raw = be16toh(rxBuff);
 		// Calculate Temperature (16-bit resolution, 0.0078125AC per LSB)
 		g_latest_i2c_temp = raw * 0.0078125f;
-		ESP_LOGW(TAG, "Temp: %d mC, %.3f C", (raw * 125) / 16, g_latest_i2c_temp);
+		// ESP_LOGW(TAG, "Temp: %d mC, %.3f C", (raw * 125) / 16, g_latest_i2c_temp);
 	} else {
 		ESP_LOGE(TAG, "I2C read failed: %d", err);
 	}
