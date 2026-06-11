@@ -40,8 +40,9 @@ class MyServerCallbacks : public NimBLEServerCallbacks {
 	};
 
 	void onDisconnect(NimBLEServer *server, NimBLEConnInfo &connInfo, int reason) override {
+		ESP_LOGE(TAG, "onDisco ENTRY: reason=%d, core %u", reason, xPortGetCoreID());
 		NimBLEDevice::startAdvertising();
-		ESP_LOGD(TAG, "Server onDisco, core %u", xPortGetCoreID());
+		ESP_LOGE(TAG, "onDisco EXIT: Server onDisco, core %u", xPortGetCoreID());
 	}
 };
 
@@ -205,7 +206,12 @@ static void IRAM_ATTR taskBlePublishAdcBuffer(void *) {
 			if ((count % 256) == 0) {
 				ESP_LOGW(TAG, "publish: pre-notify #%u core=%u", count, xPortGetCoreID());
 			}
-			chrAdcFeed->notify(packet);
+			bool notify_ok = chrAdcFeed->notify(packet);
+			if (!notify_ok) {
+				ESP_LOGE(TAG, "publish: notify FAILED count=%u", count);
+			} else if ((count % 256) == 0) {
+				ESP_LOGW(TAG, "publish: post-notify #%u", count);
+			}
 			count += sizeof(packet.adc) / sizeof(*packet.adc);
 		} else {
 			assert(0);
