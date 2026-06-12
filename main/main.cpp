@@ -44,7 +44,7 @@ static void setPower() {
 extern "C" void app_main(void) {
 	printHeader();
 
-	setupAdc(CORE_APP);
+	// setupAdc(CORE_APP);
 	setupI2C(CORE_APP);
 	setupBle(CORE_BLE);
 	setupStats(CORE_BLE);
