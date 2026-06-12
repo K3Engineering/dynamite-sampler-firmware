@@ -101,7 +101,6 @@ static void IRAM_ATTR taskAdcReadAndBuffer(void *) {
 		}
 		if (sizeof(toSend) != xStreamBufferSend(adcStreamBufferHandle, toSend, sizeof(toSend), 0))
 		    [[unlikely]] {
-			ets_printf("xStreamBufferSend failed\n");
 			ESP_LOGE(TAG, "xStreamBufferSend failed");
 		}
 	}
