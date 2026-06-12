@@ -28,9 +28,15 @@ struct ADS131HwConfigData {
 static DRAM_ATTR AdcClass adc;
 static ADS131HwConfigData savedConfig;
 
-bool startAdcAcquisition() { return adc.startAcquisition(); }
+bool startAdcAcquisition() {
+	return true;
+	// return adc.startAcquisition();
+}
 
-void stopAdcAcquisition() { adc.stopAcquisition(); }
+void stopAdcAcquisition() {
+	return;
+	// adc.stopAcquisition();
+}
 
 const AdcConfigNetworkData getAdcConfig() {
 	const ADS131HwConfigData *p = &savedConfig;
