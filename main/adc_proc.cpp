@@ -153,6 +153,7 @@ static void taskSetupAdc(void *setupDone) {
 		*(volatile bool *)setupDone = true;
 	} else {
 		startupDiagnosticIsOk = false;
+		// TODO: review init errors handling
 	}
 	vTaskDelete(NULL);
 }
