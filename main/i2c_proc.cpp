@@ -7,6 +7,8 @@
 
 #include <endian.h>
 
+#include "ADS131M0x_cfg.h"
+
 constexpr char TAG[] = "I2C";
 
 class I2CMasterBus {
@@ -155,9 +157,12 @@ static void taskSetupI2C(void *setupDone) {
 }
 
 void setupI2C(int core) {
-	volatile bool done = false;
-	xTaskCreatePinnedToCore(taskSetupI2C, "task_I2C_setup", 1024 * 2, (void *)&done, 1, NULL, core);
-	while (!done) {
-		vTaskDelay(10);
+	if constexpr (boardConfig.HAS_I2C) {
+		volatile bool done = false;
+		xTaskCreatePinnedToCore(taskSetupI2C, "task_I2C_setup", 1024 * 2, (void *)&done, 1, NULL,
+		                        core);
+		while (!done) {
+			vTaskDelay(10);
+		}
 	}
 }

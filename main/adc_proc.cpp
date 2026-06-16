@@ -74,10 +74,15 @@ static inline void copyAdcToLE24(void *dst, const void *src) {
 
 static AdcFeedNetworkData IRAM_ATTR adcToNetwork(const AdcClass::RawOutput *adc) {
 	AdcFeedNetworkData net;
-	static constexpr size_t translate[AdcFeedNetworkData::NUM_CHAN]{1, 3, 5, 7};
-	static_assert(AdcFeedNetworkData::NUM_CHAN <= AdcClass::NUM_CHANNELS);
+	static_assert(AdcFeedNetworkData::NUM_CHAN <= boardConfig.NCHAN);
 	for (size_t i = 0; i < AdcFeedNetworkData::NUM_CHAN; ++i) {
-		copyAdcToLE24(net.chan + i, adc->data + AdcClass::DATA_WORD_LENGTH * translate[i]);
+		size_t src_idx;
+		if constexpr (AdcFeedNetworkData::NUM_CHAN == boardConfig.NCHAN) {
+			src_idx = i;
+		} else {
+			src_idx = boardConfig.translate[i];
+		}
+		copyAdcToLE24(net.chan + i, adc->data + AdcClass::DATA_WORD_LENGTH * src_idx);
 	}
 	return net;
 }
@@ -108,14 +113,14 @@ static void IRAM_ATTR taskAdcReadAndBuffer(void *) {
 }
 
 static void configureAdc() {
-	static_assert(ads131UserConfig.NCHAN == adc.NUM_CHANNELS);
+	static_assert(boardConfig.NCHAN == adc.NUM_CHANNELS);
 	for (uint8_t chan = 0; chan < adc.NUM_CHANNELS; ++chan) {
-		adc.setChannelEnable(chan, ads131UserConfig.enable[chan]);
-		adc.setChannelInputSelection(chan, ads131UserConfig.input[chan]);
-		adc.setChannelPGA(chan, ads131UserConfig.pga[chan]);
+		adc.setChannelEnable(chan, boardConfig.enable[chan]);
+		adc.setChannelInputSelection(chan, boardConfig.input[chan]);
+		adc.setChannelPGA(chan, boardConfig.pga[chan]);
 	}
-	adc.setPowerMode(ads131UserConfig.powerMode);
-	adc.setOsr(ads131UserConfig.osr);
+	adc.setPowerMode(boardConfig.powerMode);
+	adc.setOsr(boardConfig.osr);
 
 	savedConfig = {
 	    .id     = adc.readID(),
