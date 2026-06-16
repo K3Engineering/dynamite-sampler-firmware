@@ -3,18 +3,22 @@
 
 #include "ADS131M0x_reg.h"
 
-template <size_t N>
-struct ADS131M0xUserCfg {
+template <size_t N, bool I2C_PRESENT>
+struct K3BoardCfg {
 	static constexpr size_t NCHAN = N;
+	static constexpr bool HAS_I2C = I2C_PRESENT;
+
 	bool enable[NCHAN];
 	uint16_t input[NCHAN];
 	uint16_t pga[NCHAN];
 	uint16_t powerMode;
 	uint16_t osr;
+
+	uint8_t translate[NCHAN];
 };
 
 // V3.0.0 hardware
-constexpr ADS131M0xUserCfg<4> ads131UserConfig_boardv300{
+constexpr K3BoardCfg<4, false> boardv300{
     .enable =
         {
             false,
@@ -38,10 +42,11 @@ constexpr ADS131M0xUserCfg<4> ads131UserConfig_boardv300{
         },
     .powerMode = ADS131M0xReg::POWER_MODE_HIGH_RESOLUTION,
     .osr       = ADS131M0xReg::OSR_4096,
+    .translate = {0, 1, 2, 3},
 };
 
 // V4.0.0 hardware
-constexpr ADS131M0xUserCfg<4> ads131UserConfig_boardv400{
+constexpr K3BoardCfg<4, false> boardv400{
     .enable =
         {
             false,
@@ -67,10 +72,11 @@ constexpr ADS131M0xUserCfg<4> ads131UserConfig_boardv400{
         },
     .powerMode = ADS131M0xReg::POWER_MODE_HIGH_RESOLUTION,
     .osr       = ADS131M0xReg::OSR_4096,
+    .translate = {0, 1, 2, 3},
 };
 
 // V5.0.0 hardware
-constexpr ADS131M0xUserCfg<4> ads131UserConfig_boardv500{
+constexpr K3BoardCfg<4, false> boardv500{
     .enable =
         {
             true,
@@ -96,10 +102,11 @@ constexpr ADS131M0xUserCfg<4> ads131UserConfig_boardv500{
         },
     .powerMode = ADS131M0xReg::POWER_MODE_HIGH_RESOLUTION,
     .osr       = ADS131M0xReg::OSR_4096,
+    .translate = {0, 1, 2, 3},
 };
 
 // V6 Lite hardware
-constexpr ADS131M0xUserCfg<4> ads131UserConfig_boardv600_lite{
+constexpr K3BoardCfg<4, false> boardv600_lite{
     .enable =
         {
             true,
@@ -125,8 +132,51 @@ constexpr ADS131M0xUserCfg<4> ads131UserConfig_boardv600_lite{
         },
     .powerMode = ADS131M0xReg::POWER_MODE_HIGH_RESOLUTION,
     .osr       = ADS131M0xReg::OSR_4096,
+    .translate = {0, 1, 2, 3},
 };
 
-constexpr auto ads131UserConfig{ads131UserConfig_boardv400};
+// V6 Pro hardware
+constexpr K3BoardCfg<8, true> boardv600_Pro{
+    .enable =
+        {
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+        },
+    .input =
+        {
+            ADS131M0xReg::INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS,
+            ADS131M0xReg::INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS,
+            ADS131M0xReg::INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS,
+            ADS131M0xReg::INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS,
+            ADS131M0xReg::INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS,
+            ADS131M0xReg::INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS,
+            ADS131M0xReg::INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS,
+            ADS131M0xReg::INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS,
+        },
+    .pga =
+        {
+            // NOTE - on this hardware revision, DIRECT gain
+            // should be within 1x-4x to be within datasheet max allowed V requirements
+            ADS131M0xReg::CHANNEL_PGA_1,
+            ADS131M0xReg::CHANNEL_PGA_1,
+            ADS131M0xReg::CHANNEL_PGA_1,
+            ADS131M0xReg::CHANNEL_PGA_1,
+            ADS131M0xReg::CHANNEL_PGA_1,
+            ADS131M0xReg::CHANNEL_PGA_1,
+            ADS131M0xReg::CHANNEL_PGA_1,
+            ADS131M0xReg::CHANNEL_PGA_1,
+        },
+    .powerMode = ADS131M0xReg::POWER_MODE_HIGH_RESOLUTION,
+    .osr       = ADS131M0xReg::OSR_4096,
+    .translate = {1, 3, 5, 7, 0, 0, 0, 0},
+};
+
+constexpr auto boardConfig{boardv300};
 
 #endif // ADS131M0x_CFG_h

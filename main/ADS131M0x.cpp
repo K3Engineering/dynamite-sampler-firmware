@@ -268,7 +268,7 @@ void ADS131M0x::init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset,
 
 	// Install global ISR service and attach DRDY handler.
 	// Global service may be already installed (ret code ESP_ERR_INVALID_STATE).
-	esp_err_t err = gpio_install_isr_service(ESP_INTR_FLAG_IRAM);
+	esp_err_t err = gpio_install_isr_service(ESP_INTR_FLAG_IRAM | ESP_INTR_FLAG_LEVEL3);
 	if ((err == ESP_OK) || (err == ESP_ERR_INVALID_STATE)) {
 		gpio_set_intr_type(drdyPin, GPIO_INTR_DISABLE);
 		gpio_isr_handler_add(drdyPin, interruptHandlerAdcDrdy, &isrData);
