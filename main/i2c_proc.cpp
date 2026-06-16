@@ -61,7 +61,7 @@ class TMP118 {
 	void readTemperature();
 };
 
-static inline void delayMSec(uint32_t ms) { vTaskDelay(ms / portTICK_PERIOD_MS); }
+static inline void delayMSec(uint32_t ms) { vTaskDelay(pdMS_TO_TICKS(ms)); }
 
 bool I2CMasterBus::setup() {
 	static constexpr i2c_master_bus_config_t busConfig = {
