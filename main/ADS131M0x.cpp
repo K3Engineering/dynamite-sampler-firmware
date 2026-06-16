@@ -21,7 +21,7 @@ constexpr char TAG[] = "ADS131";
 constexpr size_t RING_BUFF_SZ = 64;
 static_assert((RING_BUFF_SZ & (RING_BUFF_SZ - 1)) == 0, "RING_BUFF_SZ must be a power of 2");
 
-static inline void delayMSec(uint32_t ms) { vTaskDelay(pdMS_TO_TICKS(ms)); }
+static inline void delayMSec(uint32_t ms) { vTaskDelay(ms / portTICK_PERIOD_MS); }
 static void interruptHandlerAdcDrdy(void *param);
 
 static constexpr uint16_t crc16ccitt(const void *data, size_t count) {
