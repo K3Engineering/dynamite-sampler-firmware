@@ -115,6 +115,7 @@ bool TMP118::config(I2CMasterBus &bus) {
 	esp_err_t cfgErr = i2c_master_transmit(devHandle, (uint8_t *)&cfg, sizeof(cfg), 1000);
 	if (cfgErr != ESP_OK) {
 		ESP_LOGE(TAG, "config write failed: %d", cfgErr);
+		return false;
 	}
 	return true;
 }
