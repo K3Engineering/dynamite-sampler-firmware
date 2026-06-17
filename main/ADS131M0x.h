@@ -96,7 +96,7 @@ class ADS131M0x {
 	ADS131M0xIsrData isrData;
 };
 
-#if (CONFIG_MOCK_ADC == 1)
+#if (USE_MOCK_ADC)
 
 #include <driver/gptimer.h>
 
@@ -159,12 +159,12 @@ class MockAds131 {
 	MockAds131xIsrData isrData;
 };
 
-#endif // (CONFIG_MOCK_ADC == 1)
+#endif // USE_MOCK_ADC
 
-#if (CONFIG_MOCK_ADC == 1)
+#if (USE_MOCK_ADC)
 typedef MockAds131 AdcClass;
 #else
 typedef ADS131M0x AdcClass;
-#endif // (CONFIG_MOCK_ADC == 1)
+#endif // USE_MOCK_ADC
 
 #endif // ADS131M0x_h

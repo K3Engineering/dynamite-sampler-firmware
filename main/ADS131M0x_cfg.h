@@ -3,6 +3,8 @@
 
 #include "ADS131M0x_reg.h"
 
+#define USE_MOCK_ADC false
+
 template <size_t N, bool I2C_PRESENT>
 struct K3BoardCfg {
 	static constexpr size_t NCHAN = N;
