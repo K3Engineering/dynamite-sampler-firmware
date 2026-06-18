@@ -4,6 +4,8 @@
 #include "ADS131M0x_reg.h"
 
 #if (CONFIG_MOCK_ADC == 1)
+#define USE_MOCK_ADC true
+#else
 #define USE_MOCK_ADC false
 #endif
 
