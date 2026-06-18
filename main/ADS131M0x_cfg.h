@@ -3,7 +3,9 @@
 
 #include "ADS131M0x_reg.h"
 
+#if (CONFIG_MOCK_ADC == 1)
 #define USE_MOCK_ADC false
+#endif
 
 template <size_t N, bool I2C_PRESENT>
 struct K3BoardCfg {
@@ -179,6 +181,19 @@ constexpr K3BoardCfg<8, true> boardv600_Pro{
     .translate = {1, 3, 5, 7, 0, 0, 0, 0},
 };
 
+#if (CONFIG_HW_REV_V3 == 1)
 constexpr auto boardConfig{boardv300};
+#elif (CONFIG_HW_REV_V4 == 1)
+constexpr auto boardConfig{boardv400};
+#elif (CONFIG_HW_REV_V5 == 1)
+constexpr auto boardConfig{boardv500};
+#elif (CONFIG_HW_REV_V6_LITE == 1)
+constexpr auto boardConfig{boardv600_lite};
+#elif (CONFIG_HW_REV_V6_PRO == 1)
+constexpr auto boardConfig{boardv600_Pro};
+#else
+// Compiler failure
+blah;
+#endif
 
 #endif // ADS131M0x_CFG_h

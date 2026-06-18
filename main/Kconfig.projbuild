@@ -1,3 +1,24 @@
-menu "Dynamite sampler Firmware configuration"
+menu "Hardware and ADC configuration"
+    choice HARDWARE_REVISION
+        prompt "Select PCB Revision"
+        default HW_REV_V6_PRO
+
+        config HW_REV_V3
+            bool "V3.0.0"
+        config HW_REV_V4
+            bool "V4.0.0"
+        config HW_REV_V5
+            bool "V5.0.0"
+        config HW_REV_V6_LITE
+            bool "V6 Lite"
+        config HW_REV_V6_PRO
+            bool "V6 Pro"
+    endchoice
+
+    config MOCK_ADC
+        bool "Use the mock ADC class"
+        default n
+        help
+            Use this on hardware that doesn't have the ADC, or to mock the ADC.
 
 endmenu
