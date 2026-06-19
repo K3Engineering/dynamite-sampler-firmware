@@ -4,7 +4,6 @@
 #include <freertos/stream_buffer.h>
 
 #include <NimBLEDevice.h>
-#include <algorithm>
 
 #include "adc_ble_interface.h"
 #include "adc_proc.h"
@@ -13,6 +12,7 @@
 #include "dynamite_uuid.h"
 #include "loadcell_calibration.h"
 
+#include "ADS131M0x_cfg.h"
 #include "build_metadata.h"
 
 constexpr char TAG[] = "BLE";
@@ -68,10 +68,14 @@ static void setupDeviceInfo(NimBLEServer *server) {
 		ESP_LOGI(TAG, "Set Device manufacturer name to: '%s'", DEVICE_MANUFACTURER_NAME);
 	}
 	{ // Firmware version
+		char s[sizeof(GIT_DESCRIBE) + sizeof(boardConfig.name) + 1];
+		strcpy(s, boardConfig.name);
+		strcat(s, "|");
+		strcat(s, GIT_DESCRIBE);
 		NimBLECharacteristic *chr = srvDeviceInfo->createCharacteristic(
-		    DEVICE_FIRMWARE_VER_CHR_UUID16.value, NIMBLE_PROPERTY::READ, sizeof(GIT_DESCRIBE));
-		chr->setValue(GIT_DESCRIBE);
-		ESP_LOGI(TAG, "Set Device Firmware version to: '%s'", GIT_DESCRIBE);
+		    DEVICE_FIRMWARE_VER_CHR_UUID16.value, NIMBLE_PROPERTY::READ, strlen(s));
+		chr->setValue((uint8_t *)s, strlen(s));
+		ESP_LOGI(TAG, "Set Device Firmware version to: '%s'", s);
 	}
 	{ // Transmitter power
 		NimBLECharacteristic *chr = srvDeviceInfo->createCharacteristic(
@@ -151,7 +155,8 @@ class CalibrationConfigCallbacks : public NimBLECharacteristicCallbacks {
 		size_t idx             = 0;
 		calibrData.data[idx++] = res ? '0' : '1';
 		calibrData.data[idx++] = ' ';
-		const size_t sz        = std::min(len, sizeof(calibrData.data) - idx);
+		const size_t sz =
+		    len < (sizeof(calibrData.data) - idx) ? len : sizeof(calibrData.data) - idx;
 		memcpy(calibrData.data + idx, data, sz);
 		pCharacteristic->notify(calibrData.data, sz + idx);
 	}

@@ -139,26 +139,22 @@ void TMP118::readTemperature() {
 static void taskSetupI2C(void *setupDone) {
 	ESP_LOGI(TAG, "setting up I2C on core: %u", esp_cpu_get_core_id());
 	I2CMasterBus bus;
-	if (!bus.setup()) {
-		vTaskDelete(NULL);
-	}
 	TMP118 sensor;
-	if (!sensor.config(bus)) {
+	if (bus.setup() && sensor.config(bus)) {
+		*(volatile bool *)setupDone = true;
+	} else {
 		vTaskDelete(NULL);
 	}
-
-	*(volatile bool *)setupDone = true;
 
 	while (true) {
 		delayMSec(1000);
 		sensor.readTemperature();
 	}
-
 	vTaskDelete(NULL);
 }
 
 void setupI2C(int core) {
-	if constexpr (boardConfig.HAS_I2C) {
+	if constexpr (boardConfig.hasI2C) {
 		volatile bool done = false;
 		xTaskCreatePinnedToCore(taskSetupI2C, "task_I2C_setup", 1024 * 2, (void *)&done, 1, NULL,
 		                        core);

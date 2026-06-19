@@ -1,18 +1,19 @@
 #ifndef ADS131M0x_CFG_h
 #define ADS131M0x_CFG_h
 
+#include <stdint.h>
+
 #include "ADS131M0x_reg.h"
 
 #if (CONFIG_MOCK_ADC == 1)
-#define USE_MOCK_ADC true
-#else
-#define USE_MOCK_ADC false
+#define USE_MOCK_ADC 1
 #endif
 
-template <size_t N, bool I2C_PRESENT>
+template <size_t N>
 struct K3BoardCfg {
 	static constexpr size_t NCHAN = N;
-	static constexpr bool HAS_I2C = I2C_PRESENT;
+	char name[8];
+	bool hasI2C;
 
 	bool enable[NCHAN];
 	uint16_t input[NCHAN];
@@ -24,7 +25,9 @@ struct K3BoardCfg {
 };
 
 // V3.0.0 hardware
-constexpr K3BoardCfg<4, false> boardv300{
+constexpr K3BoardCfg<4> boardv300{
+    .name   = "v300",
+    .hasI2C = false,
     .enable =
         {
             false,
@@ -52,7 +55,9 @@ constexpr K3BoardCfg<4, false> boardv300{
 };
 
 // V4.0.0 hardware
-constexpr K3BoardCfg<4, false> boardv400{
+constexpr K3BoardCfg<4> boardv400{
+    .name   = "v400",
+    .hasI2C = false,
     .enable =
         {
             false,
@@ -82,7 +87,9 @@ constexpr K3BoardCfg<4, false> boardv400{
 };
 
 // V5.0.0 hardware
-constexpr K3BoardCfg<4, false> boardv500{
+constexpr K3BoardCfg<4> boardv500{
+    .name   = "v500",
+    .hasI2C = false,
     .enable =
         {
             true,
@@ -112,7 +119,9 @@ constexpr K3BoardCfg<4, false> boardv500{
 };
 
 // V6 Lite hardware
-constexpr K3BoardCfg<4, false> boardv600_lite{
+constexpr K3BoardCfg<4> boardv600_lite{
+    .name   = "v600L",
+    .hasI2C = false,
     .enable =
         {
             true,
@@ -142,7 +151,9 @@ constexpr K3BoardCfg<4, false> boardv600_lite{
 };
 
 // V6 Pro hardware
-constexpr K3BoardCfg<8, true> boardv600_Pro{
+constexpr K3BoardCfg<8> boardv600_Pro{
+    .name   = "v600P",
+    .hasI2C = true,
     .enable =
         {
             true,
@@ -194,8 +205,7 @@ constexpr auto boardConfig{boardv600_lite};
 #elif (CONFIG_HW_REV_V6_PRO == 1)
 constexpr auto boardConfig{boardv600_Pro};
 #else
-// Compiler failure
-blah;
+#error No board configuration selected.
 #endif
 
 #endif // ADS131M0x_CFG_h
