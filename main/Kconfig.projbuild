@@ -1,17 +1,18 @@
-menu "Hardware and ADC configuration"
-    choice HARDWARE_REVISION
+menu "Dynamite Sampler hardware configuration"
+    choice DYNAMITE_HARDWARE_REVISION
         prompt "Select PCB Revision"
-        default HW_REV_V6_PRO
-
-        config HW_REV_V3
+        default DYNAMITE_HW_REV_V6_PRO
+        help
+            This is the internal version printed on the PCB, not the user "release" version
+        config DYNAMITE_HW_REV_V3
             bool "V3.0.0"
-        config HW_REV_V4
+        config DYNAMITE_HW_REV_V4
             bool "V4.0.0"
-        config HW_REV_V5
+        config DYNAMITE_HW_REV_V5
             bool "V5.0.0"
-        config HW_REV_V6_LITE
+        config DYNAMITE_HW_REV_V6_LITE
             bool "V6 Lite"
-        config HW_REV_V6_PRO
+        config DYNAMITE_HW_REV_V6_PRO
             bool "V6 Pro"
     endchoice
 

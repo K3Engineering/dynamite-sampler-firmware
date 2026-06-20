@@ -143,6 +143,7 @@ static void taskSetupI2C(void *setupDone) {
 	if (bus.setup() && sensor.config(bus)) {
 		*(volatile bool *)setupDone = true;
 	} else {
+		// TODO: improve error handlng
 		vTaskDelete(NULL);
 	}
 

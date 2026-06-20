@@ -404,7 +404,7 @@ void ADS131M0x::setWakeupTask(TaskHandle_t taskToWakeOnDrdy, size_t interval) {
 	isrData.wakeInterval = interval;
 };
 
-#ifdef USE_MOCK_ADC
+#if (CONFIG_MOCK_ADC == 1)
 
 #include <driver/gptimer.h>
 
@@ -474,4 +474,4 @@ const MockAds131::RawOutput *IRAM_ATTR MockAds131::rawReadADC(size_t) const {
 	return &a;
 }
 
-#endif // USE_MOCK_ADC
+#endif // (CONFIG_MOCK_ADC == 1)
