@@ -1,9 +1,25 @@
-menu "Dynamite sampler Firmware configuration"
+menu "Dynamite Sampler hardware configuration"
+    choice DYNAMITE_HARDWARE_REVISION
+        prompt "Select PCB Revision"
+        default DYNAMITE_HW_REV_V6_PRO
+        help
+            This is the internal version printed on the PCB, not the user "release" version
+        config DYNAMITE_HW_REV_V3
+            bool "V3.0.0"
+        config DYNAMITE_HW_REV_V4
+            bool "V4.0.0"
+        config DYNAMITE_HW_REV_V5
+            bool "V5.0.0"
+        config DYNAMITE_HW_REV_V6_LITE
+            bool "V6 Lite"
+        config DYNAMITE_HW_REV_V6_PRO
+            bool "V6 Pro"
+    endchoice
 
     config MOCK_ADC
         bool "Use the mock ADC class"
         default n
         help
-            Use this on hardware that doesn't have the ADC.
+            Use this on hardware that doesn't have the ADC, or to mock the ADC. It will mock the selected hardware.
 
 endmenu

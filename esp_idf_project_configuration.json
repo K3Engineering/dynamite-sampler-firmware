@@ -28,36 +28,6 @@
       "postFlash": ""
     }
   },
-  "debug-mockADC": {
-    "build": {
-      "compileArgs": [
-        "-DIDF_TARGET=esp32s3"
-      ],
-      "ninjaArgs": [],
-      "buildDirectoryPath": "${workspaceFolder}/build/debug-mockadc",
-      "sdkconfigDefaults": [
-        "${workspaceFolder}/sdkconfig.common",
-        "${workspaceFolder}/sdkconfig.debug",
-        "${workspaceFolder}/sdkconfig.debug-mockadc"
-      ],
-      "sdkconfigFilePath": "${workspaceFolder}/build/sdkconfig.debug-mockadc"
-    },
-    "env": {},
-    "idfTarget": "esp32s3",
-    "flashBaudRate": "",
-    "monitorBaudRate": "",
-    "openOCD": {
-      "debugLevel": 2,
-      "configs": [],
-      "args": []
-    },
-    "tasks": {
-      "preBuild": "",
-      "preFlash": "",
-      "postBuild": "",
-      "postFlash": ""
-    }
-  },
   "release": {
     "build": {
       "compileArgs": [

@@ -1,12 +1,15 @@
 #ifndef ADS131M0x_CFG_h
 #define ADS131M0x_CFG_h
 
+#include <stdint.h>
+
 #include "ADS131M0x_reg.h"
 
-template <size_t N, bool I2C_PRESENT>
+template <size_t N>
 struct K3BoardCfg {
 	static constexpr size_t NCHAN = N;
-	static constexpr bool HAS_I2C = I2C_PRESENT;
+	char name[8];
+	bool hasI2C;
 
 	bool enable[NCHAN];
 	uint16_t input[NCHAN];
@@ -18,7 +21,9 @@ struct K3BoardCfg {
 };
 
 // V3.0.0 hardware
-constexpr K3BoardCfg<4, false> boardv300{
+constexpr K3BoardCfg<4> boardv300{
+    .name   = "v300",
+    .hasI2C = false,
     .enable =
         {
             false,
@@ -46,7 +51,9 @@ constexpr K3BoardCfg<4, false> boardv300{
 };
 
 // V4.0.0 hardware
-constexpr K3BoardCfg<4, false> boardv400{
+constexpr K3BoardCfg<4> boardv400{
+    .name   = "v400",
+    .hasI2C = false,
     .enable =
         {
             false,
@@ -76,7 +83,9 @@ constexpr K3BoardCfg<4, false> boardv400{
 };
 
 // V5.0.0 hardware
-constexpr K3BoardCfg<4, false> boardv500{
+constexpr K3BoardCfg<4> boardv500{
+    .name   = "v500",
+    .hasI2C = false,
     .enable =
         {
             true,
@@ -106,7 +115,9 @@ constexpr K3BoardCfg<4, false> boardv500{
 };
 
 // V6 Lite hardware
-constexpr K3BoardCfg<4, false> boardv600_lite{
+constexpr K3BoardCfg<4> boardv600_lite{
+    .name   = "v600L",
+    .hasI2C = false,
     .enable =
         {
             true,
@@ -136,7 +147,9 @@ constexpr K3BoardCfg<4, false> boardv600_lite{
 };
 
 // V6 Pro hardware
-constexpr K3BoardCfg<8, true> boardv600_Pro{
+constexpr K3BoardCfg<8> boardv600_Pro{
+    .name   = "v600P",
+    .hasI2C = true,
     .enable =
         {
             true,
@@ -177,6 +190,18 @@ constexpr K3BoardCfg<8, true> boardv600_Pro{
     .translate = {1, 3, 5, 7, 0, 0, 0, 0},
 };
 
+#if (CONFIG_DYNAMITE_HW_REV_V3 == 1)
 constexpr auto boardConfig{boardv300};
+#elif (CONFIG_DYNAMITE_HW_REV_V4 == 1)
+constexpr auto boardConfig{boardv400};
+#elif (CONFIG_DYNAMITE_HW_REV_V5 == 1)
+constexpr auto boardConfig{boardv500};
+#elif (CONFIG_DYNAMITE_HW_REV_V6_LITE == 1)
+constexpr auto boardConfig{boardv600_lite};
+#elif (CONFIG_DYNAMITE_HW_REV_V6_PRO == 1)
+constexpr auto boardConfig{boardv600_Pro};
+#else
+#error No board configuration selected.
+#endif
 
 #endif // ADS131M0x_CFG_h

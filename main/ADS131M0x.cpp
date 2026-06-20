@@ -474,4 +474,4 @@ const MockAds131::RawOutput *IRAM_ATTR MockAds131::rawReadADC(size_t) const {
 	return &a;
 }
 
-#endif // CONFIG_MOCK_ADC
+#endif // (CONFIG_MOCK_ADC == 1)
