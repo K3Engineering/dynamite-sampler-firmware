@@ -103,8 +103,9 @@ bool ADS131M0x::setOsr(uint16_t osr) {
 }
 
 bool ADS131M0x::setExternalReferenceEnable(bool enable) {
-	return writeRegisterMasked(ADS131M0xReg::REG_CLOCK, 
-	                           enable ? ADS131M0xReg::REGMASK_CLOCK_EXTREF_EN : 0, 
+	assert((NUM_CHANNELS == 8) && "EXTREF_EN is only supported on the 8-channel ADS131M08");
+	return writeRegisterMasked(ADS131M0xReg::REG_CLOCK,
+	                           enable ? ADS131M0xReg::REGMASK_CLOCK_EXTREF_EN : 0,
 	                           ADS131M0xReg::REGMASK_CLOCK_EXTREF_EN);
 }
 
