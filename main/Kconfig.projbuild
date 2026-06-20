@@ -20,6 +20,6 @@ menu "Dynamite Sampler hardware configuration"
         bool "Use the mock ADC class"
         default n
         help
-            Use this on hardware that doesn't have the ADC, or to mock the ADC.
+            Use this on hardware that doesn't have the ADC, or to mock the ADC. It will mock the selected hardware.
 
 endmenu
