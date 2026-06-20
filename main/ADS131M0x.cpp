@@ -102,6 +102,12 @@ bool ADS131M0x::setOsr(uint16_t osr) {
 	return writeRegisterMasked(ADS131M0xReg::REG_CLOCK, osr << 2, ADS131M0xReg::REGMASK_CLOCK_OSR);
 }
 
+bool ADS131M0x::setExternalReferenceEnable(bool enable) {
+	return writeRegisterMasked(ADS131M0xReg::REG_CLOCK, 
+	                           enable ? ADS131M0xReg::REGMASK_CLOCK_EXTREF_EN : 0, 
+	                           ADS131M0xReg::REGMASK_CLOCK_EXTREF_EN);
+}
+
 bool ADS131M0x::setChannelEnable(uint8_t channel, bool enable) {
 	static_assert(ADS131M0xReg::REGMASK_CLOCK_CH1_EN == (ADS131M0xReg::REGMASK_CLOCK_CH0_EN << 1));
 	static_assert(ADS131M0xReg::REGMASK_CLOCK_CH2_EN == (ADS131M0xReg::REGMASK_CLOCK_CH0_EN << 2));

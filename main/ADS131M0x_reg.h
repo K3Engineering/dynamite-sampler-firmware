@@ -166,6 +166,7 @@ struct ADS131M0xReg {
 	static constexpr uint16_t REGMASK_CLOCK_CH6_EN = REGMASK_CLOCK_CH0_EN << 6;
 	static constexpr uint16_t REGMASK_CLOCK_CH7_EN = REGMASK_CLOCK_CH0_EN << 7;
 
+	static constexpr uint16_t REGMASK_CLOCK_EXTREF_EN = 0x0040;
 	static constexpr uint16_t REGMASK_CLOCK_TBM = 0x0020;
 	static constexpr uint16_t REGMASK_CLOCK_OSR = 0x001C;
 	static constexpr uint16_t REGMASK_CLOCK_PWR = 0x0003;

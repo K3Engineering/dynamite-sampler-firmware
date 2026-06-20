@@ -60,6 +60,7 @@ class ADS131M0x {
 	bool setChannelPGA(uint8_t channel, uint16_t pga);
 	bool setChannelInputSelection(uint8_t channel, uint16_t input);
 	bool setOsr(uint16_t osr);
+	bool setExternalReferenceEnable(bool enable);
 
 	uint16_t readID();
 	uint16_t readSTATUS();
@@ -129,6 +130,7 @@ class MockAds131 {
 	bool setPowerMode(uint8_t powerMode) { return true; }
 	bool setChannelInputSelection(uint8_t channel, uint16_t input) { return true; }
 	bool setOsr(uint16_t osr) { return true; }
+	bool setExternalReferenceEnable(bool enable) { return true; }
 
 	uint16_t readID() { return 0; }
 	uint16_t readSTATUS() { return 0; }
