@@ -32,6 +32,8 @@ bool startAdcAcquisition() { return adc.startAcquisition(); }
 
 void stopAdcAcquisition() { adc.stopAcquisition(); }
 
+void setAdcExternalReference(bool enable) { adc.setExternalReferenceEnable(enable); }
+
 const AdcConfigNetworkData getAdcConfig() {
 	const ADS131HwConfigData *p = &savedConfig;
 	return AdcConfigNetworkData{

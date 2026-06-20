@@ -134,6 +134,19 @@ class AdcConfigCallbacks : public NimBLECharacteristicCallbacks {
 	}
 };
 
+class AdcDebugCtrlCallbacks : public NimBLECharacteristicCallbacks {
+	void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
+		const NimBLEAttValue val = pCharacteristic->getValue();
+		if (val.length() == 1) {
+			bool enable = val.data()[0] != 0;
+			setAdcExternalReference(enable);
+			ESP_LOGI(TAG, "ADC Debug: External Ref %s", enable ? "Enabled" : "Disabled");
+		} else {
+			ESP_LOGW(TAG, "ADC Debug: Invalid payload length %u, expected 1", val.length());
+		}
+	}
+};
+
 class CalibrationConfigCallbacks : public NimBLECharacteristicCallbacks {
 	void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
 		if (deviceLock != DeviceLock::Open) {
@@ -186,6 +199,12 @@ static void setupAdcFeed(NimBLEServer *server) {
 		NimBLECharacteristic *chr =
 		    srvc->createCharacteristic(&ADC_CONF_CHR_UUID128, NIMBLE_PROPERTY::READ);
 		static AdcConfigCallbacks cb;
+		chr->setCallbacks(&cb);
+	}
+	{ // ADC debug control
+		NimBLECharacteristic *chr =
+		    srvc->createCharacteristic(&ADC_DEBUG_CTRL_CHR_UUID128, NIMBLE_PROPERTY::WRITE);
+		static AdcDebugCtrlCallbacks cb;
 		chr->setCallbacks(&cb);
 	}
 }

@@ -6,6 +6,7 @@
 void setupAdc(int core);
 bool startAdcAcquisition();
 void stopAdcAcquisition();
+void setAdcExternalReference(bool enable);
 
 const AdcConfigNetworkData getAdcConfig();
 
