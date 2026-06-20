@@ -206,8 +206,7 @@ void ADS131M0x::init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset,
 		};
 	}
 	transDescr = {
-	    // .flags            = SPI_TRANS_DMA_BUFFER_ALIGN_MANUAL,
-	    .flags            = 0, // Until https://github.com/espressif/esp-idf/issues/18251 fixed
+	    .flags            = SPI_TRANS_DMA_BUFFER_ALIGN_MANUAL,
 	    .cmd              = 0,
 	    .addr             = 0,
 	    .length           = SPI_FRAME_SIZE * 8, // in bits.
