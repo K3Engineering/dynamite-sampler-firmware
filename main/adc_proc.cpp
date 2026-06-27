@@ -102,7 +102,11 @@ static void IRAM_ATTR taskAdcReadAndBuffer(void *) {
 		// Read ADC values. Place them in StreamBuffer. Notify the BLE task
 		const size_t idx = adc.getReadyBatchStartIdx();
 		for (size_t n = 0; n < N_SAMPLES; ++n) {
-			toSend[n] = adcToNetwork(adc.rawReadADC(idx + n));
+			const ADS131M0x::RawOutput *ptr = adc.rawReadADC(idx + n);
+			if constexpr (boardConfig.checkCRC) {
+				assert(adc.isCrcOk(ptr));
+			}
+			toSend[n] = adcToNetwork(ptr);
 		}
 		if (sizeof(toSend) != xStreamBufferSend(adcStreamBufferHandle, toSend, sizeof(toSend), 0))
 		    [[unlikely]] {
