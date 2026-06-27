@@ -138,8 +138,18 @@ class AdcDebugCtrlCallbacks : public NimBLECharacteristicCallbacks {
 	void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
 		const NimBLEAttValue val = pCharacteristic->getValue();
 		if (val.length() == 1) {
-			bool enable = val.data()[0] != 0;
+			bool enable       = val.data()[0] != 0;
+			bool wasStreaming = (deviceLock == DeviceLock::Streaming);
+
+			if (wasStreaming) {
+				stopAdcAcquisition();
+			}
+
 			setAdcExternalReference(enable);
+
+			if (wasStreaming) {
+				startAdcAcquisition();
+			}
 			ESP_LOGI(TAG, "ADC Debug: External Ref %s", enable ? "Enabled" : "Disabled");
 		} else {
 			ESP_LOGW(TAG, "ADC Debug: Invalid payload length %u, expected 1", val.length());
