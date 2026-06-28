@@ -304,7 +304,7 @@ void ADS131M0x::deinit() {
 	// The service may be used by other tasks.
 }
 
-const ADS131M0x::RawOutput *IRAM_ATTR ADS131M0x::rawReadADC(size_t idx) const {
+const ADS131M0x::RawOutput *IRAM_ATTR ADS131M0x::rawReadAdc(size_t idx) const {
 	return (RawOutput *)(isrData.rxRingBuff + (idx % RING_BUFF_SZ) * dmaPaddedSize(SPI_FRAME_SIZE));
 }
 
@@ -453,7 +453,7 @@ void MockAds131::init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset,
 	gptimer_enable(gptimer);
 }
 
-const MockAds131::RawOutput *IRAM_ATTR MockAds131::rawReadADC(size_t) const {
+const MockAds131::RawOutput *IRAM_ATTR MockAds131::rawReadAdc(size_t) const {
 	static RawOutput a{
 	    .status       = htobe16((ADS131M0xReg::REGMASK_STATUS_DRDY0 << NUM_CHANNELS) - 1),
 	    .unusedStatus = 0,

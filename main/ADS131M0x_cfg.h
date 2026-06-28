@@ -18,7 +18,6 @@ struct K3BoardCfg {
 	uint16_t osr;
 
 	uint8_t translate[NCHAN];
-	bool checkCRC;
 };
 
 // V3.0.0 hardware
@@ -49,7 +48,6 @@ constexpr K3BoardCfg<4> boardv300{
     .powerMode = ADS131M0xReg::POWER_MODE_HIGH_RESOLUTION,
     .osr       = ADS131M0xReg::OSR_4096,
     .translate = {0, 1, 2, 3},
-    .checkCRC  = false,
 };
 
 // V4.0.0 hardware
@@ -82,7 +80,6 @@ constexpr K3BoardCfg<4> boardv400{
     .powerMode = ADS131M0xReg::POWER_MODE_HIGH_RESOLUTION,
     .osr       = ADS131M0xReg::OSR_4096,
     .translate = {0, 1, 2, 3},
-    .checkCRC  = true,
 };
 
 // V5.0.0 hardware
@@ -115,7 +112,6 @@ constexpr K3BoardCfg<4> boardv500{
     .powerMode = ADS131M0xReg::POWER_MODE_HIGH_RESOLUTION,
     .osr       = ADS131M0xReg::OSR_4096,
     .translate = {0, 1, 2, 3},
-    .checkCRC  = false,
 };
 
 // V6 Lite hardware
@@ -148,7 +144,6 @@ constexpr K3BoardCfg<4> boardv600_lite{
     .powerMode = ADS131M0xReg::POWER_MODE_HIGH_RESOLUTION,
     .osr       = ADS131M0xReg::OSR_4096,
     .translate = {0, 1, 2, 3},
-    .checkCRC  = false,
 };
 
 // V6 Pro hardware
@@ -193,7 +188,14 @@ constexpr K3BoardCfg<8> boardv600_Pro{
     .powerMode = ADS131M0xReg::POWER_MODE_HIGH_RESOLUTION,
     .osr       = ADS131M0xReg::OSR_4096,
     .translate = {1, 3, 5, 7, 0, 0, 0, 0},
-    .checkCRC  = false,
+};
+
+struct GlobalSettings {
+	bool checkAdcCrc;
+};
+
+constexpr GlobalSettings globalSettings{
+    .checkAdcCrc = true,
 };
 
 #if (CONFIG_DYNAMITE_HW_REV_V3 == 1)
