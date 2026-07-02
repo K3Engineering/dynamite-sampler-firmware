@@ -10,6 +10,8 @@ struct K3BoardCfg {
 	static constexpr size_t NCHAN = N;
 	char name[8];
 	bool hasI2C;
+	int factoryResetPin;
+	bool factoryResetLevelHi;
 
 	bool enable[NCHAN];
 	uint16_t input[NCHAN];
@@ -22,8 +24,10 @@ struct K3BoardCfg {
 
 // V3.0.0 hardware
 constexpr K3BoardCfg<4> boardv300{
-    .name   = "v300",
-    .hasI2C = false,
+    .name                = "v300",
+    .hasI2C              = false,
+    .factoryResetPin     = -1,
+    .factoryResetLevelHi = false,
     .enable =
         {
             false,
@@ -52,8 +56,10 @@ constexpr K3BoardCfg<4> boardv300{
 
 // V4.0.0 hardware
 constexpr K3BoardCfg<4> boardv400{
-    .name   = "v400",
-    .hasI2C = false,
+    .name                = "v400",
+    .hasI2C              = false,
+    .factoryResetPin     = -1,
+    .factoryResetLevelHi = false,
     .enable =
         {
             false,
@@ -84,8 +90,10 @@ constexpr K3BoardCfg<4> boardv400{
 
 // V5.0.0 hardware
 constexpr K3BoardCfg<4> boardv500{
-    .name   = "v500",
-    .hasI2C = false,
+    .name                = "v500",
+    .hasI2C              = false,
+    .factoryResetPin     = -1,
+    .factoryResetLevelHi = false,
     .enable =
         {
             true,
@@ -116,8 +124,10 @@ constexpr K3BoardCfg<4> boardv500{
 
 // V6 Lite hardware
 constexpr K3BoardCfg<4> boardv600_lite{
-    .name   = "v600L",
-    .hasI2C = false,
+    .name                = "v600L",
+    .hasI2C              = false,
+    .factoryResetPin     = -1,
+    .factoryResetLevelHi = false,
     .enable =
         {
             true,
@@ -148,8 +158,10 @@ constexpr K3BoardCfg<4> boardv600_lite{
 
 // V6 Pro hardware
 constexpr K3BoardCfg<8> boardv600_Pro{
-    .name   = "v600P",
-    .hasI2C = true,
+    .name                = "v600P",
+    .hasI2C              = true,
+    .factoryResetPin     = -1,
+    .factoryResetLevelHi = false,
     .enable =
         {
             true,
