@@ -14,14 +14,14 @@
 constexpr char TAG[] = "OTA";
 
 #ifdef CONFIG_BOOTLOADER_FACTORY_RESET
-static_assert(CONFIG_BOOTLOADER_NUM_PIN_FACTORY_RESET == boardConfig.factoryResetPin);
+static_assert(CONFIG_BOOTLOADER_NUM_PIN_FACTORY_RESET == boardConfig.factoryReset.pin);
 #if (CONFIG_BOOTLOADER_FACTORY_RESET_PIN_HIGH == 1)
-static_assert(boardConfig.factoryResetLevelHi);
+static_assert(boardConfig.factoryReset.activeLevelHi);
 #else
-static_assert(!boardConfig.factoryResetLevelHi);
+static_assert(!boardConfig.factoryReset.activeLevelHi);
 #endif
 #else  // CONFIG_BOOTLOADER_FACTORY_RESET
-static_assert(-1 == boardConfig.factoryResetPin);
+static_assert(!boardConfig.factoryReset.connected());
 #endif // CONFIG_BOOTLOADER_FACTORY_RESET
 
 bool startupDiagnosticIsOk = true;

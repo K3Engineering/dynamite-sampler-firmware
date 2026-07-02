@@ -12,10 +12,6 @@
 constexpr char TAG[] = "I2C";
 
 class I2CMasterBus {
-	static constexpr gpio_num_t I2C_MASTER_SDA_IO  = GPIO_NUM_46;
-	static constexpr gpio_num_t I2C_MASTER_SCL_IO  = GPIO_NUM_3;
-	static constexpr i2c_port_num_t I2C_MASTER_NUM = I2C_NUM_0;
-
 	i2c_master_bus_handle_t busHandle;
 
   public:
@@ -65,9 +61,9 @@ static inline void delayMSec(uint32_t ms) { vTaskDelay(ms / portTICK_PERIOD_MS);
 
 bool I2CMasterBus::setup() {
 	static constexpr i2c_master_bus_config_t busConfig = {
-	    .i2c_port          = I2C_MASTER_NUM,
-	    .sda_io_num        = I2C_MASTER_SDA_IO,
-	    .scl_io_num        = I2C_MASTER_SCL_IO,
+	    .i2c_port          = boardConfig.i2c.masterPortNum,
+	    .sda_io_num        = boardConfig.i2c.masterSdaIo,
+	    .scl_io_num        = boardConfig.i2c.masterSclIo,
 	    .clk_source        = I2C_CLK_SRC_DEFAULT,
 	    .glitch_ignore_cnt = 7,
 	    .intr_priority     = 0,
@@ -155,7 +151,7 @@ static void taskSetupI2C(void *setupDone) {
 }
 
 void setupI2C(int core) {
-	if constexpr (boardConfig.hasI2C) {
+	if constexpr (boardConfig.i2c.connected()) {
 		volatile bool done = false;
 		xTaskCreatePinnedToCore(taskSetupI2C, "task_I2C_setup", 1024 * 2, (void *)&done, 1, NULL,
 		                        core);
