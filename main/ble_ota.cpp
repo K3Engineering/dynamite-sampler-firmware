@@ -9,7 +9,20 @@
 
 #include "dynamite_uuid.h"
 
+#include "ADS131M0x_cfg.h"
+
 constexpr char TAG[] = "OTA";
+
+#ifdef CONFIG_BOOTLOADER_FACTORY_RESET
+static_assert(CONFIG_BOOTLOADER_NUM_PIN_FACTORY_RESET == boardConfig.factoryResetPin);
+#if (CONFIG_BOOTLOADER_FACTORY_RESET_PIN_HIGH == 1)
+static_assert(boardConfig.factoryResetLevelHi);
+#else
+static_assert(!boardConfig.factoryResetLevelHi);
+#endif
+#else  // CONFIG_BOOTLOADER_FACTORY_RESET
+static_assert(-1 == boardConfig.factoryResetPin);
+#endif // CONFIG_BOOTLOADER_FACTORY_RESET
 
 bool startupDiagnosticIsOk = true;
 
