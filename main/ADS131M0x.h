@@ -73,7 +73,7 @@ class ADS131M0x {
 	void stopAcquisition();
 
 	size_t getReadyBatchStartIdx() const { return isrData.tailIndex - isrData.wakeInterval; }
-	const RawOutput *rawReadADC(size_t idx) const;
+	const RawOutput *rawReadAdc(size_t idx) const;
 
 	static bool isCrcOk(const RawOutput *data);
 
@@ -151,8 +151,8 @@ class MockAds131 {
 		return res;
 	}
 
-	const RawOutput *rawReadADC(size_t idx) const;
-	const RawOutput *rawReadADC() { return rawReadADC(0); };
+	const RawOutput *rawReadAdc(size_t idx) const;
+	const RawOutput *rawReadAdc() { return rawReadAdc(0); };
 
 	static bool isCrcOk(const RawOutput *data) { return true; };
 
