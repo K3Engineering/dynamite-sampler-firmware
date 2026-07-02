@@ -9,7 +9,7 @@
 
 #include "dynamite_uuid.h"
 
-#include "ADS131M0x_cfg.h"
+#include "board_cfg.h"
 
 constexpr char TAG[] = "OTA";
 

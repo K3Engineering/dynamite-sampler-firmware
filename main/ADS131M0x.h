@@ -13,7 +13,7 @@
 #include <esp_rom_lldesc.h>
 #include <soc/spi_struct.h>
 
-#include "ADS131M0x_cfg.h"
+#include "board_cfg.h"
 
 struct ADS131M0xIsrData {
 	uint8_t *rxRingBuff;

@@ -7,7 +7,7 @@
 
 #include <endian.h>
 
-#include "ADS131M0x_cfg.h"
+#include "board_cfg.h"
 
 constexpr char TAG[] = "I2C";
 

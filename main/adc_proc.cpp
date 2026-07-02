@@ -11,8 +11,8 @@
 #include "adc_ble_interface.h"
 #include "adc_proc.h"
 
-#include "ADS131M0x_cfg.h"
 #include "ADS131M0x_reg.h"
+#include "board_cfg.h"
 #include "debug_pin.h"
 
 constexpr char TAG[] = "ADC";

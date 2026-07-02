@@ -12,7 +12,7 @@
 #include "dynamite_uuid.h"
 #include "loadcell_calibration.h"
 
-#include "ADS131M0x_cfg.h"
+#include "board_cfg.h"
 #include "build_metadata.h"
 
 constexpr char TAG[] = "BLE";
