@@ -138,19 +138,13 @@ static void configureAdc() {
 
 static void taskSetupAdc(void *setupDone) {
 	ESP_LOGI(TAG, "setting up adc on core: %u", esp_cpu_get_core_id());
-	constexpr gpio_num_t PIN_NUM_CLK   = GPIO_NUM_11;
-	constexpr gpio_num_t PIN_NUM_MISO  = GPIO_NUM_10;
-	constexpr gpio_num_t PIN_NUM_MOSI  = GPIO_NUM_9;
-	constexpr gpio_num_t PIN_DRDY      = GPIO_NUM_12;
-	constexpr gpio_num_t PIN_ADC_RESET = GPIO_NUM_14;
-	constexpr gpio_num_t PIN_CS_ADC    = GPIO_NUM_13;
-
 	// TODO figure out if you need to setup wake from sleep for gpio
 	gpio_set_direction(PIN_DEBUG_TOP, GPIO_MODE_OUTPUT);
 	gpio_set_direction(PIN_DEBUG_BOT, GPIO_MODE_OUTPUT);
 
-	adc.init(PIN_CS_ADC, PIN_DRDY, PIN_ADC_RESET, SPI3_HOST, PIN_NUM_CLK, PIN_NUM_MISO,
-	         PIN_NUM_MOSI);
+	adc.init(boardConfig.adc.hwConnect.cs, boardConfig.adc.hwConnect.drdy,
+	         boardConfig.adc.hwConnect.reset, SPI3_HOST, boardConfig.adc.spiConnect.clock,
+	         boardConfig.adc.spiConnect.miso, boardConfig.adc.spiConnect.mosi);
 
 	if (adc.resetAdcHw()) {
 		configureAdc();

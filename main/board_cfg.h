@@ -7,6 +7,13 @@
 #include <driver/i2c_types.h>
 #include <soc/gpio_num.h>
 
+struct FactoryResetCfg {
+	int pin;
+	bool activeLevelHi;
+
+	constexpr bool connected() const { return pin != -1; };
+};
+
 struct I2cConnectCfg {
 	gpio_num_t masterSdaIo;
 	gpio_num_t masterSclIo;
@@ -15,16 +22,23 @@ struct I2cConnectCfg {
 	constexpr bool connected() const { return masterSdaIo != GPIO_NUM_NC; };
 };
 
-struct FactoryResetCfg {
-	int pin;
-	bool activeLevelHi;
+struct AdcHwConnect {
+	gpio_num_t cs;
+	gpio_num_t drdy;
+	gpio_num_t reset;
+};
 
-	constexpr bool connected() const { return pin != -1; };
+struct AdcSpiConnect {
+	gpio_num_t clock;
+	gpio_num_t miso;
+	gpio_num_t mosi;
 };
 
 template <size_t N>
 struct AdcCfg {
 	static constexpr size_t NCHAN = N;
+	AdcHwConnect hwConnect;
+	AdcSpiConnect spiConnect;
 	bool enable[NCHAN];
 	uint16_t input[NCHAN];
 	uint16_t pga[NCHAN];
@@ -53,6 +67,18 @@ constexpr FactoryResetCfg resetNotConnected{
     .activeLevelHi = false,
 };
 
+constexpr AdcHwConnect adcHwConnect{
+    .cs    = GPIO_NUM_13,
+    .drdy  = GPIO_NUM_12,
+    .reset = GPIO_NUM_14,
+};
+
+constexpr AdcSpiConnect adcSpiConnect{
+    .clock = GPIO_NUM_11,
+    .miso  = GPIO_NUM_10,
+    .mosi  = GPIO_NUM_9,
+};
+
 // V3.0.0 hardware
 constexpr K3BoardCfg<4> boardv300{
     .name         = "v300",
@@ -60,6 +86,8 @@ constexpr K3BoardCfg<4> boardv300{
     .factoryReset = resetNotConnected,
     .adc =
         {
+            .hwConnect  = adcHwConnect,
+            .spiConnect = adcSpiConnect,
             .enable =
                 {
                     false,
@@ -94,6 +122,8 @@ constexpr K3BoardCfg<4> boardv400{
     .factoryReset = resetNotConnected,
     .adc =
         {
+            .hwConnect  = adcHwConnect,
+            .spiConnect = adcSpiConnect,
             .enable =
                 {
                     false,
@@ -130,6 +160,8 @@ constexpr K3BoardCfg<4> boardv500{
     .factoryReset = resetNotConnected,
     .adc =
         {
+            .hwConnect  = adcHwConnect,
+            .spiConnect = adcSpiConnect,
             .enable =
                 {
                     true,
@@ -166,6 +198,8 @@ constexpr K3BoardCfg<4> boardv600_lite{
     .factoryReset = resetNotConnected,
     .adc =
         {
+            .hwConnect  = adcHwConnect,
+            .spiConnect = adcSpiConnect,
             .enable =
                 {
                     true,
@@ -207,6 +241,8 @@ constexpr K3BoardCfg<8> boardv600_Pro{
     .factoryReset = resetNotConnected,
     .adc =
         {
+            .hwConnect  = adcHwConnect,
+            .spiConnect = adcSpiConnect,
             .enable =
                 {
                     true,
