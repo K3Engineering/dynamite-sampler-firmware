@@ -249,14 +249,6 @@ constexpr K3BoardCfg<8> boardv600_Pro{
     .translate = {1, 3, 5, 7, 0, 0, 0, 0},
 };
 
-struct GlobalSettings {
-	bool checkAdcCrc;
-};
-
-constexpr GlobalSettings globalSettings{
-    .checkAdcCrc = true,
-};
-
 #if (CONFIG_DYNAMITE_HW_REV_V3 == 1)
 constexpr auto boardConfig{boardv300};
 #elif (CONFIG_DYNAMITE_HW_REV_V4 == 1)
