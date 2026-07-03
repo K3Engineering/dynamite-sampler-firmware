@@ -1,5 +1,5 @@
-#ifndef ADS131M0x_CFG_h
-#define ADS131M0x_CFG_h
+#ifndef BOARD_CFG_h
+#define BOARD_CFG_h
 
 #include <stdint.h>
 
@@ -10,7 +10,7 @@ struct FactoryResetCfg {
 	gpio_num_t pin;
 	bool activeLevelHi;
 
-	constexpr bool connected() const { return pin != GPIO_NUM_NC; };
+	constexpr bool connected() const { return pin != GPIO_NUM_NC; }
 };
 
 struct I2cConnectCfg {
@@ -19,7 +19,7 @@ struct I2cConnectCfg {
 
 	constexpr bool connected() const {
 		return (masterSdaIo != GPIO_NUM_NC) && (masterSclIo != GPIO_NUM_NC);
-	};
+	}
 };
 
 struct AdcHwConnect {
@@ -290,4 +290,4 @@ constexpr auto boardConfig{boardv600_Pro};
 #error No board configuration selected.
 #endif
 
-#endif // ADS131M0x_CFG_h
+#endif // BOARD_CFG_h
