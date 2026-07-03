@@ -7,17 +7,19 @@
 #include <soc/gpio_num.h>
 
 struct FactoryResetCfg {
-	int pin;
+	gpio_num_t pin;
 	bool activeLevelHi;
 
-	constexpr bool connected() const { return pin != -1; };
+	constexpr bool connected() const { return pin != GPIO_NUM_NC; };
 };
 
 struct I2cConnectCfg {
 	gpio_num_t masterSdaIo;
 	gpio_num_t masterSclIo;
 
-	constexpr bool connected() const { return masterSdaIo != GPIO_NUM_NC; };
+	constexpr bool connected() const {
+		return (masterSdaIo != GPIO_NUM_NC) && (masterSclIo != GPIO_NUM_NC);
+	};
 };
 
 struct AdcHwConnect {
@@ -58,7 +60,7 @@ constexpr I2cConnectCfg i2cNotConnected{
 };
 
 constexpr FactoryResetCfg resetNotConnected{
-    .pin           = -1,
+    .pin           = GPIO_NUM_NC,
     .activeLevelHi = false,
 };
 
