@@ -4,7 +4,6 @@
 #include <stdint.h>
 
 #include "ADS131M0x_reg.h"
-#include <driver/i2c_types.h>
 #include <soc/gpio_num.h>
 
 struct FactoryResetCfg {
@@ -17,7 +16,6 @@ struct FactoryResetCfg {
 struct I2cConnectCfg {
 	gpio_num_t masterSdaIo;
 	gpio_num_t masterSclIo;
-	i2c_port_num_t masterPortNum;
 
 	constexpr bool connected() const { return masterSdaIo != GPIO_NUM_NC; };
 };
@@ -57,9 +55,8 @@ struct K3BoardCfg {
 };
 
 constexpr I2cConnectCfg i2cNotConnected{
-    .masterSdaIo   = GPIO_NUM_NC,
-    .masterSclIo   = GPIO_NUM_NC,
-    .masterPortNum = I2C_NUM_MAX,
+    .masterSdaIo = GPIO_NUM_NC,
+    .masterSclIo = GPIO_NUM_NC,
 };
 
 constexpr FactoryResetCfg resetNotConnected{
@@ -234,9 +231,8 @@ constexpr K3BoardCfg<8> boardv600_Pro{
     .name = "v600P",
     .i2c =
         {
-            .masterSdaIo   = GPIO_NUM_46,
-            .masterSclIo   = GPIO_NUM_3,
-            .masterPortNum = I2C_NUM_0,
+            .masterSdaIo = GPIO_NUM_46,
+            .masterSclIo = GPIO_NUM_3,
         },
     .factoryReset = resetNotConnected,
     .adc =

@@ -15,7 +15,7 @@ class I2CMasterBus {
 	i2c_master_bus_handle_t busHandle;
 
   public:
-	bool setup();
+	bool setup(i2c_port_num_t port, gpio_num_t sda, gpio_num_t scl);
 	void release() { i2c_del_master_bus(busHandle); }
 	i2c_master_dev_handle_t addDevice(uint16_t addr);
 };
@@ -59,11 +59,11 @@ class TMP118 {
 
 static inline void delayMSec(uint32_t ms) { vTaskDelay(ms / portTICK_PERIOD_MS); }
 
-bool I2CMasterBus::setup() {
-	static constexpr i2c_master_bus_config_t busConfig = {
-	    .i2c_port          = boardConfig.i2c.masterPortNum,
-	    .sda_io_num        = boardConfig.i2c.masterSdaIo,
-	    .scl_io_num        = boardConfig.i2c.masterSclIo,
+bool I2CMasterBus::setup(i2c_port_num_t port, gpio_num_t sda, gpio_num_t scl) {
+	const i2c_master_bus_config_t busConfig = {
+	    .i2c_port          = port,
+	    .sda_io_num        = sda,
+	    .scl_io_num        = scl,
 	    .clk_source        = I2C_CLK_SRC_DEFAULT,
 	    .glitch_ignore_cnt = 7,
 	    .intr_priority     = 0,
@@ -136,7 +136,8 @@ static void taskSetupI2C(void *setupDone) {
 	ESP_LOGI(TAG, "setting up I2C on core: %u", esp_cpu_get_core_id());
 	I2CMasterBus bus;
 	TMP118 sensor;
-	if (bus.setup() && sensor.config(bus)) {
+	if (bus.setup(I2C_NUM_0, boardConfig.i2c.masterSdaIo, boardConfig.i2c.masterSclIo) &&
+	    sensor.config(bus)) {
 		*(volatile bool *)setupDone = true;
 	} else {
 		// TODO: improve error handlng
