@@ -50,8 +50,6 @@ struct K3BoardCfg {
 	I2cConnectCfg i2c;
 	FactoryResetCfg factoryReset;
 	AdcCfg<N> adc;
-
-	uint8_t translate[N];
 };
 
 constexpr I2cConnectCfg i2cNotConnected{
@@ -109,7 +107,6 @@ constexpr K3BoardCfg<4> boardv300{
             .powerMode = ADS131M0xReg::POWER_MODE_HIGH_RESOLUTION,
             .osr       = ADS131M0xReg::OSR_4096,
         },
-    .translate = {0, 1, 2, 3},
 };
 
 // V4.0.0 hardware
@@ -147,7 +144,6 @@ constexpr K3BoardCfg<4> boardv400{
             .powerMode = ADS131M0xReg::POWER_MODE_HIGH_RESOLUTION,
             .osr       = ADS131M0xReg::OSR_4096,
         },
-    .translate = {0, 1, 2, 3},
 };
 
 // V5.0.0 hardware
@@ -185,7 +181,6 @@ constexpr K3BoardCfg<4> boardv500{
             .powerMode = ADS131M0xReg::POWER_MODE_HIGH_RESOLUTION,
             .osr       = ADS131M0xReg::OSR_4096,
         },
-    .translate = {0, 1, 2, 3},
 };
 
 // V6 Lite hardware
@@ -223,7 +218,6 @@ constexpr K3BoardCfg<4> boardv600_lite{
             .powerMode = ADS131M0xReg::POWER_MODE_HIGH_RESOLUTION,
             .osr       = ADS131M0xReg::OSR_4096,
         },
-    .translate = {0, 1, 2, 3},
 };
 
 // V6 Pro hardware
@@ -278,7 +272,6 @@ constexpr K3BoardCfg<8> boardv600_Pro{
             .powerMode = ADS131M0xReg::POWER_MODE_HIGH_RESOLUTION,
             .osr       = ADS131M0xReg::OSR_4096,
         },
-    .translate = {1, 3, 5, 7, 0, 0, 0, 0},
 };
 
 #if (CONFIG_DYNAMITE_HW_REV_V3 == 1)

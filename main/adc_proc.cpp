@@ -76,11 +76,12 @@ static AdcFeedNetworkData IRAM_ATTR adcToNetwork(const AdcClass::RawOutput *adc)
 	AdcFeedNetworkData net;
 	static_assert(AdcFeedNetworkData::NUM_CHAN <= boardConfig.adc.NCHAN);
 	for (size_t i = 0; i < AdcFeedNetworkData::NUM_CHAN; ++i) {
-		size_t src_idx;
-		if constexpr (AdcFeedNetworkData::NUM_CHAN == boardConfig.adc.NCHAN) {
-			src_idx = i;
-		} else {
-			src_idx = boardConfig.translate[i];
+		size_t src_idx = i;
+		if constexpr (AdcFeedNetworkData::NUM_CHAN != boardConfig.adc.NCHAN) {
+			static const uint8_t translate[8] = {
+			    1, 3, 5, 7, 0, 0, 0, 0,
+			};
+			src_idx = translate[i];
 		}
 		copyAdcToLE24(net.chan + i, adc->data + AdcClass::DATA_WORD_LENGTH * src_idx);
 	}
