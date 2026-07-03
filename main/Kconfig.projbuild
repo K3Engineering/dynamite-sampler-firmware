@@ -22,4 +22,10 @@ menu "Dynamite Sampler hardware configuration"
         help
             Use this on hardware that doesn't have the ADC, or to mock the ADC. It will mock the selected hardware.
 
+    config CHECK_ADC_CHECKSUM
+        bool "Check ADC data checksum"
+        default n
+        help
+            Affects performance.
+            
 endmenu

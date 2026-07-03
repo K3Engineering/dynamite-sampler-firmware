@@ -11,8 +11,8 @@
 #include "adc_ble_interface.h"
 #include "adc_proc.h"
 
-#include "ADS131M0x_cfg.h"
 #include "ADS131M0x_reg.h"
+#include "board_cfg.h"
 #include "debug_pin.h"
 
 constexpr char TAG[] = "ADC";
@@ -74,13 +74,12 @@ static inline void copyAdcToLE24(void *dst, const void *src) {
 
 static AdcFeedNetworkData IRAM_ATTR adcToNetwork(const AdcClass::RawOutput *adc) {
 	AdcFeedNetworkData net;
-	static_assert(AdcFeedNetworkData::NUM_CHAN <= boardConfig.NCHAN);
+	static_assert(AdcFeedNetworkData::NUM_CHAN <= boardConfig.adc.NCHAN);
 	for (size_t i = 0; i < AdcFeedNetworkData::NUM_CHAN; ++i) {
-		size_t src_idx;
-		if constexpr (AdcFeedNetworkData::NUM_CHAN == boardConfig.NCHAN) {
-			src_idx = i;
-		} else {
-			src_idx = boardConfig.translate[i];
+		size_t src_idx = i;
+		if constexpr ((AdcFeedNetworkData::NUM_CHAN == 4) && (boardConfig.adc.NCHAN == 8)) {
+			static const uint8_t translate[AdcFeedNetworkData::NUM_CHAN] = {1, 3, 5, 7};
+			src_idx                                                      = translate[i];
 		}
 		copyAdcToLE24(net.chan + i, adc->data + AdcClass::DATA_WORD_LENGTH * src_idx);
 	}
@@ -103,9 +102,9 @@ static void IRAM_ATTR taskAdcReadAndBuffer(void *) {
 		const size_t idx = adc.getReadyBatchStartIdx();
 		for (size_t n = 0; n < N_SAMPLES; ++n) {
 			const ADS131M0x::RawOutput *ptr = adc.rawReadAdc(idx + n);
-			if constexpr (globalSettings.checkAdcCrc) {
-				assert(adc.isCrcOk(ptr));
-			}
+#if (CONFIG_CHECK_ADC_CHECKSUM == 1)
+			assert(adc.isCrcOk(ptr));
+#endif // (CONFIG_CHECK_ADC_CHECKSUM == 1)
 			toSend[n] = adcToNetwork(ptr);
 		}
 		if (sizeof(toSend) != xStreamBufferSend(adcStreamBufferHandle, toSend, sizeof(toSend), 0))
@@ -117,14 +116,14 @@ static void IRAM_ATTR taskAdcReadAndBuffer(void *) {
 }
 
 static void configureAdc() {
-	static_assert(boardConfig.NCHAN == adc.NUM_CHANNELS);
+	static_assert(boardConfig.adc.NCHAN == adc.NUM_CHANNELS);
 	for (uint8_t chan = 0; chan < adc.NUM_CHANNELS; ++chan) {
-		adc.setChannelEnable(chan, boardConfig.enable[chan]);
-		adc.setChannelInputSelection(chan, boardConfig.input[chan]);
-		adc.setChannelPGA(chan, boardConfig.pga[chan]);
+		adc.setChannelEnable(chan, boardConfig.adc.enable[chan]);
+		adc.setChannelInputSelection(chan, boardConfig.adc.input[chan]);
+		adc.setChannelPGA(chan, boardConfig.adc.pga[chan]);
 	}
-	adc.setPowerMode(boardConfig.powerMode);
-	adc.setOsr(boardConfig.osr);
+	adc.setPowerMode(boardConfig.adc.powerMode);
+	adc.setOsr(boardConfig.adc.osr);
 
 	savedConfig = {
 	    .id     = adc.readID(),
@@ -138,19 +137,13 @@ static void configureAdc() {
 
 static void taskSetupAdc(void *setupDone) {
 	ESP_LOGI(TAG, "setting up adc on core: %u", esp_cpu_get_core_id());
-	constexpr gpio_num_t PIN_NUM_CLK   = GPIO_NUM_11;
-	constexpr gpio_num_t PIN_NUM_MISO  = GPIO_NUM_10;
-	constexpr gpio_num_t PIN_NUM_MOSI  = GPIO_NUM_9;
-	constexpr gpio_num_t PIN_DRDY      = GPIO_NUM_12;
-	constexpr gpio_num_t PIN_ADC_RESET = GPIO_NUM_14;
-	constexpr gpio_num_t PIN_CS_ADC    = GPIO_NUM_13;
-
 	// TODO figure out if you need to setup wake from sleep for gpio
 	gpio_set_direction(PIN_DEBUG_TOP, GPIO_MODE_OUTPUT);
 	gpio_set_direction(PIN_DEBUG_BOT, GPIO_MODE_OUTPUT);
 
-	adc.init(PIN_CS_ADC, PIN_DRDY, PIN_ADC_RESET, SPI3_HOST, PIN_NUM_CLK, PIN_NUM_MISO,
-	         PIN_NUM_MOSI);
+	adc.init(boardConfig.adc.hwConnect.cs, boardConfig.adc.hwConnect.drdy,
+	         boardConfig.adc.hwConnect.reset, SPI3_HOST, boardConfig.adc.spiConnect.clock,
+	         boardConfig.adc.spiConnect.miso, boardConfig.adc.spiConnect.mosi);
 
 	if (adc.resetAdcHw()) {
 		configureAdc();

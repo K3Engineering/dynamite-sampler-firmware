@@ -9,7 +9,21 @@
 
 #include "dynamite_uuid.h"
 
+#include "board_cfg.h"
+
 constexpr char TAG[] = "OTA";
+
+#ifdef CONFIG_BOOTLOADER_FACTORY_RESET
+static_assert(CONFIG_BOOTLOADER_NUM_PIN_FACTORY_RESET == boardConfig.factoryReset.pin,
+              "Menu config != board config");
+#if (CONFIG_BOOTLOADER_FACTORY_RESET_PIN_HIGH == 1)
+static_assert(boardConfig.factoryReset.activeLevelHi, "Menu config != board config");
+#else
+static_assert(!boardConfig.factoryReset.activeLevelHi, "Menu config != board config");
+#endif
+#else  // CONFIG_BOOTLOADER_FACTORY_RESET
+static_assert(!boardConfig.factoryReset.connected(), "Menu config != board config");
+#endif // CONFIG_BOOTLOADER_FACTORY_RESET
 
 bool startupDiagnosticIsOk = true;
 

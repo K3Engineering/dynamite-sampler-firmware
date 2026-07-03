@@ -7,19 +7,15 @@
 
 #include <endian.h>
 
-#include "ADS131M0x_cfg.h"
+#include "board_cfg.h"
 
 constexpr char TAG[] = "I2C";
 
 class I2CMasterBus {
-	static constexpr gpio_num_t I2C_MASTER_SDA_IO  = GPIO_NUM_46;
-	static constexpr gpio_num_t I2C_MASTER_SCL_IO  = GPIO_NUM_3;
-	static constexpr i2c_port_num_t I2C_MASTER_NUM = I2C_NUM_0;
-
 	i2c_master_bus_handle_t busHandle;
 
   public:
-	bool setup();
+	bool setup(i2c_port_num_t port, gpio_num_t sda, gpio_num_t scl);
 	void release() { i2c_del_master_bus(busHandle); }
 	i2c_master_dev_handle_t addDevice(uint16_t addr);
 };
@@ -63,11 +59,11 @@ class TMP118 {
 
 static inline void delayMSec(uint32_t ms) { vTaskDelay(ms / portTICK_PERIOD_MS); }
 
-bool I2CMasterBus::setup() {
-	static constexpr i2c_master_bus_config_t busConfig = {
-	    .i2c_port          = I2C_MASTER_NUM,
-	    .sda_io_num        = I2C_MASTER_SDA_IO,
-	    .scl_io_num        = I2C_MASTER_SCL_IO,
+bool I2CMasterBus::setup(i2c_port_num_t port, gpio_num_t sda, gpio_num_t scl) {
+	const i2c_master_bus_config_t busConfig = {
+	    .i2c_port          = port,
+	    .sda_io_num        = sda,
+	    .scl_io_num        = scl,
 	    .clk_source        = I2C_CLK_SRC_DEFAULT,
 	    .glitch_ignore_cnt = 7,
 	    .intr_priority     = 0,
@@ -140,7 +136,8 @@ static void taskSetupI2C(void *setupDone) {
 	ESP_LOGI(TAG, "setting up I2C on core: %u", esp_cpu_get_core_id());
 	I2CMasterBus bus;
 	TMP118 sensor;
-	if (bus.setup() && sensor.config(bus)) {
+	if (bus.setup(I2C_NUM_0, boardConfig.i2c.masterSdaIo, boardConfig.i2c.masterSclIo) &&
+	    sensor.config(bus)) {
 		*(volatile bool *)setupDone = true;
 	} else {
 		// TODO: improve error handlng
@@ -155,7 +152,7 @@ static void taskSetupI2C(void *setupDone) {
 }
 
 void setupI2C(int core) {
-	if constexpr (boardConfig.hasI2C) {
+	if constexpr (boardConfig.i2c.connected()) {
 		volatile bool done = false;
 		xTaskCreatePinnedToCore(taskSetupI2C, "task_I2C_setup", 1024 * 2, (void *)&done, 1, NULL,
 		                        core);
