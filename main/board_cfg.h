@@ -276,15 +276,15 @@ constexpr K3BoardCfg<8> boardv600_Pro{
         },
 };
 
-#if (CONFIG_DYNAMITE_HW_REV_V3 == 1)
+#if CONFIG_DYNAMITE_HW_REV_V3
 constexpr auto boardConfig{boardv300};
-#elif (CONFIG_DYNAMITE_HW_REV_V4 == 1)
+#elif CONFIG_DYNAMITE_HW_REV_V4
 constexpr auto boardConfig{boardv400};
-#elif (CONFIG_DYNAMITE_HW_REV_V5 == 1)
+#elif CONFIG_DYNAMITE_HW_REV_V5
 constexpr auto boardConfig{boardv500};
-#elif (CONFIG_DYNAMITE_HW_REV_V6_LITE == 1)
+#elif CONFIG_DYNAMITE_HW_REV_V6_LITE
 constexpr auto boardConfig{boardv600_lite};
-#elif (CONFIG_DYNAMITE_HW_REV_V6_PRO == 1)
+#elif CONFIG_DYNAMITE_HW_REV_V6_PRO
 constexpr auto boardConfig{boardv600_Pro};
 #else
 #error No board configuration selected.
