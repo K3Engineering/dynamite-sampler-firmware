@@ -228,6 +228,7 @@ static void IRAM_ATTR taskBlePublishAdcBuffer(void *) {
 
 static void taskSetupBle(void *setupDone) {
 	ESP_LOGI(TAG, "Setting up BLE");
+	initCalibrationStorage();
 	// Create the BLE Device
 	// Name the device with the mac address to make it unique for testing purposes.
 	// TODO this probably isn't the elegant way to do this.
