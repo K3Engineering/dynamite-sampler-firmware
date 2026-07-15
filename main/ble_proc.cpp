@@ -140,6 +140,10 @@ static bool processConfigCommand(CalibrationNetworkData *cmd) {
 		// DCLWk...k=v...v
 		return writeCalibrationKeyVal(cmd);
 	}
+	if (0 == memcmp(cmd, "DCLR", cmdLen)) {
+		// DCLRk...k
+		return readCalibrationKeyVal(cmd);
+	}
 	if (0 == memcmp(cmd, "DCLD", cmdLen)) {
 		// DCLDk...k
 		return deleteCalibrationKey(cmd);

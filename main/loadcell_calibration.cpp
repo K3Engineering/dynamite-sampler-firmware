@@ -65,6 +65,19 @@ bool writeCalibrationKeyVal(CalibrationNetworkData *cmd) {
 	return ESP_OK == err;
 }
 
+bool readCalibrationKeyVal(CalibrationNetworkData *cmd) {
+	nvs_handle_t handle;
+	if (ESP_OK != nvs_open_from_partition(CALIBRATION_PARTITION, DEVICE_CALIBRATION_NSPACE,
+	                                      NVS_READONLY, &handle)) {
+		return false;
+	}
+	const char *key = (char *)cmd->data + CMD_LEN;
+	size_t valSz    = sizeof(cmd->data);
+	esp_err_t err   = nvs_get_str(handle, key, (char *)cmd->data, &valSz);
+	nvs_close(handle);
+	return ESP_OK == err;
+}
+
 bool deleteCalibrationKey(CalibrationNetworkData *cmd) {
 	nvs_handle_t handle;
 	if (ESP_OK != nvs_open_from_partition(CALIBRATION_PARTITION, DEVICE_CALIBRATION_NSPACE,
