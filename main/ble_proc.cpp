@@ -134,6 +134,23 @@ class AdcConfigCallbacks : public NimBLECharacteristicCallbacks {
 	}
 };
 
+static bool processConfigCommand(CalibrationNetworkData *cmd) {
+	const size_t cmdLen = 4;
+	if (0 == memcmp(cmd, "DCLW", cmdLen)) {
+		// DCLWk...k=v...v
+		return writeCalibrationKeyVal(cmd);
+	}
+	if (0 == memcmp(cmd, "DCLD", cmdLen)) {
+		// DCLDk...k
+		return deleteCalibrationKey(cmd);
+	}
+	if (0 == memcmp(cmd, "DCLN", cmdLen)) {
+		// DCLNx...x
+		return readCalibrationN(cmd);
+	}
+	return false;
+}
+
 class CalibrationConfigCallbacks : public NimBLECharacteristicCallbacks {
 	void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
 		if (deviceLock != DeviceLock::Open) {
@@ -143,28 +160,19 @@ class CalibrationConfigCallbacks : public NimBLECharacteristicCallbacks {
 		const NimBLEAttValue val{pCharacteristic->getValue()};
 		const uint8_t *data = val.data();
 		const size_t len    = val.length();
-		CalibrationNetworkData calibrData;
-		bool res = false;
-		if (len > 1 && len < sizeof(calibrData.data)) {
-			if (('W' == data[0]) && (' ' == data[1])) {
-				res = writeCalibrationKeyVal(data + 2, len - 2);
-			} else if (('D' == data[0]) && (' ' == data[1])) {
-				res = deleteCalibrationKey(data + 2, len - 2);
-			}
+		CalibrationNetworkData rq;
+		if (len >= sizeof(rq.data)) {
+			return;
 		}
-		size_t idx             = 0;
-		calibrData.data[idx++] = res ? '0' : '1';
-		calibrData.data[idx++] = ' ';
-		const size_t sz =
-		    len < (sizeof(calibrData.data) - idx) ? len : sizeof(calibrData.data) - idx;
-		memcpy(calibrData.data + idx, data, sz);
-		pCharacteristic->notify(calibrData.data, sz + idx);
-	}
-	void onRead(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
-		CalibrationNetworkData calibrData;
-		if (readCalibrationAll(&calibrData)) {
-			pCharacteristic->setValue((const char *)calibrData.data);
+		memset(rq.data, 0, sizeof(rq.data));
+		memcpy(rq.data, data, len);
+		ESP_LOGI(TAG, "Cmd '%s'", rq.data);
+		if (!processConfigCommand(&rq)) {
+			rq.data[0] = '0';
 		}
+		ESP_LOGI(TAG, "Repl '%s'", rq.data);
+		pCharacteristic->setValue((const char *)rq.data);
+		pCharacteristic->notify();
 	}
 };
 
@@ -228,7 +236,6 @@ static void IRAM_ATTR taskBlePublishAdcBuffer(void *) {
 
 static void taskSetupBle(void *setupDone) {
 	ESP_LOGI(TAG, "Setting up BLE");
-	initCalibrationStorage();
 	// Create the BLE Device
 	// Name the device with the mac address to make it unique for testing purposes.
 	// TODO this probably isn't the elegant way to do this.
@@ -251,6 +258,8 @@ static void taskSetupBle(void *setupDone) {
 	setupPowerManagerInterface(bleServer);
 	setupBleOta(bleServer);
 
+	initCalibrationStorage();
+
 	setupAdvertising(bleName);
 	ESP_LOGI(TAG, "BLE setup done, advertising started");
 
@@ -264,7 +273,7 @@ void setupBle(int core) {
 	assert(adcStreamBufferHandle != NULL);
 
 	volatile bool done = false;
-	xTaskCreatePinnedToCore(taskSetupBle, "task_BLE_setup", 1024 * 5, (void *)&done, 1, NULL, core);
+	xTaskCreatePinnedToCore(taskSetupBle, "task_BLE_setup", 1024 * 6, (void *)&done, 1, NULL, core);
 	while (!done)
 		vTaskDelay(10);
 
