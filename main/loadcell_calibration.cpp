@@ -21,8 +21,9 @@ static_assert(sizeof(SENSOR_CALIBRATION_NSPACE) <= NVS_NS_NAME_MAX_SIZE);
 constexpr size_t CALIBRATION_MAX_KEY_LEN = 15; // does not incude terminating 0
 static_assert(CALIBRATION_MAX_KEY_LEN < NVS_KEY_NAME_MAX_SIZE);
 constexpr size_t CALIBRATION_MAX_VAL_LEN = 192; // does not incude terminating 0
-
-constexpr size_t CMD_LEN = 4;
+constexpr size_t CMD_LEN                 = 4;
+static_assert(CMD_LEN + CALIBRATION_MAX_KEY_LEN + CALIBRATION_MAX_VAL_LEN + 1 <
+              sizeof(CalibrationNetworkData::data));
 
 constexpr size_t splitKeyVal(const char *str) {
 	const char *delim = strchr(str, '=');
@@ -72,8 +73,12 @@ bool readCalibrationKeyVal(CalibrationNetworkData *cmd) {
 		return false;
 	}
 	const char *key = (char *)cmd->data + CMD_LEN;
-	size_t valSz    = sizeof(cmd->data);
-	esp_err_t err   = nvs_get_str(handle, key, (char *)cmd->data, &valSz);
+	char val[CALIBRATION_MAX_VAL_LEN];
+	size_t valSz  = sizeof(val);
+	esp_err_t err = nvs_get_str(handle, key, val, &valSz);
+	if ((ESP_OK == err) && (valSz <= sizeof(val))) {
+		strcpy((char *)cmd->data, val);
+	}
 	nvs_close(handle);
 	return ESP_OK == err;
 }
