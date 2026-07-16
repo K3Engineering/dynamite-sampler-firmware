@@ -76,7 +76,7 @@ bool readCalibrationKeyVal(CalibrationNetworkData *cmd) {
 	char val[CALIBRATION_MAX_VAL_LEN];
 	size_t valSz  = sizeof(val);
 	esp_err_t err = nvs_get_str(handle, key, val, &valSz);
-	if ((ESP_OK == err) && (valSz <= sizeof(val))) {
+	if (ESP_OK == err) {
 		strcpy((char *)cmd->data, val);
 	}
 	nvs_close(handle);
