@@ -22,7 +22,7 @@ constexpr size_t CALIBRATION_MAX_KEY_LEN = 15; // does not incude terminating 0
 static_assert(CALIBRATION_MAX_KEY_LEN < NVS_KEY_NAME_MAX_SIZE);
 constexpr size_t CALIBRATION_MAX_VAL_LEN = 192; // does not incude terminating 0
 constexpr size_t CMD_LEN                 = 4;
-static_assert(CMD_LEN + CALIBRATION_MAX_KEY_LEN + CALIBRATION_MAX_VAL_LEN + 1 <
+static_assert(CMD_LEN + CALIBRATION_MAX_KEY_LEN + 1 + CALIBRATION_MAX_VAL_LEN + 1 <
               sizeof(CalibrationNetworkData::data));
 
 constexpr size_t splitKeyVal(const char *str) {
@@ -73,7 +73,7 @@ bool readCalibrationKeyVal(CalibrationNetworkData *cmd) {
 		return false;
 	}
 	const char *key = (char *)cmd->data + CMD_LEN;
-	char val[CALIBRATION_MAX_VAL_LEN];
+	char val[CALIBRATION_MAX_VAL_LEN + 1];
 	size_t valSz  = sizeof(val);
 	esp_err_t err = nvs_get_str(handle, key, val, &valSz);
 	if (ESP_OK == err) {
@@ -115,7 +115,7 @@ bool readCalibrationN(CalibrationNetworkData *cmd) {
 			nvs_entry_info_t info;
 			err = nvs_entry_info(it, &info);
 			if (ESP_OK == err) {
-				char val[CALIBRATION_MAX_VAL_LEN];
+				char val[CALIBRATION_MAX_VAL_LEN + 1];
 				size_t valSz = sizeof(val);
 				err          = nvs_get_str(handle, info.key, val, &valSz);
 				if (ESP_OK == err) {

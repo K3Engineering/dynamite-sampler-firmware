@@ -136,19 +136,19 @@ class AdcConfigCallbacks : public NimBLECharacteristicCallbacks {
 
 static bool processConfigCommand(CalibrationNetworkData *cmd) {
 	const size_t cmdLen = 4;
-	if (0 == memcmp(cmd, "DCLW", cmdLen)) {
+	if (0 == memcmp(cmd->data, "DCLW", cmdLen)) {
 		// DCLWk...k=v...v
 		return writeCalibrationKeyVal(cmd);
 	}
-	if (0 == memcmp(cmd, "DCLR", cmdLen)) {
+	if (0 == memcmp(cmd->data, "DCLR", cmdLen)) {
 		// DCLRk...k
 		return readCalibrationKeyVal(cmd);
 	}
-	if (0 == memcmp(cmd, "DCLD", cmdLen)) {
+	if (0 == memcmp(cmd->data, "DCLD", cmdLen)) {
 		// DCLDk...k
 		return deleteCalibrationKey(cmd);
 	}
-	if (0 == memcmp(cmd, "DCLN", cmdLen)) {
+	if (0 == memcmp(cmd->data, "DCLN", cmdLen)) {
 		// DCLNx...x
 		return readCalibrationN(cmd);
 	}
@@ -262,7 +262,9 @@ static void taskSetupBle(void *setupDone) {
 	setupPowerManagerInterface(bleServer);
 	setupBleOta(bleServer);
 
-	initCalibrationStorage();
+	if (!initCalibrationStorage()) {
+		ESP_LOGE(TAG, "CStorage init failed");
+	}
 
 	setupAdvertising(bleName);
 	ESP_LOGI(TAG, "BLE setup done, advertising started");
