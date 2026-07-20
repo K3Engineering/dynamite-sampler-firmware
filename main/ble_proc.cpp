@@ -139,20 +139,19 @@ static bool processConfigCommand(const char *rq, size_t rqLen, char *reply, size
 	if (rqLen < cmdLen) {
 		return false;
 	}
-	bool res = false;
 	if (0 == memcmp(rq, "DCLW", cmdLen)) {
-		res = writeCalibrationKeyVal(rq + cmdLen, rqLen - cmdLen);
+		return writeCalibrationKeyVal(rq + cmdLen, rqLen - cmdLen);
 	}
 	if (0 == memcmp(rq, "DCLR", cmdLen)) {
-		res = readCalibrationKey(rq + cmdLen, rqLen - cmdLen, reply, replySz);
+		return readCalibrationKey(rq + cmdLen, rqLen - cmdLen, reply, replySz);
 	}
 	if (0 == memcmp(rq, "DCLD", cmdLen)) {
-		res = deleteCalibrationKey(rq + cmdLen, rqLen - cmdLen);
+		return deleteCalibrationKey(rq + cmdLen, rqLen - cmdLen);
 	}
 	if (0 == memcmp(rq, "DCLN", cmdLen)) {
-		res = readCalibrationN(rq + cmdLen, rqLen - cmdLen, reply, replySz);
+		return readCalibrationN(rq + cmdLen, rqLen - cmdLen, reply, replySz);
 	}
-	return res;
+	return false;
 }
 
 class CalibrationConfigCallbacks : public NimBLECharacteristicCallbacks {
