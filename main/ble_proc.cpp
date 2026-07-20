@@ -160,12 +160,12 @@ class CalibrationConfigCallbacks : public NimBLECharacteristicCallbacks {
 			ESP_LOGI(TAG, "CC command: Device locked(%u)", deviceLock);
 			return;
 		}
-		char buff[CalibrationNetworkData::CALIB_PARTITION_LENGTH]{0};
-		size_t rqLength;
+		char buff[CALIB_NETWORK_FRAME_LENGTH + 1]{0};
+		size_t rqLength = 0;
 		{
 			const NimBLEAttValue val{pCharacteristic->getValue()};
-			rqLength = val.length();
-			if ((rqLength + 2) < sizeof(buff)) {
+			if ((val.length() + 2) < sizeof(buff)) {
+				rqLength = val.length();
 				memcpy(buff + 1, val.data(), rqLength);
 			}
 		}

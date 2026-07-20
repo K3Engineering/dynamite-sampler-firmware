@@ -99,15 +99,11 @@ struct AdcConfigNetworkData {
 
 //======================== </ADC Data>
 
-// A large arbirtary size of the partition to read. It will hold all the possible data.
-// Its made to be large enough so that the format can change without changing the firmware.
-// It can't be larger than the max BLE characteristic length of 512 (0x200)
-struct CalibrationNetworkData {
-	static constexpr size_t CALIB_PARTITION_LENGTH = 0xff;
-	static_assert(CALIB_PARTITION_LENGTH <= 512);
-
-	uint8_t data[CALIB_PARTITION_LENGTH];
-};
+// Calibration store interface: BLE write, read, notify.
+// Limited by the max BLE characteristic length of 512 (0x200).
+// Device storage: key-value store at DynaPersistent nvs.
+constexpr size_t CALIB_NETWORK_FRAME_LENGTH = 240;
+static_assert(CALIB_NETWORK_FRAME_LENGTH <= 512);
 
 // BLE Standard
 struct TxPowerNetworkData {
