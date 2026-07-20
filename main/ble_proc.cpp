@@ -134,25 +134,25 @@ class AdcConfigCallbacks : public NimBLECharacteristicCallbacks {
 	}
 };
 
-static bool processConfigCommand(CalibrationNetworkData *cmd) {
+static bool processConfigCommand(const char *rq, size_t rqLen, char *reply, size_t replySz) {
 	const size_t cmdLen = 4;
-	if (0 == memcmp(cmd->data, "DCLW", cmdLen)) {
-		// DCLWk...k=v...v
-		return writeCalibrationKeyVal(cmd);
+	if (rqLen < cmdLen) {
+		return false;
 	}
-	if (0 == memcmp(cmd->data, "DCLR", cmdLen)) {
-		// DCLRk...k
-		return readCalibrationKeyVal(cmd);
+	bool res = false;
+	if (0 == memcmp(rq, "DCLW", cmdLen)) {
+		res = writeCalibrationKeyVal(rq + cmdLen, rqLen - cmdLen);
 	}
-	if (0 == memcmp(cmd->data, "DCLD", cmdLen)) {
-		// DCLDk...k
-		return deleteCalibrationKey(cmd);
+	if (0 == memcmp(rq, "DCLR", cmdLen)) {
+		res = readCalibrationKey(rq + cmdLen, rqLen - cmdLen, reply, replySz);
 	}
-	if (0 == memcmp(cmd->data, "DCLN", cmdLen)) {
-		// DCLNx...x
-		return readCalibrationN(cmd);
+	if (0 == memcmp(rq, "DCLD", cmdLen)) {
+		res = deleteCalibrationKey(rq + cmdLen, rqLen - cmdLen);
 	}
-	return false;
+	if (0 == memcmp(rq, "DCLN", cmdLen)) {
+		res = readCalibrationN(rq + cmdLen, rqLen - cmdLen, reply, replySz);
+	}
+	return res;
 }
 
 class CalibrationConfigCallbacks : public NimBLECharacteristicCallbacks {
@@ -161,21 +161,25 @@ class CalibrationConfigCallbacks : public NimBLECharacteristicCallbacks {
 			ESP_LOGI(TAG, "CC command: Device locked(%u)", deviceLock);
 			return;
 		}
-		const NimBLEAttValue val{pCharacteristic->getValue()};
-		const uint8_t *data = val.data();
-		const size_t len    = val.length();
-		CalibrationNetworkData rq;
-		if (len >= sizeof(rq.data)) {
-			return;
+		char buff[CalibrationNetworkData::CALIB_PARTITION_LENGTH]{0};
+		size_t rqLength;
+		{
+			const NimBLEAttValue val{pCharacteristic->getValue()};
+			rqLength = val.length();
+			if ((rqLength + 2) < sizeof(buff)) {
+				memcpy(buff + 1, val.data(), rqLength);
+			}
 		}
-		memset(rq.data, 0, sizeof(rq.data));
-		memcpy(rq.data, data, len);
-		ESP_LOGI(TAG, "Cmd '%s'", rq.data);
-		if (!processConfigCommand(&rq)) {
-			rq.data[0] = '0';
+		ESP_LOGI(TAG, "Rq '%s'", buff + 1);
+		if (processConfigCommand(buff + 1, rqLength, buff + (rqLength + 2),
+		                         sizeof(buff) - (rqLength + 2))) {
+			buff[0]            = '1';
+			buff[rqLength + 1] = '=';
+		} else {
+			buff[0] = '0';
 		}
-		ESP_LOGI(TAG, "Repl '%s'", rq.data);
-		pCharacteristic->setValue((const char *)rq.data);
+		ESP_LOGI(TAG, "Repl '%s'", buff);
+		pCharacteristic->setValue((const char *)buff);
 		pCharacteristic->notify();
 	}
 };

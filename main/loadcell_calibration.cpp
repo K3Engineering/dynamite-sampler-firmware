@@ -20,77 +20,69 @@ static_assert(sizeof(SENSOR_CALIBRATION_NSPACE) <= NVS_NS_NAME_MAX_SIZE);
 
 constexpr size_t CALIBRATION_MAX_KEY_LEN = 15; // does not incude terminating 0
 static_assert(CALIBRATION_MAX_KEY_LEN < NVS_KEY_NAME_MAX_SIZE);
-constexpr size_t CALIBRATION_MAX_VAL_LEN = 192; // does not incude terminating 0
-constexpr size_t CMD_LEN                 = 4;
-static_assert(CMD_LEN + CALIBRATION_MAX_KEY_LEN + 1 + CALIBRATION_MAX_VAL_LEN + 1 <
+constexpr size_t CALIBRATION_MAX_VAL_LEN = 128; // does not incude terminating 0
+static_assert(CALIBRATION_MAX_KEY_LEN + 1 + CALIBRATION_MAX_VAL_LEN + 1 <
               sizeof(CalibrationNetworkData::data));
 
-constexpr size_t splitKeyVal(const char *str) {
-	const char *delim = strchr(str, '=');
-	if ((delim == nullptr) || (delim == str) || (delim - str > CALIBRATION_MAX_KEY_LEN)) {
-		return 0;
+constexpr size_t splitKeyVal(const char *cmd, size_t cmdLen) {
+	for (size_t idx = 0; (idx <= CALIBRATION_MAX_KEY_LEN) && (idx < cmdLen); ++idx) {
+		if (cmd[idx] == '=') {
+			return idx;
+		}
 	}
-	if (strlen(delim + 1) > CALIBRATION_MAX_VAL_LEN) {
-		return 0;
-	}
-	return delim - str;
+	return 0;
 }
 
-static_assert(splitKeyVal("012=345") == 3);
-static_assert(splitKeyVal("012345") == 0);
-static_assert(splitKeyVal("012345678901234=") == 15);
-static_assert(splitKeyVal("0123456789012345=") == 0);
-
-bool writeCalibrationKeyVal(CalibrationNetworkData *cmd) {
-	char *key                 = (char *)cmd->data + CMD_LEN;
-	const size_t delimiterIdx = splitKeyVal(key);
-	if (!delimiterIdx) {
+bool writeCalibrationKeyVal(const char *cmd, size_t cmdLen) {
+	size_t delimiterIdx = splitKeyVal(cmd, cmdLen);
+	if ((delimiterIdx == 0) || (cmdLen <= delimiterIdx + 1)) {
 		return false;
 	}
-	const char *val = key + delimiterIdx + 1;
-	if (0 == *val) {
-		return false;
-	}
+	char key[CALIBRATION_MAX_KEY_LEN + 1]{0};
+	memcpy(key, cmd, delimiterIdx);
+	char val[CALIBRATION_MAX_VAL_LEN]{0};
+	memcpy(val, cmd + (delimiterIdx + 1), cmdLen - (delimiterIdx + 1));
 	nvs_handle_t handle;
 	if (ESP_OK != nvs_open_from_partition(CALIBRATION_PARTITION, DEVICE_CALIBRATION_NSPACE,
 	                                      NVS_READWRITE, &handle)) {
 		return false;
 	}
-	key[delimiterIdx] = 0;
-	esp_err_t err     = nvs_set_str(handle, key, val);
+	esp_err_t err = nvs_set_str(handle, key, val);
 	if (ESP_OK == err) {
 		err = nvs_commit(handle);
 	}
 	nvs_close(handle);
-	key[delimiterIdx] = '=';
 	return ESP_OK == err;
 }
 
-bool readCalibrationKeyVal(CalibrationNetworkData *cmd) {
+bool readCalibrationKey(const char *cmd, size_t cmdLen, char *reply, size_t replySz) {
+	if (cmdLen > CALIBRATION_MAX_KEY_LEN) {
+		return false;
+	}
 	nvs_handle_t handle;
 	if (ESP_OK != nvs_open_from_partition(CALIBRATION_PARTITION, DEVICE_CALIBRATION_NSPACE,
 	                                      NVS_READONLY, &handle)) {
 		return false;
 	}
-	const char *key = (char *)cmd->data + CMD_LEN;
-	char val[CALIBRATION_MAX_VAL_LEN + 1];
-	size_t valSz  = sizeof(val);
-	esp_err_t err = nvs_get_str(handle, key, val, &valSz);
-	if (ESP_OK == err) {
-		strcpy((char *)cmd->data, val);
-	}
+	char key[CALIBRATION_MAX_KEY_LEN + 1]{0};
+	memcpy(key, cmd, cmdLen);
+	esp_err_t err = nvs_get_str(handle, key, reply, &replySz);
 	nvs_close(handle);
 	return ESP_OK == err;
 }
 
-bool deleteCalibrationKey(CalibrationNetworkData *cmd) {
+bool deleteCalibrationKey(const char *cmd, size_t cmdLen) {
+	if (cmdLen > CALIBRATION_MAX_KEY_LEN) {
+		return false;
+	}
 	nvs_handle_t handle;
 	if (ESP_OK != nvs_open_from_partition(CALIBRATION_PARTITION, DEVICE_CALIBRATION_NSPACE,
 	                                      NVS_READWRITE, &handle)) {
 		return false;
 	}
-	const char *key = (char *)cmd->data + CMD_LEN;
-	esp_err_t err   = nvs_erase_key(handle, key);
+	char key[CALIBRATION_MAX_KEY_LEN + 1]{0};
+	memcpy(key, cmd, cmdLen);
+	esp_err_t err = nvs_erase_key(handle, key);
 	if (ESP_OK == err) {
 		err = nvs_commit(handle);
 	}
@@ -100,29 +92,29 @@ bool deleteCalibrationKey(CalibrationNetworkData *cmd) {
 
 bool initCalibrationStorage() { return ESP_OK == nvs_flash_init_partition(CALIBRATION_PARTITION); }
 
-bool readCalibrationN(CalibrationNetworkData *cmd) {
-	const size_t num    = strtoul((char *)cmd->data + CMD_LEN, nullptr, 16);
+bool readCalibrationN(const char *cmd, size_t cmdLen, char *reply, size_t replySz) {
+	const size_t num    = strtoul(cmd, nullptr, 16);
 	nvs_handle_t handle = 0;
-	nvs_iterator_t it   = 0;
-	esp_err_t err       = nvs_open_from_partition(CALIBRATION_PARTITION, DEVICE_CALIBRATION_NSPACE,
-	                                              NVS_READONLY, &handle);
+	if (ESP_OK != nvs_open_from_partition(CALIBRATION_PARTITION, DEVICE_CALIBRATION_NSPACE,
+	                                      NVS_READONLY, &handle)) {
+		return false;
+	}
+	nvs_iterator_t it = 0;
+	esp_err_t err     = nvs_entry_find_in_handle(handle, NVS_TYPE_STR, &it);
+	for (size_t i = 0; (ESP_OK == err) && (i < num); ++i) {
+		err = nvs_entry_next(&it);
+	}
 	if (ESP_OK == err) {
-		err = nvs_entry_find_in_handle(handle, NVS_TYPE_STR, &it);
-		for (size_t i = 0; (ESP_OK == err) && (i < num); ++i) {
-			err = nvs_entry_next(&it);
-		}
+		nvs_entry_info_t info;
+		err = nvs_entry_info(it, &info);
 		if (ESP_OK == err) {
-			nvs_entry_info_t info;
-			err = nvs_entry_info(it, &info);
+			char val[CALIBRATION_MAX_VAL_LEN + 1];
+			size_t valSz = sizeof(val);
+			err          = nvs_get_str(handle, info.key, val, &valSz);
 			if (ESP_OK == err) {
-				char val[CALIBRATION_MAX_VAL_LEN + 1];
-				size_t valSz = sizeof(val);
-				err          = nvs_get_str(handle, info.key, val, &valSz);
-				if (ESP_OK == err) {
-					strcpy((char *)cmd->data, info.key);
-					strcat((char *)cmd->data, "=");
-					strcat((char *)cmd->data, val);
-				}
+				strcpy(reply, info.key);
+				strcat(reply, "|");
+				strcat(reply, val);
 			}
 		}
 	}
@@ -130,3 +122,32 @@ bool readCalibrationN(CalibrationNetworkData *cmd) {
 	nvs_close(handle);
 	return ESP_OK == err;
 }
+/*
+bool debugLog() {
+    nvs_handle_t handle = 0;
+    if (ESP_OK != nvs_open_from_partition(CALIBRATION_PARTITION, DEVICE_CALIBRATION_NSPACE,
+                                          NVS_READONLY, &handle)) {
+        return false;
+    }
+    nvs_iterator_t it = 0;
+    esp_err_t err     = nvs_entry_find_in_handle(handle, NVS_TYPE_ANY, &it);
+    while (ESP_OK == err) {
+        nvs_entry_info_t info;
+        err = nvs_entry_info(it, &info);
+        if (ESP_OK == err) {
+            ESP_LOGI(TAG, "'%s::%s' %x", info.namespace_name, info.key, info.type);
+            if (info.type == NVS_TYPE_STR) {
+                char val[CALIBRATION_MAX_VAL_LEN + 1];
+                size_t valSz = sizeof(val);
+                if (ESP_OK == nvs_get_str(handle, info.key, val, &valSz)) {
+                    ESP_LOGI(TAG, "   ='%s'", val);
+                }
+            }
+        }
+        err = nvs_entry_next(&it);
+    }
+    nvs_release_iterator(it);
+    nvs_close(handle);
+    return true;
+}
+*/

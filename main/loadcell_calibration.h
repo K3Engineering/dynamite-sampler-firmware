@@ -4,9 +4,9 @@
 #include "dynamite_sampler_api.h"
 
 bool initCalibrationStorage();
-bool readCalibrationN(CalibrationNetworkData *data);
-bool writeCalibrationKeyVal(CalibrationNetworkData *data);
-bool readCalibrationKeyVal(CalibrationNetworkData *data);
-bool deleteCalibrationKey(CalibrationNetworkData *data);
+bool readCalibrationN(const char *cmd, size_t cmdLen, char *reply, size_t replyLen);
+bool writeCalibrationKeyVal(const char *cmd, size_t cmdLen);
+bool readCalibrationKey(const char *cmd, size_t cmdLen, char *reply, size_t replyLen);
+bool deleteCalibrationKey(const char *cmd, size_t cmdLen);
 
 #endif // _LOADCELL_CALIBRATION_H
