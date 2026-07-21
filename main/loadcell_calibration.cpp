@@ -24,19 +24,25 @@ constexpr size_t CALIBRATION_MAX_VAL_LEN = 128; // does not incude terminating 0
 static_assert(CALIBRATION_MAX_KEY_LEN + 1 + CALIBRATION_MAX_VAL_LEN + 1 <=
               CALIB_NETWORK_FRAME_LENGTH);
 
-constexpr size_t splitKeyVal(const char *cmd, size_t cmdLen) {
-	for (size_t idx = 0; (idx <= CALIBRATION_MAX_KEY_LEN) && (idx < cmdLen); ++idx) {
+bool initCalibrationStorage() { return ESP_OK == nvs_flash_init_partition(CALIBRATION_PARTITION); }
+
+constexpr size_t splitKeyVal(const char *cmd) {
+	for (size_t idx = 0; (idx <= CALIBRATION_MAX_KEY_LEN) && cmd[idx]; ++idx) {
 		if (cmd[idx] == '=') {
-			return (cmdLen - idx <= CALIBRATION_MAX_VAL_LEN + 1) ? idx : 0;
+			size_t valLen = strlen(cmd + idx + 1);
+			if (valLen && (valLen <= CALIBRATION_MAX_VAL_LEN)) {
+				return idx;
+			}
+			return 0;
 		}
 	}
 	return 0;
 }
 
-bool writeCalibrationKeyVal(const char *cmd, size_t cmdLen) {
-	// "k...=v..." key=value null terminated
-	size_t delimiterIdx = splitKeyVal(cmd, cmdLen);
-	if ((delimiterIdx == 0) || (cmdLen <= delimiterIdx + 1)) {
+bool writeCalibrationKeyVal(const char *cmd) {
+	// "k...=v..." key=value, null terminated
+	size_t delimiterIdx = splitKeyVal(cmd);
+	if (delimiterIdx == 0) {
 		return false;
 	}
 	char key[CALIBRATION_MAX_KEY_LEN + 1]{0};
@@ -55,9 +61,9 @@ bool writeCalibrationKeyVal(const char *cmd, size_t cmdLen) {
 	return ESP_OK == err;
 }
 
-bool readCalibrationKey(const char *cmd, size_t cmdLen, char *reply, size_t replySz) {
+bool readCalibrationKey(const char *cmd, char *reply, size_t replySz) {
 	// "k..." key, null terminated
-	if (cmdLen > CALIBRATION_MAX_KEY_LEN) {
+	if (strlen(cmd) > CALIBRATION_MAX_KEY_LEN) {
 		return false;
 	}
 	nvs_handle_t handle;
@@ -70,9 +76,9 @@ bool readCalibrationKey(const char *cmd, size_t cmdLen, char *reply, size_t repl
 	return ESP_OK == err;
 }
 
-bool deleteCalibrationKey(const char *cmd, size_t cmdLen) {
+bool deleteCalibrationKey(const char *cmd) {
 	// "k..." key, null terminated
-	if (cmdLen > CALIBRATION_MAX_KEY_LEN) {
+	if (strlen(cmd) > CALIBRATION_MAX_KEY_LEN) {
 		return false;
 	}
 	nvs_handle_t handle;
@@ -88,9 +94,7 @@ bool deleteCalibrationKey(const char *cmd, size_t cmdLen) {
 	return ESP_OK == err;
 }
 
-bool initCalibrationStorage() { return ESP_OK == nvs_flash_init_partition(CALIBRATION_PARTITION); }
-
-bool readCalibrationN(const char *cmd, size_t cmdLen, char *reply, size_t replySz) {
+bool readCalibrationN(const char *cmd, char *reply, size_t replySz) {
 	// "N..." number in hex, null terminated
 	if (replySz <= CALIBRATION_MAX_KEY_LEN + 1) {
 		return false;

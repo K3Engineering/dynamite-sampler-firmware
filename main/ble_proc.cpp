@@ -140,16 +140,16 @@ static bool processConfigCommand(const char *rq, size_t rqLen, char *reply, size
 		return false;
 	}
 	if (0 == memcmp(rq, "DCLW", cmdLen)) {
-		return writeCalibrationKeyVal(rq + cmdLen, rqLen - cmdLen);
+		return writeCalibrationKeyVal(rq + cmdLen);
 	}
 	if (0 == memcmp(rq, "DCLR", cmdLen)) {
-		return readCalibrationKey(rq + cmdLen, rqLen - cmdLen, reply, replySz);
+		return readCalibrationKey(rq + cmdLen, reply, replySz);
 	}
 	if (0 == memcmp(rq, "DCLD", cmdLen)) {
-		return deleteCalibrationKey(rq + cmdLen, rqLen - cmdLen);
+		return deleteCalibrationKey(rq + cmdLen);
 	}
 	if (0 == memcmp(rq, "DCLN", cmdLen)) {
-		return readCalibrationN(rq + cmdLen, rqLen - cmdLen, reply, replySz);
+		return readCalibrationN(rq + cmdLen, reply, replySz);
 	}
 	return false;
 }
