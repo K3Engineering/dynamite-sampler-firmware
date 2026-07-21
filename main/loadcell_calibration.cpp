@@ -115,7 +115,7 @@ bool readCalibrationN(const char *cmd, size_t cmdLen, char *reply, size_t replyS
 			err                 = nvs_get_str(handle, info.key, reply + (keyLen + 1), &valSz);
 			if (ESP_OK == err) {
 				memcpy(reply, info.key, keyLen);
-				reply[keyLen] = '|';
+				reply[keyLen] = '=';
 			}
 		}
 	}
