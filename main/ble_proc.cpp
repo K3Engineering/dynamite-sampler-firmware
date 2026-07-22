@@ -10,7 +10,7 @@
 #include "ble_ota_interface.h"
 #include "ble_proc.h"
 #include "dynamite_uuid.h"
-#include "loadcell_calibration.h"
+#include "user_kvs.h"
 
 #include "board_cfg.h"
 #include "build_metadata.h"

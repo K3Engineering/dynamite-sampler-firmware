@@ -3,7 +3,7 @@
 #include <nvs_flash.h>
 
 #include "dynamite_sampler_api.h"
-#include "loadcell_calibration.h"
+#include "user_kvs.h"
 
 #include <stdlib.h>
 #include <string.h>
