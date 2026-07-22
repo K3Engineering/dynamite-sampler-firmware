@@ -135,32 +135,35 @@ class AdcConfigCallbacks : public NimBLECharacteristicCallbacks {
 };
 
 static bool processConfigCommand(const char *rq, size_t rqLen, char *reply, size_t replySz) {
-	const size_t cmdLen = 4;
-	if (rqLen < cmdLen) {
+	const size_t dataOffset = KVS_CMD_LEN + 1;
+	if (rqLen < dataOffset) {
 		return false;
 	}
-	if (0 == memcmp(rq, "DCLW", cmdLen)) {
-		return writeCalibrationKeyVal(rq + cmdLen);
+	if (rq[KVS_CMD_LEN] != UserKvsFolderDevice) {
+		return false;
 	}
-	if (0 == memcmp(rq, "DCLR", cmdLen)) {
-		return readCalibrationKey(rq + cmdLen, reply, replySz);
+	if (0 == memcmp(rq, CmdKvsSet, KVS_CMD_LEN)) {
+		return writeDeviceKeyVal(rq + dataOffset);
 	}
-	if (0 == memcmp(rq, "DCLD", cmdLen)) {
-		return deleteCalibrationKey(rq + cmdLen);
+	if (0 == memcmp(rq, CmdKvsGet, KVS_CMD_LEN)) {
+		return readDeviceKey(rq + dataOffset, reply, replySz);
 	}
-	if (0 == memcmp(rq, "DCLN", cmdLen)) {
-		return readCalibrationN(rq + cmdLen, reply, replySz);
+	if (0 == memcmp(rq, CmdKvsDelete, KVS_CMD_LEN)) {
+		return deleteDeviceKey(rq + dataOffset);
+	}
+	if (0 == memcmp(rq, CmdKvsGetByIdx, KVS_CMD_LEN)) {
+		return readDeviceByIdx(rq + dataOffset, reply, replySz);
 	}
 	return false;
 }
 
-class CalibrationConfigCallbacks : public NimBLECharacteristicCallbacks {
+class UserKvsCallbacks : public NimBLECharacteristicCallbacks {
 	void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
 		if (deviceLock != DeviceLock::Open) {
 			ESP_LOGI(TAG, "CC command: Device locked(%u)", deviceLock);
 			return;
 		}
-		char buff[CALIB_NETWORK_FRAME_LENGTH + 1]{0};
+		char buff[USER_KVS_NETWORK_FRAME_LENGTH + 1]{0};
 		size_t rqLength = 0;
 		{
 			const NimBLEAttValue val{pCharacteristic->getValue()};
@@ -190,11 +193,11 @@ static void setupAdcFeed(NimBLEServer *server) {
 		static AdcFeedCallbacks cb;
 		chrAdcFeed->setCallbacks(&cb);
 	}
-	{ // Calibration data
+	{ // User KeyValStore data
 		NimBLECharacteristic *chr = srvc->createCharacteristic(
-		    &CALIB_CFG_CHR_UUID128,
+		    &USER_KVS_CHR_UUID128,
 		    NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::NOTIFY);
-		static CalibrationConfigCallbacks cb;
+		static UserKvsCallbacks cb;
 		chr->setCallbacks(&cb);
 	}
 	{ // ADC config
@@ -265,7 +268,7 @@ static void taskSetupBle(void *setupDone) {
 	setupPowerManagerInterface(bleServer);
 	setupBleOta(bleServer);
 
-	if (!initCalibrationStorage()) {
+	if (!initUserKeyValStorage()) {
 		ESP_LOGE(TAG, "CStorage init failed");
 	}
 

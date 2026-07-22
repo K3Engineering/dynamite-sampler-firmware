@@ -26,7 +26,7 @@ constexpr uint16_t DEVICE_TX_POWER_CHR_UUID     = 0x2A07;
 // They should be changed to be unique.
 constexpr char DYNAMITE_SAMPLER_SVC_UUID[] = "e331016b-6618-4f8f-8997-1a2c7c9e5fa3";
 constexpr char ADC_FEED_CHR_UUID[]         = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
-constexpr char CALIB_CFG_CHR_UUID[]        = "10adce11-68a6-450b-9810-ca11b39fd283";
+constexpr char USER_KVS_CHR_UUID[]         = "10adce11-68a6-450b-9810-ca11b39fd283";
 constexpr char ADC_CONF_CHR_UUID[]         = "adcc0f19-2575-4502-9a48-0e99974eb34f";
 
 constexpr char OTA_SVC_UUID[]         = "d6f1d96d-594c-4c53-b1c6-144a1dfde6d8";
@@ -99,11 +99,50 @@ struct AdcConfigNetworkData {
 
 //======================== </ADC Data>
 
-// Calibration store interface: BLE write, read, notify.
-// Limited by the max BLE characteristic length of 512 (0x200).
-// Device storage: key-value store at DynaPersistent nvs.
-constexpr size_t CALIB_NETWORK_FRAME_LENGTH = 240;
-static_assert(CALIB_NETWORK_FRAME_LENGTH <= 512);
+//======================== <KV Store>
+// Key-value store interface: BLE write, read, notify.
+// Limited by the max BLE characteristic length of 512 (0x200),
+// preferably less than 244
+// On device storage: key-value persistent store.
+
+// CmdFolderCmd_data response is CmdFolderCmd_data=Response
+//  Cmd is 3 Bytes
+//  Folder is 1 Byte
+//  KEY is up to 15 bytes
+//  VALUE is up to 128 bytes
+
+// | CMD | COMMAND_DATA     | RESPONSE_DATA | Notes
+// |-----|------------------|---------------|---------------------------------------------|
+// | GET | KEY              | VALUE         | Return the Value for the Key
+// | SET | KEY=VALUE        | NONE          | Write the value, look for the status to
+//                                            	see if successful.
+// | IDX | N(uint32 as hex)	| KEY           | Get the Nth key in the Key-Value store.
+//                                              Use this to iterate over all keys.
+//                                              Use status to determine if Nth key exists.
+// | DEL | KEY              | NONE          | Delete the Key-Value Pair.
+//                                              Look for the status to see if successful.
+
+// | Folder    | Notes                              | Example              |
+// |-----------|------------------------------------|----------------------|
+// | S         | Settings, factory reset-able       | Device name          |
+// | D         | Device information, non reset-able | Device calibration   |
+// | E         | Extra information, non reset-able  | Loadcell calibration |
+
+constexpr size_t KVS_CMD_LEN = 3;
+
+constexpr char CmdKvsSet[KVS_CMD_LEN]{'S', 'E', 'T'};
+constexpr char CmdKvsGet[KVS_CMD_LEN]{'G', 'E', 'T'};
+constexpr char CmdKvsDelete[KVS_CMD_LEN]{'D', 'E', 'L'};
+constexpr char CmdKvsGetByIdx[KVS_CMD_LEN]{'I', 'D', 'X'};
+
+constexpr char UserKvsFolderDevice   = 'D';
+constexpr char UserKvsFolderExtra    = 'E';
+constexpr char UserKvsFolderSettings = 'S';
+
+constexpr size_t USER_KVS_NETWORK_FRAME_LENGTH = 240;
+static_assert(USER_KVS_NETWORK_FRAME_LENGTH <= 512);
+
+//======================== </KV Store>
 
 // BLE Standard
 struct TxPowerNetworkData {

@@ -8,29 +8,28 @@
 #include <stdlib.h>
 #include <string.h>
 
-constexpr char TAG[] = "CALIBR";
+constexpr char TAG[] = "KVS";
 
-constexpr char CALIBRATION_PARTITION[] = "DynaPersistent";
-static_assert(sizeof(CALIBRATION_PARTITION) <= NVS_PART_NAME_MAX_SIZE);
+constexpr char DYNA_PERSIST_PARTITION[] = "DynaPersistent";
+static_assert(sizeof(DYNA_PERSIST_PARTITION) <= NVS_PART_NAME_MAX_SIZE);
 
-constexpr char DEVICE_CALIBRATION_NSPACE[] = "Device";
-constexpr char SENSOR_CALIBRATION_NSPACE[] = "Extra";
-static_assert(sizeof(DEVICE_CALIBRATION_NSPACE) <= NVS_NS_NAME_MAX_SIZE);
-static_assert(sizeof(SENSOR_CALIBRATION_NSPACE) <= NVS_NS_NAME_MAX_SIZE);
+constexpr char DEVICE_NSPACE[] = "Device";
+constexpr char EXTRA_NSPACE[]  = "Extra";
+static_assert(sizeof(DEVICE_NSPACE) <= NVS_NS_NAME_MAX_SIZE);
+static_assert(sizeof(EXTRA_NSPACE) <= NVS_NS_NAME_MAX_SIZE);
 
-constexpr size_t CALIBRATION_MAX_KEY_LEN = 15; // does not incude terminating 0
-static_assert(CALIBRATION_MAX_KEY_LEN < NVS_KEY_NAME_MAX_SIZE);
-constexpr size_t CALIBRATION_MAX_VAL_LEN = 128; // does not incude terminating 0
-static_assert(CALIBRATION_MAX_KEY_LEN + 1 + CALIBRATION_MAX_VAL_LEN + 1 <=
-              CALIB_NETWORK_FRAME_LENGTH);
+constexpr size_t USER_KVS_MAX_KEY_LEN = 15; // does not incude terminating 0
+static_assert(USER_KVS_MAX_KEY_LEN < NVS_KEY_NAME_MAX_SIZE);
+constexpr size_t USER_KVS_MAX_VAL_LEN = 128; // does not incude terminating 0
+static_assert(USER_KVS_MAX_KEY_LEN + 1 + USER_KVS_MAX_VAL_LEN + 1 <= USER_KVS_NETWORK_FRAME_LENGTH);
 
-bool initCalibrationStorage() { return ESP_OK == nvs_flash_init_partition(CALIBRATION_PARTITION); }
+bool initUserKeyValStorage() { return ESP_OK == nvs_flash_init_partition(DYNA_PERSIST_PARTITION); }
 
 constexpr size_t splitKeyVal(const char *cmd) {
-	for (size_t idx = 0; (idx <= CALIBRATION_MAX_KEY_LEN) && cmd[idx]; ++idx) {
+	for (size_t idx = 0; (idx <= USER_KVS_MAX_KEY_LEN) && cmd[idx]; ++idx) {
 		if (cmd[idx] == '=') {
 			size_t valLen = strlen(cmd + idx + 1);
-			if (valLen && (valLen <= CALIBRATION_MAX_VAL_LEN)) {
+			if (valLen && (valLen <= USER_KVS_MAX_VAL_LEN)) {
 				return idx;
 			}
 			return 0;
@@ -39,18 +38,18 @@ constexpr size_t splitKeyVal(const char *cmd) {
 	return 0;
 }
 
-bool writeCalibrationKeyVal(const char *cmd) {
+bool writeDeviceKeyVal(const char *cmd) {
 	// "k...=v..." key=value, null terminated
 	size_t delimiterIdx = splitKeyVal(cmd);
 	if (delimiterIdx == 0) {
 		return false;
 	}
-	char key[CALIBRATION_MAX_KEY_LEN + 1]{0};
+	char key[USER_KVS_MAX_KEY_LEN + 1]{0};
 	memcpy(key, cmd, delimiterIdx);
 	const char *val = cmd + (delimiterIdx + 1);
 	nvs_handle_t handle;
-	if (ESP_OK != nvs_open_from_partition(CALIBRATION_PARTITION, DEVICE_CALIBRATION_NSPACE,
-	                                      NVS_READWRITE, &handle)) {
+	if (ESP_OK !=
+	    nvs_open_from_partition(DYNA_PERSIST_PARTITION, DEVICE_NSPACE, NVS_READWRITE, &handle)) {
 		return false;
 	}
 	esp_err_t err = nvs_set_str(handle, key, val);
@@ -61,14 +60,14 @@ bool writeCalibrationKeyVal(const char *cmd) {
 	return ESP_OK == err;
 }
 
-bool readCalibrationKey(const char *cmd, char *reply, size_t replySz) {
+bool readDeviceKey(const char *cmd, char *reply, size_t replySz) {
 	// "k..." key, null terminated
-	if (strlen(cmd) > CALIBRATION_MAX_KEY_LEN) {
+	if (strlen(cmd) > USER_KVS_MAX_KEY_LEN) {
 		return false;
 	}
 	nvs_handle_t handle;
-	if (ESP_OK != nvs_open_from_partition(CALIBRATION_PARTITION, DEVICE_CALIBRATION_NSPACE,
-	                                      NVS_READONLY, &handle)) {
+	if (ESP_OK !=
+	    nvs_open_from_partition(DYNA_PERSIST_PARTITION, DEVICE_NSPACE, NVS_READONLY, &handle)) {
 		return false;
 	}
 	esp_err_t err = nvs_get_str(handle, cmd, reply, &replySz);
@@ -76,14 +75,14 @@ bool readCalibrationKey(const char *cmd, char *reply, size_t replySz) {
 	return ESP_OK == err;
 }
 
-bool deleteCalibrationKey(const char *cmd) {
+bool deleteDeviceKey(const char *cmd) {
 	// "k..." key, null terminated
-	if (strlen(cmd) > CALIBRATION_MAX_KEY_LEN) {
+	if (strlen(cmd) > USER_KVS_MAX_KEY_LEN) {
 		return false;
 	}
 	nvs_handle_t handle;
-	if (ESP_OK != nvs_open_from_partition(CALIBRATION_PARTITION, DEVICE_CALIBRATION_NSPACE,
-	                                      NVS_READWRITE, &handle)) {
+	if (ESP_OK !=
+	    nvs_open_from_partition(DYNA_PERSIST_PARTITION, DEVICE_NSPACE, NVS_READWRITE, &handle)) {
 		return false;
 	}
 	esp_err_t err = nvs_erase_key(handle, cmd);
@@ -94,15 +93,15 @@ bool deleteCalibrationKey(const char *cmd) {
 	return ESP_OK == err;
 }
 
-bool readCalibrationN(const char *cmd, char *reply, size_t replySz) {
+bool readDeviceByIdx(const char *cmd, char *reply, size_t replySz) {
 	// "N..." number in hex, null terminated
-	if (replySz <= CALIBRATION_MAX_KEY_LEN + 1) {
+	if (replySz <= USER_KVS_MAX_KEY_LEN + 1) {
 		return false;
 	}
 	const size_t num    = strtoul(cmd, nullptr, 16);
 	nvs_handle_t handle = 0;
-	if (ESP_OK != nvs_open_from_partition(CALIBRATION_PARTITION, DEVICE_CALIBRATION_NSPACE,
-	                                      NVS_READONLY, &handle)) {
+	if (ESP_OK !=
+	    nvs_open_from_partition(DYNA_PERSIST_PARTITION, DEVICE_NSPACE, NVS_READONLY, &handle)) {
 		return false;
 	}
 	nvs_iterator_t it = 0;
@@ -130,7 +129,7 @@ bool readCalibrationN(const char *cmd, char *reply, size_t replySz) {
 /*
 bool debugLog() {
     nvs_handle_t handle = 0;
-    if (ESP_OK != nvs_open_from_partition(CALIBRATION_PARTITION, DEVICE_CALIBRATION_NSPACE,
+    if (ESP_OK != nvs_open_from_partition(DYNA_PERSIST_PARTITION, DEVICE_NSPACE,
                                           NVS_READONLY, &handle)) {
         return false;
     }
@@ -142,7 +141,7 @@ bool debugLog() {
         if (ESP_OK == err) {
             ESP_LOGI(TAG, "'%s::%s' %x", info.namespace_name, info.key, info.type);
             if (info.type == NVS_TYPE_STR) {
-                char val[CALIBRATION_MAX_VAL_LEN + 1];
+                char val[USER_KVS_MAX_VAL_LEN + 1];
                 size_t valSz = sizeof(val);
                 if (ESP_OK == nvs_get_str(handle, info.key, val, &valSz)) {
                     ESP_LOGI(TAG, "   ='%s'", val);
