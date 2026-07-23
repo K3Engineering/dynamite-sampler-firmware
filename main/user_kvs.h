@@ -4,6 +4,6 @@
 #include <stddef.h>
 
 bool initUserKeyValStorage();
-bool processConfigCommand(const char *rq, size_t rqLen, char *reply, size_t replySz);
+bool processKvsCommand(const char *rq, size_t rqLen, char *reply, size_t replySz);
 
 #endif // _USER_KVS_H

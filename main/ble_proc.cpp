@@ -150,8 +150,8 @@ class UserKvsCallbacks : public NimBLECharacteristicCallbacks {
 			}
 		}
 		ESP_LOGI(TAG, "Rq '%s'", buff + 1);
-		if (processConfigCommand(buff + 1, rqLength, buff + (rqLength + 2),
-		                         sizeof(buff) - (rqLength + 2))) {
+		if (processKvsCommand(buff + 1, rqLength, buff + (rqLength + 2),
+		                      sizeof(buff) - (rqLength + 2))) {
 			buff[0]            = '1';
 			buff[rqLength + 1] = '=';
 		} else {

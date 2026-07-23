@@ -153,7 +153,7 @@ static bool debugLog() {
 }
 */
 
-bool processConfigCommand(const char *rq, size_t rqLen, char *reply, size_t replySz) {
+bool processKvsCommand(const char *rq, size_t rqLen, char *reply, size_t replySz) {
 	const size_t dataOffset = KVS_CMD_LEN + 1;
 	if (rqLen < dataOffset) {
 		return false;
