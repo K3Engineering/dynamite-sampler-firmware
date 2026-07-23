@@ -134,33 +134,10 @@ class AdcConfigCallbacks : public NimBLECharacteristicCallbacks {
 	}
 };
 
-static bool processConfigCommand(const char *rq, size_t rqLen, char *reply, size_t replySz) {
-	const size_t dataOffset = KVS_CMD_LEN + 1;
-	if (rqLen < dataOffset) {
-		return false;
-	}
-	if (rq[KVS_CMD_LEN] != UserKvsFolderDevice) {
-		return false;
-	}
-	if (0 == memcmp(rq, CmdKvsSet, KVS_CMD_LEN)) {
-		return writeDeviceKeyVal(rq + dataOffset);
-	}
-	if (0 == memcmp(rq, CmdKvsGet, KVS_CMD_LEN)) {
-		return readDeviceKey(rq + dataOffset, reply, replySz);
-	}
-	if (0 == memcmp(rq, CmdKvsDelete, KVS_CMD_LEN)) {
-		return deleteDeviceKey(rq + dataOffset);
-	}
-	if (0 == memcmp(rq, CmdKvsGetByIdx, KVS_CMD_LEN)) {
-		return readDeviceByIdx(rq + dataOffset, reply, replySz);
-	}
-	return false;
-}
-
 class UserKvsCallbacks : public NimBLECharacteristicCallbacks {
 	void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
 		if (deviceLock != DeviceLock::Open) {
-			ESP_LOGI(TAG, "CC command: Device locked(%u)", deviceLock);
+			ESP_LOGI(TAG, "KVS command: Device locked(%u)", deviceLock);
 			return;
 		}
 		char buff[USER_KVS_NETWORK_FRAME_LENGTH + 1]{0};
