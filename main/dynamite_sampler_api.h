@@ -108,7 +108,7 @@ struct AdcConfigNetworkData {
 // <Cmd><Folder><Cmd_data> response is <Status><Cmd><Folder><Cmd_data>=Response
 //  Cmd is 3 Bytes
 //  Folder is 1 Byte
-//  Status is 1 Byte
+//  Status is 1 Byte: Character '1' for success, '0 otherwise
 //  Cmd_data is command specific
 //  KEY is up to 15 bytes
 //  VALUE is up to 128 bytes
@@ -118,7 +118,7 @@ struct AdcConfigNetworkData {
 // | GET | KEY              | VALUE         | Return the Value for the Key
 // | SET | KEY=VALUE        | NONE          | Write the value, look for the status to
 //                                            	see if successful.
-// | IDX | N(uint32 as hex)	| KEY           | Get the Nth key in the Key-Value store.
+// | IDX | N(uint32 as hex)	| KEY=TYPE(hex) | Get the Nth key in the Key-Value store.
 //                                              Use this to iterate over all keys.
 //                                              Use status to determine if Nth key exists.
 // | DEL | KEY              | NONE          | Delete the Key-Value Pair.

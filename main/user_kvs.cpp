@@ -95,7 +95,7 @@ bool deleteDeviceKey(const char *cmd) {
 
 bool readDeviceByIdx(const char *cmd, char *reply, size_t replySz) {
 	// "N..." number in hex, null terminated
-	if (replySz <= USER_KVS_MAX_KEY_LEN + 1) {
+	if (replySz <= USER_KVS_MAX_KEY_LEN + 10) {
 		return false;
 	}
 	const size_t num    = strtoul(cmd, nullptr, 16);
@@ -105,7 +105,7 @@ bool readDeviceByIdx(const char *cmd, char *reply, size_t replySz) {
 		return false;
 	}
 	nvs_iterator_t it = 0;
-	esp_err_t err     = nvs_entry_find_in_handle(handle, NVS_TYPE_STR, &it);
+	esp_err_t err     = nvs_entry_find_in_handle(handle, NVS_TYPE_ANY, &it);
 	for (size_t i = 0; (ESP_OK == err) && (i < num); ++i) {
 		err = nvs_entry_next(&it);
 	}
@@ -113,13 +113,10 @@ bool readDeviceByIdx(const char *cmd, char *reply, size_t replySz) {
 		nvs_entry_info_t info;
 		err = nvs_entry_info(it, &info);
 		if (ESP_OK == err) {
-			const size_t keyLen = strlen(info.key);
-			size_t valSz        = replySz - (keyLen + 1);
-			err                 = nvs_get_str(handle, info.key, reply + (keyLen + 1), &valSz);
-			if (ESP_OK == err) {
-				memcpy(reply, info.key, keyLen);
-				reply[keyLen] = '=';
-			}
+			size_t keyLen = strlen(info.key);
+			memcpy(reply, info.key, keyLen);
+			reply[keyLen] = '=';
+			utoa(info.type, reply + keyLen + 1, 16);
 		}
 	}
 	nvs_release_iterator(it);
