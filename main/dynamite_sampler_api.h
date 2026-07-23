@@ -105,9 +105,10 @@ struct AdcConfigNetworkData {
 // preferably less than 244
 // On device storage: key-value persistent store.
 
-// CmdFolderCmd_data response is CmdFolderCmd_data=Response
+// CmdFolderCmd_data response is StatusCmdFolderCmd_data=Response
 //  Cmd is 3 Bytes
 //  Folder is 1 Byte
+//  Status is 1 Byte
 //  KEY is up to 15 bytes
 //  VALUE is up to 128 bytes
 
