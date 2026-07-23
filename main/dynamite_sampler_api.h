@@ -118,9 +118,10 @@ struct AdcConfigNetworkData {
 // | GET | KEY              | VALUE         | Return the Value for the Key
 // | SET | KEY=VALUE        | NONE          | Write the value, look for the status to
 //                                            	see if successful.
-// | IDX | N(uint32 as hex)	| KEY=TYPE(hex) | Get the Nth key in the Key-Value store.
+// | IDX | N(uint32 as hex)	| KEY=TYPE      | Get the Nth key in the Key-Value store.
 //                                              Use this to iterate over all keys.
 //                                              Use status to determine if Nth key exists.
+//                                              TYPE,hex stored value type(nvs.h nvs_type_t).
 // | DEL | KEY              | NONE          | Delete the Key-Value Pair.
 //                                              Look for the status to see if successful.
 
