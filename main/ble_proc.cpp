@@ -10,7 +10,7 @@
 #include "ble_ota_interface.h"
 #include "ble_proc.h"
 #include "dynamite_uuid.h"
-#include "loadcell_calibration.h"
+#include "user_kvs.h"
 
 #include "board_cfg.h"
 #include "build_metadata.h"
@@ -134,37 +134,32 @@ class AdcConfigCallbacks : public NimBLECharacteristicCallbacks {
 	}
 };
 
-class CalibrationConfigCallbacks : public NimBLECharacteristicCallbacks {
+class UserKvsCallbacks : public NimBLECharacteristicCallbacks {
 	void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
 		if (deviceLock != DeviceLock::Open) {
-			ESP_LOGI(TAG, "CC command: Device locked(%u)", deviceLock);
+			ESP_LOGI(TAG, "KVS command: Device locked(%u)", deviceLock);
 			return;
 		}
-		const NimBLEAttValue val{pCharacteristic->getValue()};
-		const uint8_t *data = val.data();
-		const size_t len    = val.length();
-		CalibrationNetworkData calibrData;
-		bool res = false;
-		if (len > 1 && len < sizeof(calibrData.data)) {
-			if (('W' == data[0]) && (' ' == data[1])) {
-				res = writeCalibrationKeyVal(data + 2, len - 2);
-			} else if (('D' == data[0]) && (' ' == data[1])) {
-				res = deleteCalibrationKey(data + 2, len - 2);
+		char buff[USER_KVS_NETWORK_FRAME_LENGTH + 1]{0};
+		size_t rqLength = 0;
+		{
+			const NimBLEAttValue val{pCharacteristic->getValue()};
+			if ((val.length() + 2) < sizeof(buff)) {
+				rqLength = val.length();
+				memcpy(buff + 1, val.data(), rqLength);
 			}
 		}
-		size_t idx             = 0;
-		calibrData.data[idx++] = res ? '0' : '1';
-		calibrData.data[idx++] = ' ';
-		const size_t sz =
-		    len < (sizeof(calibrData.data) - idx) ? len : sizeof(calibrData.data) - idx;
-		memcpy(calibrData.data + idx, data, sz);
-		pCharacteristic->notify(calibrData.data, sz + idx);
-	}
-	void onRead(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
-		CalibrationNetworkData calibrData;
-		if (readCalibrationAll(&calibrData)) {
-			pCharacteristic->setValue((const char *)calibrData.data);
+		ESP_LOGI(TAG, "Rq '%s'", buff + 1);
+		if (processKvsCommand(buff + 1, rqLength, buff + (rqLength + 2),
+		                      sizeof(buff) - (rqLength + 2))) {
+			buff[0]            = '1';
+			buff[rqLength + 1] = '=';
+		} else {
+			buff[0] = '0';
 		}
+		ESP_LOGI(TAG, "Repl '%s'", buff);
+		pCharacteristic->setValue((const char *)buff);
+		pCharacteristic->notify();
 	}
 };
 
@@ -175,11 +170,11 @@ static void setupAdcFeed(NimBLEServer *server) {
 		static AdcFeedCallbacks cb;
 		chrAdcFeed->setCallbacks(&cb);
 	}
-	{ // Calibration data
+	{ // User KeyValStore data
 		NimBLECharacteristic *chr = srvc->createCharacteristic(
-		    &CALIB_CFG_CHR_UUID128,
+		    &USER_KVS_CHR_UUID128,
 		    NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::NOTIFY);
-		static CalibrationConfigCallbacks cb;
+		static UserKvsCallbacks cb;
 		chr->setCallbacks(&cb);
 	}
 	{ // ADC config
@@ -250,6 +245,10 @@ static void taskSetupBle(void *setupDone) {
 	setupPowerManagerInterface(bleServer);
 	setupBleOta(bleServer);
 
+	if (!initUserKeyValStorage()) {
+		ESP_LOGE(TAG, "CStorage init failed");
+	}
+
 	setupAdvertising(bleName);
 	ESP_LOGI(TAG, "BLE setup done, advertising started");
 
@@ -263,7 +262,7 @@ void setupBle(int core) {
 	assert(adcStreamBufferHandle != NULL);
 
 	volatile bool done = false;
-	xTaskCreatePinnedToCore(taskSetupBle, "task_BLE_setup", 1024 * 5, (void *)&done, 1, NULL, core);
+	xTaskCreatePinnedToCore(taskSetupBle, "task_BLE_setup", 1024 * 6, (void *)&done, 1, NULL, core);
 	while (!done)
 		vTaskDelay(10);
 
