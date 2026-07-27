@@ -126,7 +126,7 @@ class MockAds131 {
 	bool resetAdcHw() { return true; }
 	bool setChannelEnable(uint8_t channel, bool enable) { return true; }
 	bool setChannelPGA(uint8_t channel, uint16_t pga) { return true; }
-	bool setPowerMode(uint8_t powerMode) { return true; }
+	bool setPowerMode(uint16_t powerMode) { return true; }
 	bool setChannelInputSelection(uint8_t channel, uint16_t input) { return true; }
 	bool setOsr(uint16_t osr) { return true; }
 

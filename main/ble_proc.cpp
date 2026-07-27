@@ -246,7 +246,7 @@ static void taskSetupBle(void *setupDone) {
 	setupBleOta(bleServer);
 
 	if (!initUserKeyValStorage()) {
-		ESP_LOGE(TAG, "CStorage init failed");
+		ESP_LOGE(TAG, "KVStorage init failed");
 	}
 
 	setupAdvertising(bleName);
