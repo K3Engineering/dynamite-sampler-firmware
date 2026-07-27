@@ -22,6 +22,11 @@ struct I2cConnectCfg {
 	}
 };
 
+struct TMP118SensorCfg {
+	I2cConnectCfg i2c;
+	char TMP118SubType; // TMP118A/B/C/D
+};
+
 struct AdcHwConnect {
 	gpio_num_t cs;
 	gpio_num_t drdy;
@@ -49,7 +54,7 @@ struct AdcCfg {
 template <size_t N>
 struct K3BoardCfg {
 	char name[8];
-	I2cConnectCfg i2c;
+	TMP118SensorCfg temperatureSensor;
 	FactoryResetCfg factoryReset;
 	AdcCfg<N> adc;
 };
@@ -78,8 +83,12 @@ constexpr AdcSpiConnect adcSpiConnect{
 
 // V3.0.0 hardware
 constexpr K3BoardCfg<4> boardv300{
-    .name         = "v300",
-    .i2c          = i2cNotConnected,
+    .name = "v300",
+    .temperatureSensor =
+        {
+            .i2c           = i2cNotConnected,
+            .TMP118SubType = 0,
+        },
     .factoryReset = resetNotConnected,
     .adc =
         {
@@ -113,8 +122,12 @@ constexpr K3BoardCfg<4> boardv300{
 
 // V4.0.0 hardware
 constexpr K3BoardCfg<4> boardv400{
-    .name         = "v400",
-    .i2c          = i2cNotConnected,
+    .name = "v400",
+    .temperatureSensor =
+        {
+            .i2c           = i2cNotConnected,
+            .TMP118SubType = 0,
+        },
     .factoryReset = resetNotConnected,
     .adc =
         {
@@ -150,8 +163,12 @@ constexpr K3BoardCfg<4> boardv400{
 
 // V5.0.0 hardware
 constexpr K3BoardCfg<4> boardv500{
-    .name         = "v500",
-    .i2c          = i2cNotConnected,
+    .name = "v500",
+    .temperatureSensor =
+        {
+            .i2c           = i2cNotConnected,
+            .TMP118SubType = 0,
+        },
     .factoryReset = resetNotConnected,
     .adc =
         {
@@ -187,8 +204,12 @@ constexpr K3BoardCfg<4> boardv500{
 
 // V6 Lite hardware
 constexpr K3BoardCfg<4> boardv600_lite{
-    .name         = "v600L",
-    .i2c          = i2cNotConnected,
+    .name = "v600L",
+    .temperatureSensor =
+        {
+            .i2c           = i2cNotConnected,
+            .TMP118SubType = 0,
+        },
     .factoryReset = resetNotConnected,
     .adc =
         {
@@ -225,10 +246,14 @@ constexpr K3BoardCfg<4> boardv600_lite{
 // V6 Pro hardware
 constexpr K3BoardCfg<8> boardv600_Pro{
     .name = "v600P",
-    .i2c =
+    .temperatureSensor =
         {
-            .masterSdaIo = GPIO_NUM_46,
-            .masterSclIo = GPIO_NUM_3,
+            .i2c =
+                {
+                    .masterSdaIo = GPIO_NUM_46,
+                    .masterSclIo = GPIO_NUM_3,
+                },
+            .TMP118SubType = 'A',
         },
     .factoryReset = resetNotConnected,
     .adc =

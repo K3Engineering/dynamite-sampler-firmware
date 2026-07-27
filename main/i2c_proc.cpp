@@ -25,6 +25,7 @@ class TMP118 {
 	static constexpr uint16_t TMP118B_I2C_ADDR = 0x49;
 	static constexpr uint16_t TMP118C_I2C_ADDR = 0x4A;
 	static constexpr uint16_t TMP118D_I2C_ADDR = 0x4B;
+	static constexpr uint16_t INVALID_I2C_ADDR = 0xFFFF;
 
 	static constexpr uint8_t CONFIG_REG      = 0x01;
 	static constexpr uint8_t TEMP_RESULT_REG = 0x00;
@@ -52,7 +53,22 @@ class TMP118 {
 	};
 #pragma pack(pop)
   public:
-	bool config(I2CMasterBus &bus);
+	static constexpr uint16_t i2cAddr(char sensorType) {
+		if (sensorType == 'A') {
+			return TMP118A_I2C_ADDR;
+		}
+		if (sensorType == 'B') {
+			return TMP118B_I2C_ADDR;
+		}
+		if (sensorType == 'C') {
+			return TMP118C_I2C_ADDR;
+		}
+		if (sensorType == 'D') {
+			return TMP118D_I2C_ADDR;
+		}
+		return INVALID_I2C_ADDR;
+	}
+	bool config(I2CMasterBus &bus, char subType);
 	void remove() { i2c_master_bus_rm_device(devHandle); }
 	void readTemperature();
 };
@@ -99,8 +115,8 @@ i2c_master_dev_handle_t I2CMasterBus::addDevice(uint16_t addr) {
 	return nullptr;
 }
 
-bool TMP118::config(I2CMasterBus &bus) {
-	devHandle = bus.addDevice(TMP118A_I2C_ADDR);
+bool TMP118::config(I2CMasterBus &bus, char subType) {
+	devHandle = bus.addDevice(i2cAddr(subType));
 	if (!devHandle) {
 		return false;
 	}
@@ -136,8 +152,9 @@ static void taskSetupI2C(void *setupDone) {
 	ESP_LOGI(TAG, "setting up I2C on core: %u", esp_cpu_get_core_id());
 	I2CMasterBus bus;
 	TMP118 sensor;
-	if (bus.setup(I2C_NUM_0, boardConfig.i2c.masterSdaIo, boardConfig.i2c.masterSclIo) &&
-	    sensor.config(bus)) {
+	if (bus.setup(I2C_NUM_0, boardConfig.temperatureSensor.i2c.masterSdaIo,
+	              boardConfig.temperatureSensor.i2c.masterSclIo) &&
+	    sensor.config(bus, boardConfig.temperatureSensor.TMP118SubType)) {
 		*(volatile bool *)setupDone = true;
 	} else {
 		// TODO: improve error handlng
@@ -152,7 +169,7 @@ static void taskSetupI2C(void *setupDone) {
 }
 
 void setupI2C(int core) {
-	if constexpr (boardConfig.i2c.connected()) {
+	if constexpr (boardConfig.temperatureSensor.i2c.connected()) {
 		volatile bool done = false;
 		xTaskCreatePinnedToCore(taskSetupI2C, "task_I2C_setup", 1024 * 2, (void *)&done, 1, NULL,
 		                        core);
