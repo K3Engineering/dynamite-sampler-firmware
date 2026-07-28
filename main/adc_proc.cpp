@@ -13,7 +13,6 @@
 
 #include "ADS131M0x_reg.h"
 #include "board_cfg.h"
-#include "debug_pin.h"
 
 constexpr char TAG[] = "ADC";
 
@@ -137,9 +136,6 @@ static void configureAdc() {
 
 static void taskSetupAdc(void *setupDone) {
 	ESP_LOGI(TAG, "setting up adc on core: %u", esp_cpu_get_core_id());
-	// TODO figure out if you need to setup wake from sleep for gpio
-	gpio_set_direction(PIN_DEBUG_TOP, GPIO_MODE_OUTPUT);
-	gpio_set_direction(PIN_DEBUG_BOT, GPIO_MODE_OUTPUT);
 
 	adc.init(boardConfig.adc.hwConnect.cs, boardConfig.adc.hwConnect.drdy,
 	         boardConfig.adc.hwConnect.reset, SPI3_HOST, boardConfig.adc.spiConnect.clock,
