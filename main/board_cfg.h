@@ -411,6 +411,10 @@ constexpr auto boardConfig{boardv500};
 constexpr auto boardConfig{boardv600_lite};
 #elif CONFIG_DYNAMITE_HW_REV_V6_PRO
 constexpr auto boardConfig{boardv600_Pro};
+#elif CONFIG_DYNAMITE_HW_REV_V7_LITE
+constexpr auto boardConfig{boardv700_lite};
+#elif CONFIG_DYNAMITE_HW_REV_V7_PRO
+constexpr auto boardConfig{boardv700_Pro};
 #else
 #error No board configuration selected.
 #endif

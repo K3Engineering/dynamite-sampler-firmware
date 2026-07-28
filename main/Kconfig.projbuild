@@ -14,6 +14,10 @@ menu "Dynamite Sampler hardware configuration"
             bool "V6 Lite"
         config DYNAMITE_HW_REV_V6_PRO
             bool "V6 Pro"
+        config DYNAMITE_HW_REV_V7_LITE
+            bool "V7 Lite"
+        config DYNAMITE_HW_REV_V7_PRO
+            bool "V7 Pro"
     endchoice
 
     config MOCK_ADC
