@@ -324,8 +324,8 @@ constexpr K3BoardCfg<4> boardv700_lite{
     .factoryReset = resetNotConnected,
     .adc =
         {
-            .hwConnect  = adcHwConnect2,
-            .spiConnect = adcSpiConnect2,
+            .hwConnect  = adcHwConnect,
+            .spiConnect = adcSpiConnect,
             .enable =
                 {
                     true,
@@ -370,8 +370,8 @@ constexpr K3BoardCfg<4> boardv700_Pro{
     .adc =
         {
             // TODO SPI pins are now also different
-            .hwConnect  = adcHwConnect,
-            .spiConnect = adcSpiConnect,
+            .hwConnect  = adcHwConnect2,
+            .spiConnect = adcSpiConnect2,
             .enable =
                 {
                     true,
