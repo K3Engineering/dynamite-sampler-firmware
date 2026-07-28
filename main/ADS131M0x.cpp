@@ -14,8 +14,6 @@
 
 #include <endian.h>
 
-#include "debug_pin.h"
-
 constexpr char TAG[] = "ADS131";
 
 constexpr size_t RING_BUFF_SZ = 64;
