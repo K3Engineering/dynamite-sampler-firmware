@@ -148,19 +148,26 @@ void TMP118::readTemperature() {
 	}
 }
 
-static void taskSetupI2C(void *setupDone) {
+struct SetupResult {
+	volatile bool done;
+	volatile bool ok;
+};
+
+static void taskSetupI2C(void *arg) {
+	SetupResult *result = (SetupResult *)arg;
 	ESP_LOGI(TAG, "setting up I2C on core: %u", esp_cpu_get_core_id());
 	I2CMasterBus bus;
 	TMP118 sensor;
-	if (bus.setup(I2C_NUM_0, boardConfig.temperatureSensor.i2c.masterSdaIo,
-	              boardConfig.temperatureSensor.i2c.masterSclIo) &&
-	    sensor.config(bus, boardConfig.temperatureSensor.TMP118SubType)) {
-		*(volatile bool *)setupDone = true;
-	} else {
+	result->ok = bus.setup(I2C_NUM_0, boardConfig.temperatureSensor.i2c.masterSdaIo,
+	                       boardConfig.temperatureSensor.i2c.masterSclIo) &&
+	             sensor.config(bus, boardConfig.temperatureSensor.TMP118SubType);
+	if (!result->ok) {
 		ESP_LOGE(TAG, "I2C setup failed (SDA=%d SCL=%d)",
 		         boardConfig.temperatureSensor.i2c.masterSdaIo,
 		         boardConfig.temperatureSensor.i2c.masterSclIo);
-		// TODO: improve error handlng
+	}
+	result->done = true;
+	if (!result->ok) {
 		vTaskDelete(NULL);
 	}
 
@@ -171,16 +178,18 @@ static void taskSetupI2C(void *setupDone) {
 	vTaskDelete(NULL);
 }
 
-void setupI2C(int core) {
+bool setupI2C(int core) {
 	static_assert(!(boardConfig.temperatureSensor.i2c.connected() &&
 	                (TMP118::i2cAddr(boardConfig.temperatureSensor.TMP118SubType) ==
 	                 TMP118::INVALID_I2C_ADDR)));
 	if constexpr (boardConfig.temperatureSensor.i2c.connected()) {
-		volatile bool done = false;
-		xTaskCreatePinnedToCore(taskSetupI2C, "task_I2C_setup", 1024 * 2, (void *)&done, 1, NULL,
-		                        core);
-		while (!done) {
+		SetupResult result = {.done = false, .ok = false};
+		xTaskCreatePinnedToCore(taskSetupI2C, "task_I2C_setup", 1024 * 2, (void *)&result, 1,
+		                        NULL, core);
+		while (!result.done) {
 			vTaskDelay(10);
 		}
+		return result.ok;
 	}
+	return true;
 }

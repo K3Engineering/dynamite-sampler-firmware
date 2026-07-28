@@ -3,7 +3,7 @@
 
 #include "dynamite_sampler_api.h"
 
-void setupAdc(int core);
+bool setupAdc(int core);
 bool startAdcAcquisition();
 void stopAdcAcquisition();
 
