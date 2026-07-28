@@ -118,12 +118,22 @@ static void IRAM_ATTR taskAdcReadAndBuffer(void *) {
 static void configureAdc() {
 	static_assert(boardConfig.adc.NCHAN == adc.NUM_CHANNELS);
 	for (uint8_t chan = 0; chan < adc.NUM_CHANNELS; ++chan) {
-		adc.setChannelEnable(chan, boardConfig.adc.enable[chan]);
-		adc.setChannelInputSelection(chan, boardConfig.adc.input[chan]);
-		adc.setChannelPGA(chan, boardConfig.adc.pga[chan]);
+		if (!adc.setChannelEnable(chan, boardConfig.adc.enable[chan])) {
+			ESP_LOGE(TAG, "setChannelEnable ch%u failed", chan);
+		}
+		if (!adc.setChannelInputSelection(chan, boardConfig.adc.input[chan])) {
+			ESP_LOGE(TAG, "setChannelInputSelection ch%u failed", chan);
+		}
+		if (!adc.setChannelPGA(chan, boardConfig.adc.pga[chan])) {
+			ESP_LOGE(TAG, "setChannelPGA ch%u failed", chan);
+		}
 	}
-	adc.setPowerMode(boardConfig.adc.powerMode);
-	adc.setOsr(boardConfig.adc.osr);
+	if (!adc.setPowerMode(boardConfig.adc.powerMode)) {
+		ESP_LOGE(TAG, "setPowerMode failed");
+	}
+	if (!adc.setOsr(boardConfig.adc.osr)) {
+		ESP_LOGE(TAG, "setOsr failed");
+	}
 
 	savedConfig = {
 	    .id     = adc.readID(),
@@ -149,6 +159,10 @@ static void taskSetupAdc(void *setupDone) {
 		configureAdc();
 		*(volatile bool *)setupDone = true;
 	} else {
+		ESP_LOGE(TAG, "ADC setup failed (CS=%d DRDY=%d RESET=%d CLK=%d MISO=%d MOSI=%d)",
+		         boardConfig.adc.hwConnect.cs, boardConfig.adc.hwConnect.drdy,
+		         boardConfig.adc.hwConnect.reset, boardConfig.adc.spiConnect.clock,
+		         boardConfig.adc.spiConnect.miso, boardConfig.adc.spiConnect.mosi);
 		startupDiagnosticIsOk = false;
 		// TODO: review init errors handling
 	}

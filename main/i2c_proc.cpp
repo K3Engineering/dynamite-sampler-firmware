@@ -157,6 +157,9 @@ static void taskSetupI2C(void *setupDone) {
 	    sensor.config(bus, boardConfig.temperatureSensor.TMP118SubType)) {
 		*(volatile bool *)setupDone = true;
 	} else {
+		ESP_LOGE(TAG, "I2C setup failed (SDA=%d SCL=%d)",
+		         boardConfig.temperatureSensor.i2c.masterSdaIo,
+		         boardConfig.temperatureSensor.i2c.masterSclIo);
 		// TODO: improve error handlng
 		vTaskDelete(NULL);
 	}
