@@ -69,16 +69,30 @@ constexpr FactoryResetCfg resetNotConnected{
     .activeLevelHi = false,
 };
 
-constexpr AdcHwConnect adcHwConnect{
+constexpr AdcHwConnect adcHwConnect1{
     .cs    = GPIO_NUM_13,
     .drdy  = GPIO_NUM_12,
     .reset = GPIO_NUM_14,
 };
 
-constexpr AdcSpiConnect adcSpiConnect{
+constexpr AdcSpiConnect adcSpiConnect1{
     .clock = GPIO_NUM_11,
     .miso  = GPIO_NUM_10,
     .mosi  = GPIO_NUM_9,
+};
+
+// Shift pins
+constexpr AdcHwConnect adcHwConnect2{
+    .cs    = GPIO_NUM_21,
+    .drdy  = GPIO_NUM_14,
+    .reset = GPIO_NUM_47,
+};
+
+// Shift pins
+constexpr AdcSpiConnect adcSpiConnect2{
+    .clock = GPIO_NUM_13,
+    .miso  = GPIO_NUM_12,
+    .mosi  = GPIO_NUM_11,
 };
 
 // V3.0.0 hardware
@@ -92,8 +106,8 @@ constexpr K3BoardCfg<4> boardv300{
     .factoryReset = resetNotConnected,
     .adc =
         {
-            .hwConnect  = adcHwConnect,
-            .spiConnect = adcSpiConnect,
+            .hwConnect  = adcHwConnect1,
+            .spiConnect = adcSpiConnect1,
             .enable =
                 {
                     false,
@@ -131,8 +145,8 @@ constexpr K3BoardCfg<4> boardv400{
     .factoryReset = resetNotConnected,
     .adc =
         {
-            .hwConnect  = adcHwConnect,
-            .spiConnect = adcSpiConnect,
+            .hwConnect  = adcHwConnect1,
+            .spiConnect = adcSpiConnect1,
             .enable =
                 {
                     false,
@@ -172,8 +186,8 @@ constexpr K3BoardCfg<4> boardv500{
     .factoryReset = resetNotConnected,
     .adc =
         {
-            .hwConnect  = adcHwConnect,
-            .spiConnect = adcSpiConnect,
+            .hwConnect  = adcHwConnect1,
+            .spiConnect = adcSpiConnect1,
             .enable =
                 {
                     true,
@@ -213,8 +227,8 @@ constexpr K3BoardCfg<4> boardv600_lite{
     .factoryReset = resetNotConnected,
     .adc =
         {
-            .hwConnect  = adcHwConnect,
-            .spiConnect = adcSpiConnect,
+            .hwConnect  = adcHwConnect1,
+            .spiConnect = adcSpiConnect1,
             .enable =
                 {
                     true,
@@ -258,8 +272,8 @@ constexpr K3BoardCfg<8> boardv600_Pro{
     .factoryReset = resetNotConnected,
     .adc =
         {
-            .hwConnect  = adcHwConnect,
-            .spiConnect = adcSpiConnect,
+            .hwConnect  = adcHwConnect1,
+            .spiConnect = adcSpiConnect1,
             .enable =
                 {
                     true,
@@ -301,6 +315,94 @@ constexpr K3BoardCfg<8> boardv600_Pro{
         },
 };
 
+// V7 Lite hardware
+constexpr K3BoardCfg<4> boardv700_lite{
+    .name = "v700L",
+    .temperatureSensor =
+        {
+            .i2c           = i2cNotConnected,
+            .TMP118SubType = 0,
+        },
+    .factoryReset = resetNotConnected,
+    .adc =
+        {
+            .hwConnect  = adcHwConnect1,
+            .spiConnect = adcSpiConnect1,
+            .enable =
+                {
+                    true,
+                    true,
+                    true,
+                    true,
+                },
+            .input =
+                {
+                    ADS131M0xReg::INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS,
+                    ADS131M0xReg::INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS,
+                    ADS131M0xReg::INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS,
+                    ADS131M0xReg::INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS,
+                },
+            .pga =
+                {
+                    // NOTE - on this hardware revision, DIRECT gain
+                    // should be within 1x-4x to be within datasheet max allowed V requirements
+                    ADS131M0xReg::CHANNEL_PGA_32, // DIRECT, bottom connector
+                    ADS131M0xReg::CHANNEL_PGA_32, // OP AMP, bottom connector
+                    ADS131M0xReg::CHANNEL_PGA_32, // DIRECT, top connector
+                    ADS131M0xReg::CHANNEL_PGA_32, // OP AMP, top connector
+                },
+            .powerMode = ADS131M0xReg::POWER_MODE_HIGH_RESOLUTION,
+            .osr       = ADS131M0xReg::OSR_4096,
+        },
+};
+
+// V7 Pro hardware
+constexpr K3BoardCfg<4> boardv700_Pro{
+    .name = "v700P",
+    .temperatureSensor =
+        {
+            .i2c =
+                {
+                    .masterSdaIo = GPIO_NUM_10,
+                    .masterSclIo = GPIO_NUM_9,
+                },
+            .TMP118SubType = 'A',
+        },
+    .factoryReset = resetNotConnected,
+    .adc =
+        {
+            // TODO SPI pins are now also different
+            .hwConnect  = adcHwConnect2,
+            .spiConnect = adcSpiConnect2,
+            .enable =
+                {
+                    true,
+                    true,
+                    true,
+                    true,
+                },
+            .input =
+                {
+                    ADS131M0xReg::INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS,
+                    ADS131M0xReg::INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS,
+                    ADS131M0xReg::INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS,
+                    ADS131M0xReg::INPUT_CHANNEL_MUX_DEFAULT_INPUT_PINS,
+                },
+            .pga =
+                {
+                    // NOTE - on this hardware revision, DIRECT gain
+                    // should be within 1x-4x to be within datasheet max allowed V
+                    // requirements
+                    ADS131M0xReg::CHANNEL_PGA_1,
+                    ADS131M0xReg::CHANNEL_PGA_1,
+                    ADS131M0xReg::CHANNEL_PGA_1,
+                    ADS131M0xReg::CHANNEL_PGA_1,
+                },
+            .powerMode = ADS131M0xReg::POWER_MODE_HIGH_RESOLUTION,
+            .osr       = ADS131M0xReg::OSR_4096,
+        },
+};
+
 #if CONFIG_DYNAMITE_HW_REV_V3
 constexpr auto boardConfig{boardv300};
 #elif CONFIG_DYNAMITE_HW_REV_V4
@@ -311,6 +413,10 @@ constexpr auto boardConfig{boardv500};
 constexpr auto boardConfig{boardv600_lite};
 #elif CONFIG_DYNAMITE_HW_REV_V6_PRO
 constexpr auto boardConfig{boardv600_Pro};
+#elif CONFIG_DYNAMITE_HW_REV_V7_LITE
+constexpr auto boardConfig{boardv700_lite};
+#elif CONFIG_DYNAMITE_HW_REV_V7_PRO
+constexpr auto boardConfig{boardv700_Pro};
 #else
 #error No board configuration selected.
 #endif
