@@ -3,6 +3,6 @@
 
 #include <stdint.h>
 
-void setupI2C(int core);
+bool setupI2C(int core);
 
 #endif // _I2C_PROC_h

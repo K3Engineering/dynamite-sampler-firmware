@@ -115,15 +115,30 @@ static void IRAM_ATTR taskAdcReadAndBuffer(void *) {
 	vTaskDelete(NULL);
 }
 
-static void configureAdc() {
+static bool configureAdc() {
 	static_assert(boardConfig.adc.NCHAN == adc.NUM_CHANNELS);
 	for (uint8_t chan = 0; chan < adc.NUM_CHANNELS; ++chan) {
-		adc.setChannelEnable(chan, boardConfig.adc.enable[chan]);
-		adc.setChannelInputSelection(chan, boardConfig.adc.input[chan]);
-		adc.setChannelPGA(chan, boardConfig.adc.pga[chan]);
+		if (!adc.setChannelEnable(chan, boardConfig.adc.enable[chan])) {
+			ESP_LOGE(TAG, "setChannelEnable ch%u failed", chan);
+			return false;
+		}
+		if (!adc.setChannelInputSelection(chan, boardConfig.adc.input[chan])) {
+			ESP_LOGE(TAG, "setChannelInputSelection ch%u failed", chan);
+			return false;
+		}
+		if (!adc.setChannelPGA(chan, boardConfig.adc.pga[chan])) {
+			ESP_LOGE(TAG, "setChannelPGA ch%u failed", chan);
+			return false;
+		}
 	}
-	adc.setPowerMode(boardConfig.adc.powerMode);
-	adc.setOsr(boardConfig.adc.osr);
+	if (!adc.setPowerMode(boardConfig.adc.powerMode)) {
+		ESP_LOGE(TAG, "setPowerMode failed");
+		return false;
+	}
+	if (!adc.setOsr(boardConfig.adc.osr)) {
+		ESP_LOGE(TAG, "setOsr failed");
+		return false;
+	}
 
 	savedConfig = {
 	    .id     = adc.readID(),
@@ -133,9 +148,16 @@ static void configureAdc() {
 	    .pga    = adc.readPGA(),
 	};
 	logADS131M0xConfig(&savedConfig);
+	return true;
 }
 
-static void taskSetupAdc(void *setupDone) {
+struct SetupResult {
+	volatile bool done;
+	volatile bool ok;
+};
+
+static void taskSetupAdc(void *arg) {
+	SetupResult *result = (SetupResult *)arg;
 	ESP_LOGI(TAG, "setting up adc on core: %u", esp_cpu_get_core_id());
 	// TODO figure out if you need to setup wake from sleep for gpio
 	gpio_set_direction(PIN_DEBUG_TOP, GPIO_MODE_OUTPUT);
@@ -145,21 +167,27 @@ static void taskSetupAdc(void *setupDone) {
 	         boardConfig.adc.hwConnect.reset, SPI3_HOST, boardConfig.adc.spiConnect.clock,
 	         boardConfig.adc.spiConnect.miso, boardConfig.adc.spiConnect.mosi);
 
-	if (adc.resetAdcHw()) {
-		configureAdc();
-		*(volatile bool *)setupDone = true;
-	} else {
+	result->ok = adc.resetAdcHw() && configureAdc();
+	if (!result->ok) {
+		ESP_LOGE(TAG, "ADC setup failed (CS=%d DRDY=%d RESET=%d CLK=%d MISO=%d MOSI=%d)",
+		         boardConfig.adc.hwConnect.cs, boardConfig.adc.hwConnect.drdy,
+		         boardConfig.adc.hwConnect.reset, boardConfig.adc.spiConnect.clock,
+		         boardConfig.adc.spiConnect.miso, boardConfig.adc.spiConnect.mosi);
 		startupDiagnosticIsOk = false;
-		// TODO: review init errors handling
 	}
+	result->done = true;
 	vTaskDelete(NULL);
 }
 
-void setupAdc(int core) {
-	volatile bool done = false;
-	xTaskCreatePinnedToCore(taskSetupAdc, "task_ADC_setup", 1024 * 5, (void *)&done, 1, NULL, core);
-	while (!done)
+bool setupAdc(int core) {
+	SetupResult result = {.done = false, .ok = false};
+	xTaskCreatePinnedToCore(taskSetupAdc, "task_ADC_setup", 1024 * 5, (void *)&result, 1, NULL,
+	                        core);
+	while (!result.done)
 		vTaskDelay(10);
+	if (!result.ok) {
+		return false;
+	}
 
 	// TODO figure out the memory stack required
 	TaskHandle_t adcReadTaskHandle = 0;
@@ -168,4 +196,5 @@ void setupAdc(int core) {
 	                        &adcReadTaskHandle, core);
 	assert(adcReadTaskHandle);
 	adc.setWakeupTask(adcReadTaskHandle, AdcFeedNetworkPacket::NUM_SAMPLES);
+	return true;
 }
