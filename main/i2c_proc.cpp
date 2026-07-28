@@ -25,7 +25,6 @@ class TMP118 {
 	static constexpr uint16_t TMP118B_I2C_ADDR = 0x49;
 	static constexpr uint16_t TMP118C_I2C_ADDR = 0x4A;
 	static constexpr uint16_t TMP118D_I2C_ADDR = 0x4B;
-	static constexpr uint16_t INVALID_I2C_ADDR = 0xFFFF;
 
 	static constexpr uint8_t CONFIG_REG      = 0x01;
 	static constexpr uint8_t TEMP_RESULT_REG = 0x00;
@@ -53,6 +52,7 @@ class TMP118 {
 	};
 #pragma pack(pop)
   public:
+	static constexpr uint16_t INVALID_I2C_ADDR = 0xFFFF;
 	static constexpr uint16_t i2cAddr(char sensorType) {
 		if (sensorType == 'A') {
 			return TMP118A_I2C_ADDR;
@@ -169,6 +169,9 @@ static void taskSetupI2C(void *setupDone) {
 }
 
 void setupI2C(int core) {
+	static_assert(!(boardConfig.temperatureSensor.i2c.connected() &&
+	                (TMP118::i2cAddr(boardConfig.temperatureSensor.TMP118SubType) ==
+	                 TMP118::INVALID_I2C_ADDR)));
 	if constexpr (boardConfig.temperatureSensor.i2c.connected()) {
 		volatile bool done = false;
 		xTaskCreatePinnedToCore(taskSetupI2C, "task_I2C_setup", 1024 * 2, (void *)&done, 1, NULL,
