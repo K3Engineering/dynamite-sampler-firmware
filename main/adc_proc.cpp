@@ -135,6 +135,11 @@ static void configureAdc() {
 }
 
 static void taskSetupAdc(void *setupDone) {
+	ESP_LOGI(TAG, "Board %s, ADC[CS=%d DRDY=%d RESET=%d CLK=%d MISO=%d MOSI=%d]", boardConfig.name,
+	         boardConfig.adc.hwConnect.cs, boardConfig.adc.hwConnect.drdy,
+	         boardConfig.adc.hwConnect.reset, boardConfig.adc.spiConnect.clock,
+	         boardConfig.adc.spiConnect.miso, boardConfig.adc.spiConnect.mosi);
+
 	ESP_LOGI(TAG, "setting up adc on core: %u", esp_cpu_get_core_id());
 
 	adc.init(boardConfig.adc.hwConnect.cs, boardConfig.adc.hwConnect.drdy,
