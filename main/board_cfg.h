@@ -163,12 +163,12 @@ constexpr K3BoardCfg<4> boardv400{
                 },
             .pga =
                 {
-                    // NOTE - on this hardware revision, DIRECT gain
-                    // should be within 1x-4x to be within datasheet max allowed V requirements
-                    ADS131M0xReg::CHANNEL_PGA_4, // DIRECT, bottom connector
-                    ADS131M0xReg::CHANNEL_PGA_4, // OP AMP, bottom connector
-                    ADS131M0xReg::CHANNEL_PGA_4, // DIRECT, top connector
-                    ADS131M0xReg::CHANNEL_PGA_4, // OP AMP, top connector
+                    // NOTE - gain should be at 1x-4x to be within
+                    // datasheet max allowed V requirements
+                    ADS131M0xReg::CHANNEL_PGA_4,
+                    ADS131M0xReg::CHANNEL_PGA_4,
+                    ADS131M0xReg::CHANNEL_PGA_4,
+                    ADS131M0xReg::CHANNEL_PGA_4,
                 },
             .powerMode = ADS131M0xReg::POWER_MODE_HIGH_RESOLUTION,
             .osr       = ADS131M0xReg::OSR_4096,
@@ -204,8 +204,8 @@ constexpr K3BoardCfg<4> boardv500{
                 },
             .pga =
                 {
-                    // NOTE - on this hardware revision, DIRECT gain
-                    // should be within 1x-4x to be within datasheet max allowed V requirements
+                    // NOTE - gain should be at 1x-4x to be within
+                    // datasheet max allowed V requirements
                     ADS131M0xReg::CHANNEL_PGA_1, // DIRECT, bottom connector
                     ADS131M0xReg::CHANNEL_PGA_1, // OP AMP, bottom connector
                     ADS131M0xReg::CHANNEL_PGA_1, // DIRECT, top connector
@@ -245,12 +245,10 @@ constexpr K3BoardCfg<4> boardv600_lite{
                 },
             .pga =
                 {
-                    // NOTE - on this hardware revision, DIRECT gain
-                    // should be within 1x-4x to be within datasheet max allowed V requirements
-                    ADS131M0xReg::CHANNEL_PGA_32, // DIRECT, bottom connector
-                    ADS131M0xReg::CHANNEL_PGA_32, // OP AMP, bottom connector
-                    ADS131M0xReg::CHANNEL_PGA_32, // DIRECT, top connector
-                    ADS131M0xReg::CHANNEL_PGA_32, // OP AMP, top connector
+                    ADS131M0xReg::CHANNEL_PGA_32,
+                    ADS131M0xReg::CHANNEL_PGA_32,
+                    ADS131M0xReg::CHANNEL_PGA_32,
+                    ADS131M0xReg::CHANNEL_PGA_32,
                 },
             .powerMode = ADS131M0xReg::POWER_MODE_HIGH_RESOLUTION,
             .osr       = ADS131M0xReg::OSR_4096,
@@ -298,9 +296,8 @@ constexpr K3BoardCfg<8> boardv600_Pro{
                 },
             .pga =
                 {
-                    // NOTE - on this hardware revision, DIRECT gain
-                    // should be within 1x-4x to be within datasheet max allowed V
-                    // requirements
+                    // NOTE - gain should be at 1x-4x to be within
+                    // datasheet max allowed V requirements
                     ADS131M0xReg::CHANNEL_PGA_1,
                     ADS131M0xReg::CHANNEL_PGA_1,
                     ADS131M0xReg::CHANNEL_PGA_1,
@@ -344,12 +341,10 @@ constexpr K3BoardCfg<4> boardv700_lite{
                 },
             .pga =
                 {
-                    // NOTE - on this hardware revision, DIRECT gain
-                    // should be within 1x-4x to be within datasheet max allowed V requirements
-                    ADS131M0xReg::CHANNEL_PGA_32, // DIRECT, bottom connector
-                    ADS131M0xReg::CHANNEL_PGA_32, // OP AMP, bottom connector
-                    ADS131M0xReg::CHANNEL_PGA_32, // DIRECT, top connector
-                    ADS131M0xReg::CHANNEL_PGA_32, // OP AMP, top connector
+                    ADS131M0xReg::CHANNEL_PGA_32,
+                    ADS131M0xReg::CHANNEL_PGA_32,
+                    ADS131M0xReg::CHANNEL_PGA_32,
+                    ADS131M0xReg::CHANNEL_PGA_32,
                 },
             .powerMode = ADS131M0xReg::POWER_MODE_HIGH_RESOLUTION,
             .osr       = ADS131M0xReg::OSR_4096,
@@ -390,9 +385,8 @@ constexpr K3BoardCfg<4> boardv700_Pro{
                 },
             .pga =
                 {
-                    // NOTE - on this hardware revision, DIRECT gain
-                    // should be within 1x-4x to be within datasheet max allowed V
-                    // requirements
+                    // NOTE - gain should be at 1x-4x to be within
+                    // datasheet max allowed V requirements
                     ADS131M0xReg::CHANNEL_PGA_1,
                     ADS131M0xReg::CHANNEL_PGA_1,
                     ADS131M0xReg::CHANNEL_PGA_1,
