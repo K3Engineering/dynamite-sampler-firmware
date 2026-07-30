@@ -5,7 +5,7 @@
 // When enabled in menuconfig (Dynamite Sampler hardware configuration ->
 // "Continuous BLE TX test on a fixed channel"), the device does not advertise.
 // Instead the BLE controller transmits test packets continuously on a single
-// fixed channel (no frequency hopping) at maximum TX power.
+// fixed channel (no frequency hopping) at the configured TX power.
 //
 // Returns true when the RF test is active and normal BLE operation
 // (advertising) should not be started.

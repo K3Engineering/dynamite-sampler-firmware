@@ -51,6 +51,25 @@ constexpr uint8_t txPhy = 0x03;
 constexpr uint8_t txPhy = 0x04;
 #endif
 
+// TX power in dBm. ESP32-S3 supports -12 to +9 dBm in 3 dB steps.
+#if CONFIG_DYNAMITE_RF_TX_TEST_POWER_P9
+constexpr int8_t txPowerDbm = 9;
+#elif CONFIG_DYNAMITE_RF_TX_TEST_POWER_P6
+constexpr int8_t txPowerDbm = 6;
+#elif CONFIG_DYNAMITE_RF_TX_TEST_POWER_P3
+constexpr int8_t txPowerDbm = 3;
+#elif CONFIG_DYNAMITE_RF_TX_TEST_POWER_N0
+constexpr int8_t txPowerDbm = 0;
+#elif CONFIG_DYNAMITE_RF_TX_TEST_POWER_N3
+constexpr int8_t txPowerDbm = -3;
+#elif CONFIG_DYNAMITE_RF_TX_TEST_POWER_N6
+constexpr int8_t txPowerDbm = -6;
+#elif CONFIG_DYNAMITE_RF_TX_TEST_POWER_N9
+constexpr int8_t txPowerDbm = -9;
+#elif CONFIG_DYNAMITE_RF_TX_TEST_POWER_N12
+constexpr int8_t txPowerDbm = -12;
+#endif
+
 static const char *dtmEvtName(uint8_t evt) {
 	switch (evt) {
 	case BLE_GAP_DTM_TX_START_EVT: return "TX_START";
@@ -74,8 +93,7 @@ static int onDtmGapEvent(ble_gap_event *event, void *) {
 bool rfTestStartIfEnabled() {
 #if CONFIG_DYNAMITE_RF_TX_TEST
 	NimBLEDevice::setCustomGapHandler(onDtmGapEvent);
-	// Max out the TX power for RF measurements.
-	if (!NimBLEDevice::setPower(9)) {
+	if (!NimBLEDevice::setPower(txPowerDbm)) {
 		ESP_LOGE(TAG, "Set TX power failed");
 	}
 	// HCI LE Enhanced Transmitter Test: transmit continuously on one channel.
@@ -83,8 +101,8 @@ bool rfTestStartIfEnabled() {
 		ESP_LOGE(TAG, "DTM TX test start failed, rc=%d", rc);
 		return false;
 	}
-	ESP_LOGI(TAG, "DTM TX test: ch %u (%u MHz), %uB payload type %u, phy %u", txChannel,
-	         2402 + 2 * txChannel, testDataLen, payloadType, txPhy);
+	ESP_LOGI(TAG, "DTM TX test: ch %u (%u MHz), %d dBm, %uB payload type %u, phy %u",
+	         txChannel, 2402 + 2 * txChannel, txPowerDbm, testDataLen, payloadType, txPhy);
 	return true;
 #else
 	return false;
