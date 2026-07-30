@@ -31,5 +31,62 @@ menu "Dynamite Sampler hardware configuration"
         default n
         help
             Affects performance.
-            
+
+    config DYNAMITE_RF_TX_TEST
+        bool "Continuous BLE TX test on a fixed channel (DTM)"
+        default n
+        help
+            For RF debugging (e.g. spectrum analyzer / resonance hunting).
+            On boot the device does NOT advertise; instead the BLE controller
+            continuously transmits test packets on a single fixed channel
+            (no frequency hopping) at maximum TX power.
+            Normal BLE connections are not possible in this mode.
+            Disable this option and reflash to restore normal operation.
+
+    if DYNAMITE_RF_TX_TEST
+
+    config DYNAMITE_RF_TX_TEST_CHANNEL
+        int "TX channel index"
+        default 19
+        range 0 39
+        help
+            Fixed BLE channel to hammer. Carrier frequency is
+            2402 + 2*channel MHz: 0 = 2402 MHz, 19 = 2440 MHz, 39 = 2480 MHz.
+
+    choice DYNAMITE_RF_TX_TEST_PHY
+        prompt "TX PHY"
+        default DYNAMITE_RF_TX_TEST_PHY_1M
+        config DYNAMITE_RF_TX_TEST_PHY_1M
+            bool "LE 1M"
+        config DYNAMITE_RF_TX_TEST_PHY_2M
+            bool "LE 2M"
+        config DYNAMITE_RF_TX_TEST_PHY_CODED_S8
+            bool "LE Coded S=8"
+        config DYNAMITE_RF_TX_TEST_PHY_CODED_S2
+            bool "LE Coded S=2"
+    endchoice
+
+    choice DYNAMITE_RF_TX_TEST_PAYLOAD
+        prompt "TX packet payload pattern"
+        default DYNAMITE_RF_TX_TEST_PAYLOAD_PRBS9
+        config DYNAMITE_RF_TX_TEST_PAYLOAD_PRBS9
+            bool "PRBS9 (standard modulated reference)"
+        config DYNAMITE_RF_TX_TEST_PAYLOAD_F0
+            bool "0xF0 repeated"
+        config DYNAMITE_RF_TX_TEST_PAYLOAD_AA
+            bool "0xAA repeated"
+        config DYNAMITE_RF_TX_TEST_PAYLOAD_PRBS15
+            bool "PRBS15"
+        config DYNAMITE_RF_TX_TEST_PAYLOAD_FF
+            bool "0xFF repeated (constant max deviation)"
+        config DYNAMITE_RF_TX_TEST_PAYLOAD_00
+            bool "0x00 repeated (constant carrier)"
+        config DYNAMITE_RF_TX_TEST_PAYLOAD_0F
+            bool "0x0F repeated"
+        config DYNAMITE_RF_TX_TEST_PAYLOAD_55
+            bool "0x55 repeated"
+    endchoice
+
+    endif # DYNAMITE_RF_TX_TEST
+
 endmenu
