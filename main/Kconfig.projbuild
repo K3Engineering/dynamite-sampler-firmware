@@ -56,8 +56,18 @@ menu "Dynamite Sampler hardware configuration"
     choice DYNAMITE_RF_TX_TEST_POWER
         prompt "TX power"
         default DYNAMITE_RF_TX_TEST_POWER_P9
+        help
+            ESP32-S3 supports -24 to +20 dBm in 3 dB steps.
+        config DYNAMITE_RF_TX_TEST_POWER_P20
+            bool "+20 dBm (max)"
+        config DYNAMITE_RF_TX_TEST_POWER_P18
+            bool "+18 dBm"
+        config DYNAMITE_RF_TX_TEST_POWER_P15
+            bool "+15 dBm"
+        config DYNAMITE_RF_TX_TEST_POWER_P12
+            bool "+12 dBm"
         config DYNAMITE_RF_TX_TEST_POWER_P9
-            bool "+9 dBm (max)"
+            bool "+9 dBm"
         config DYNAMITE_RF_TX_TEST_POWER_P6
             bool "+6 dBm"
         config DYNAMITE_RF_TX_TEST_POWER_P3
@@ -71,7 +81,15 @@ menu "Dynamite Sampler hardware configuration"
         config DYNAMITE_RF_TX_TEST_POWER_N9
             bool "-9 dBm"
         config DYNAMITE_RF_TX_TEST_POWER_N12
-            bool "-12 dBm (min)"
+            bool "-12 dBm"
+        config DYNAMITE_RF_TX_TEST_POWER_N15
+            bool "-15 dBm"
+        config DYNAMITE_RF_TX_TEST_POWER_N18
+            bool "-18 dBm"
+        config DYNAMITE_RF_TX_TEST_POWER_N21
+            bool "-21 dBm"
+        config DYNAMITE_RF_TX_TEST_POWER_N24
+            bool "-24 dBm (min)"
     endchoice
 
     choice DYNAMITE_RF_TX_TEST_PHY

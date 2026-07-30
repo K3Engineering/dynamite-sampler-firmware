@@ -51,8 +51,16 @@ constexpr uint8_t txPhy = 0x03;
 constexpr uint8_t txPhy = 0x04;
 #endif
 
-// TX power in dBm. ESP32-S3 supports -12 to +9 dBm in 3 dB steps.
-#if CONFIG_DYNAMITE_RF_TX_TEST_POWER_P9
+// TX power in dBm. ESP32-S3 supports -24 to +20 dBm in 3 dB steps.
+#if CONFIG_DYNAMITE_RF_TX_TEST_POWER_P20
+constexpr int8_t txPowerDbm = 20;
+#elif CONFIG_DYNAMITE_RF_TX_TEST_POWER_P18
+constexpr int8_t txPowerDbm = 18;
+#elif CONFIG_DYNAMITE_RF_TX_TEST_POWER_P15
+constexpr int8_t txPowerDbm = 15;
+#elif CONFIG_DYNAMITE_RF_TX_TEST_POWER_P12
+constexpr int8_t txPowerDbm = 12;
+#elif CONFIG_DYNAMITE_RF_TX_TEST_POWER_P9
 constexpr int8_t txPowerDbm = 9;
 #elif CONFIG_DYNAMITE_RF_TX_TEST_POWER_P6
 constexpr int8_t txPowerDbm = 6;
@@ -68,6 +76,14 @@ constexpr int8_t txPowerDbm = -6;
 constexpr int8_t txPowerDbm = -9;
 #elif CONFIG_DYNAMITE_RF_TX_TEST_POWER_N12
 constexpr int8_t txPowerDbm = -12;
+#elif CONFIG_DYNAMITE_RF_TX_TEST_POWER_N15
+constexpr int8_t txPowerDbm = -15;
+#elif CONFIG_DYNAMITE_RF_TX_TEST_POWER_N18
+constexpr int8_t txPowerDbm = -18;
+#elif CONFIG_DYNAMITE_RF_TX_TEST_POWER_N21
+constexpr int8_t txPowerDbm = -21;
+#elif CONFIG_DYNAMITE_RF_TX_TEST_POWER_N24
+constexpr int8_t txPowerDbm = -24;
 #endif
 
 static const char *dtmEvtName(uint8_t evt) {
