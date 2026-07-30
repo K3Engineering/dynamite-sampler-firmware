@@ -5,6 +5,7 @@ set(srclist
     "ble_proc.cpp" 
     "i2c_proc.cpp" 
     "user_kvs.cpp"
+    "rf_test.cpp"
     "runtime_stats.cpp" 
     "main.cpp" 
 )
