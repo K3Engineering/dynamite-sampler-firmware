@@ -232,8 +232,8 @@ static void taskSetupBle(void *setupDone) {
 	snprintf(bleName, sizeof(bleName), "DS %02x%02x%02x%02x%02x%02x", mac[5], mac[4], mac[3],
 	         mac[2], mac[1], mac[0]);
 	NimBLEDevice::init(bleName);
-
 	NimBLEDevice::setMTU(BLE_ATT_MTU_MAX);
+	// ble_gap_set_prefered_default_le_phy(BLE_GAP_LE_PHY_2M_MASK, BLE_GAP_LE_PHY_2M_MASK);
 
 	// Create the BLE Server
 	NimBLEServer *bleServer = NimBLEDevice::createServer();
