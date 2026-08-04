@@ -125,11 +125,11 @@ struct AdcConfigNetworkData {
 // | DEL | KEY              | NONE          | Delete the Key-Value Pair.
 //                                              Look for the status to see if successful.
 
-// | Folder    | Notes                              | Example              |
-// |-----------|------------------------------------|----------------------|
-// | S         | Settings, factory reset-able       | Device name          |
-// | D         | Device information, non reset-able | Device calibration   |
-// | E         | Extra information, non reset-able  | Loadcell calibration |
+// | Folder    | Notes                               | Example              |
+// |-----------|-------------------------------------|----------------------|
+// | S         | Settings, factory reset-able        | Device name          |
+// | F         | Factory information, non reset-able | Device calibration   |
+// | U         | User information, non reset-able    | Loadcell calibration |
 
 constexpr size_t KVS_CMD_LEN = 3;
 

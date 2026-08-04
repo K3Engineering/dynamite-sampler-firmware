@@ -40,7 +40,7 @@ constexpr size_t splitKeyVal(const char *cmd) {
 	return 0;
 }
 
-static bool writeDeviceKeyVal(const char *partition, const char *nsp, const char *cmd) {
+static bool writeKeyVal(const char *partition, const char *nsp, const char *cmd) {
 	// "k...=v..." key=value, null terminated
 	size_t delimiterIdx = splitKeyVal(cmd);
 	if (delimiterIdx == 0) {
@@ -61,8 +61,8 @@ static bool writeDeviceKeyVal(const char *partition, const char *nsp, const char
 	return ESP_OK == err;
 }
 
-static bool readDeviceKey(const char *partition, const char *nsp, const char *cmd, char *reply,
-                          size_t replySz) {
+static bool readKey(const char *partition, const char *nsp, const char *cmd, char *reply,
+                    size_t replySz) {
 	// "k..." key, null terminated
 	if (strlen(cmd) > USER_KVS_MAX_KEY_LEN) {
 		return false;
@@ -76,7 +76,7 @@ static bool readDeviceKey(const char *partition, const char *nsp, const char *cm
 	return ESP_OK == err;
 }
 
-static bool deleteDeviceKey(const char *partition, const char *nsp, const char *cmd) {
+static bool deleteKey(const char *partition, const char *nsp, const char *cmd) {
 	// "k..." key, null terminated
 	if (strlen(cmd) > USER_KVS_MAX_KEY_LEN) {
 		return false;
@@ -93,8 +93,8 @@ static bool deleteDeviceKey(const char *partition, const char *nsp, const char *
 	return ESP_OK == err;
 }
 
-static bool readDeviceByIdx(const char *partition, const char *nsp, const char *cmd, char *reply,
-                            size_t replySz) {
+static bool readByIdx(const char *partition, const char *nsp, const char *cmd, char *reply,
+                      size_t replySz) {
 	// "N..." number in hex, null terminated
 	if (replySz <= USER_KVS_MAX_KEY_LEN + 10) {
 		return false;
@@ -190,16 +190,16 @@ bool processKvsCommand(const char *rq, size_t rqLen, char *reply, size_t replySz
 		return false;
 	}
 	if (0 == memcmp(rq, CmdKvsSet, KVS_CMD_LEN)) {
-		return writeDeviceKeyVal(part, nsp, rq + dataOffset);
+		return writeKeyVal(part, nsp, rq + dataOffset);
 	}
 	if (0 == memcmp(rq, CmdKvsGet, KVS_CMD_LEN)) {
-		return readDeviceKey(part, nsp, rq + dataOffset, reply, replySz);
+		return readKey(part, nsp, rq + dataOffset, reply, replySz);
 	}
 	if (0 == memcmp(rq, CmdKvsDelete, KVS_CMD_LEN)) {
-		return deleteDeviceKey(part, nsp, rq + dataOffset);
+		return deleteKey(part, nsp, rq + dataOffset);
 	}
 	if (0 == memcmp(rq, CmdKvsGetByIdx, KVS_CMD_LEN)) {
-		return readDeviceByIdx(part, nsp, rq + dataOffset, reply, replySz);
+		return readByIdx(part, nsp, rq + dataOffset, reply, replySz);
 	}
 	return false;
 }
