@@ -138,8 +138,8 @@ constexpr char CmdKvsGet[KVS_CMD_LEN]{'G', 'E', 'T'};
 constexpr char CmdKvsDelete[KVS_CMD_LEN]{'D', 'E', 'L'};
 constexpr char CmdKvsGetByIdx[KVS_CMD_LEN]{'I', 'D', 'X'};
 
-constexpr char UserKvsFolderDevice   = 'D';
-constexpr char UserKvsFolderExtra    = 'E';
+constexpr char UserKvsFolderFactory  = 'F';
+constexpr char UserKvsFolderUser     = 'U';
 constexpr char UserKvsFolderSettings = 'S';
 
 constexpr size_t USER_KVS_NETWORK_FRAME_LENGTH = 240;
