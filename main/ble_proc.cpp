@@ -93,6 +93,13 @@ static void setupDeviceInfo(NimBLEServer *server) {
 		chr->setValue(DEVICE_MANUFACTURER_NAME);
 		ESP_LOGI(TAG, "Set Device manufacturer name to: '%s'", DEVICE_MANUFACTURER_NAME);
 	}
+	{ // Model number (marketing name)
+		NimBLECharacteristic *chr = srvDeviceInfo->createCharacteristic(
+		    DEVICE_MODEL_NUMBER_CHR_UUID16.value, NIMBLE_PROPERTY::READ,
+		    sizeof(boardConfig.marketingName));
+		chr->setValue(boardConfig.marketingName);
+		ESP_LOGI(TAG, "Set Device model number to: '%s'", boardConfig.marketingName);
+	}
 	{ // Serial number (eFuse MAC)
 		char hwId[HW_ID_LEN + 1]{0};
 		hwIdStr(hwId);
