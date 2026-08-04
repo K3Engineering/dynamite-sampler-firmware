@@ -108,6 +108,12 @@ static void setupDeviceInfo(NimBLEServer *server) {
 		chr->setValue((uint8_t *)hwId, HW_ID_LEN);
 		ESP_LOGI(TAG, "Set Device serial number to: '%s'", hwId);
 	}
+	{ // Hardware revision (board model)
+		NimBLECharacteristic *chr = srvDeviceInfo->createCharacteristic(
+		    DEVICE_HARDWARE_REV_CHR_UUID16.value, NIMBLE_PROPERTY::READ, sizeof(boardConfig.name));
+		chr->setValue(boardConfig.name);
+		ESP_LOGI(TAG, "Set Device hardware revision to: '%s'", boardConfig.name);
+	}
 	{ // Firmware version
 		char s[sizeof(GIT_DESCRIBE) + sizeof(boardConfig.name) + 1];
 		strcpy(s, boardConfig.name);
