@@ -13,11 +13,11 @@ constexpr char TAG[] = "KVS";
 constexpr char DYNA_PERSIST_PARTITION[] = "DynaPersistent";
 static_assert(sizeof(DYNA_PERSIST_PARTITION) <= NVS_PART_NAME_MAX_SIZE);
 
-constexpr char DEVICE_NSPACE[]   = "Device";
-constexpr char EXTRA_NSPACE[]    = "Extra";
+constexpr char FACTORY_NSPACE[]  = "Factory";
+constexpr char USER_NSPACE[]     = "User";
 constexpr char SETTINGS_NSPACE[] = "Settings";
-static_assert(sizeof(DEVICE_NSPACE) <= NVS_NS_NAME_MAX_SIZE);
-static_assert(sizeof(EXTRA_NSPACE) <= NVS_NS_NAME_MAX_SIZE);
+static_assert(sizeof(FACTORY_NSPACE) <= NVS_NS_NAME_MAX_SIZE);
+static_assert(sizeof(USER_NSPACE) <= NVS_NS_NAME_MAX_SIZE);
 static_assert(sizeof(SETTINGS_NSPACE) <= NVS_NS_NAME_MAX_SIZE);
 
 constexpr size_t USER_KVS_MAX_KEY_LEN = 15; // does not incude terminating 0
@@ -40,7 +40,7 @@ constexpr size_t splitKeyVal(const char *cmd) {
 	return 0;
 }
 
-static bool writeDeviceKeyVal(const char *nsp, const char *cmd) {
+static bool writeKeyVal(const char *partition, const char *nsp, const char *cmd) {
 	// "k...=v..." key=value, null terminated
 	size_t delimiterIdx = splitKeyVal(cmd);
 	if (delimiterIdx == 0) {
@@ -50,7 +50,7 @@ static bool writeDeviceKeyVal(const char *nsp, const char *cmd) {
 	memcpy(key, cmd, delimiterIdx);
 	const char *val = cmd + (delimiterIdx + 1);
 	nvs_handle_t handle;
-	if (ESP_OK != nvs_open_from_partition(DYNA_PERSIST_PARTITION, nsp, NVS_READWRITE, &handle)) {
+	if (ESP_OK != nvs_open_from_partition(partition, nsp, NVS_READWRITE, &handle)) {
 		return false;
 	}
 	esp_err_t err = nvs_set_str(handle, key, val);
@@ -61,13 +61,14 @@ static bool writeDeviceKeyVal(const char *nsp, const char *cmd) {
 	return ESP_OK == err;
 }
 
-static bool readDeviceKey(const char *nsp, const char *cmd, char *reply, size_t replySz) {
+static bool readKey(const char *partition, const char *nsp, const char *cmd, char *reply,
+                    size_t replySz) {
 	// "k..." key, null terminated
 	if (strlen(cmd) > USER_KVS_MAX_KEY_LEN) {
 		return false;
 	}
 	nvs_handle_t handle;
-	if (ESP_OK != nvs_open_from_partition(DYNA_PERSIST_PARTITION, nsp, NVS_READONLY, &handle)) {
+	if (ESP_OK != nvs_open_from_partition(partition, nsp, NVS_READONLY, &handle)) {
 		return false;
 	}
 	esp_err_t err = nvs_get_str(handle, cmd, reply, &replySz);
@@ -75,13 +76,13 @@ static bool readDeviceKey(const char *nsp, const char *cmd, char *reply, size_t 
 	return ESP_OK == err;
 }
 
-static bool deleteDeviceKey(const char *nsp, const char *cmd) {
+static bool deleteKey(const char *partition, const char *nsp, const char *cmd) {
 	// "k..." key, null terminated
 	if (strlen(cmd) > USER_KVS_MAX_KEY_LEN) {
 		return false;
 	}
 	nvs_handle_t handle;
-	if (ESP_OK != nvs_open_from_partition(DYNA_PERSIST_PARTITION, nsp, NVS_READWRITE, &handle)) {
+	if (ESP_OK != nvs_open_from_partition(partition, nsp, NVS_READWRITE, &handle)) {
 		return false;
 	}
 	esp_err_t err = nvs_erase_key(handle, cmd);
@@ -92,14 +93,15 @@ static bool deleteDeviceKey(const char *nsp, const char *cmd) {
 	return ESP_OK == err;
 }
 
-static bool readDeviceByIdx(const char *nsp, const char *cmd, char *reply, size_t replySz) {
+static bool readByIdx(const char *partition, const char *nsp, const char *cmd, char *reply,
+                      size_t replySz) {
 	// "N..." number in hex, null terminated
 	if (replySz <= USER_KVS_MAX_KEY_LEN + 10) {
 		return false;
 	}
 	const size_t num    = strtoul(cmd, nullptr, 16);
 	nvs_handle_t handle = 0;
-	if (ESP_OK != nvs_open_from_partition(DYNA_PERSIST_PARTITION, nsp, NVS_READONLY, &handle)) {
+	if (ESP_OK != nvs_open_from_partition(partition, nsp, NVS_READONLY, &handle)) {
 		return false;
 	}
 	nvs_iterator_t it = 0;
@@ -124,7 +126,7 @@ static bool readDeviceByIdx(const char *nsp, const char *cmd, char *reply, size_
 /*
 static bool debugLog() {
     nvs_handle_t handle = 0;
-    if (ESP_OK != nvs_open_from_partition(DYNA_PERSIST_PARTITION, DEVICE_NSPACE,
+    if (ESP_OK != nvs_open_from_partition(DYNA_PERSIST_PARTITION, FACTORY_NSPACE,
                                           NVS_READONLY, &handle)) {
         return false;
     }
@@ -153,12 +155,25 @@ static bool debugLog() {
 
 constexpr const char *nameSpace(char folderCode) {
 	switch (folderCode) {
-	case UserKvsFolderDevice:
-		return DEVICE_NSPACE;
-	case UserKvsFolderExtra:
-		return EXTRA_NSPACE;
+	case UserKvsFolderFactory:
+		return FACTORY_NSPACE;
+	case UserKvsFolderUser:
+		return USER_NSPACE;
 	case UserKvsFolderSettings:
 		return SETTINGS_NSPACE;
+	default:
+		return nullptr;
+	}
+}
+
+constexpr const char *partitionName(char folderCode) {
+	switch (folderCode) {
+	case UserKvsFolderFactory:
+		[[fallthrough]];
+	case UserKvsFolderUser:
+		return DYNA_PERSIST_PARTITION;
+	case UserKvsFolderSettings:
+		return NVS_DEFAULT_PART_NAME;
 	default:
 		return nullptr;
 	}
@@ -169,21 +184,22 @@ bool processKvsCommand(const char *rq, size_t rqLen, char *reply, size_t replySz
 	if (rqLen < dataOffset) {
 		return false;
 	}
-	const char *nsp = nameSpace(rq[KVS_CMD_LEN]);
-	if (!nsp) {
+	const char *part = partitionName(rq[KVS_CMD_LEN]);
+	const char *nsp  = nameSpace(rq[KVS_CMD_LEN]);
+	if (!(part && nsp)) {
 		return false;
 	}
 	if (0 == memcmp(rq, CmdKvsSet, KVS_CMD_LEN)) {
-		return writeDeviceKeyVal(nsp, rq + dataOffset);
+		return writeKeyVal(part, nsp, rq + dataOffset);
 	}
 	if (0 == memcmp(rq, CmdKvsGet, KVS_CMD_LEN)) {
-		return readDeviceKey(nsp, rq + dataOffset, reply, replySz);
+		return readKey(part, nsp, rq + dataOffset, reply, replySz);
 	}
 	if (0 == memcmp(rq, CmdKvsDelete, KVS_CMD_LEN)) {
-		return deleteDeviceKey(nsp, rq + dataOffset);
+		return deleteKey(part, nsp, rq + dataOffset);
 	}
 	if (0 == memcmp(rq, CmdKvsGetByIdx, KVS_CMD_LEN)) {
-		return readDeviceByIdx(nsp, rq + dataOffset, reply, replySz);
+		return readByIdx(part, nsp, rq + dataOffset, reply, replySz);
 	}
 	return false;
 }

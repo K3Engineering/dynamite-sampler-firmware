@@ -125,11 +125,11 @@ struct AdcConfigNetworkData {
 // | DEL | KEY              | NONE          | Delete the Key-Value Pair.
 //                                              Look for the status to see if successful.
 
-// | Folder    | Notes                              | Example              |
-// |-----------|------------------------------------|----------------------|
-// | S         | Settings, factory reset-able       | Device name          |
-// | D         | Device information, non reset-able | Device calibration   |
-// | E         | Extra information, non reset-able  | Loadcell calibration |
+// | Folder    | Notes                               | Example              |
+// |-----------|-------------------------------------|----------------------|
+// | S         | Settings, factory reset-able        | Device name          |
+// | F         | Factory information, non reset-able | Device calibration   |
+// | U         | User information, non reset-able    | Loadcell calibration |
 
 constexpr size_t KVS_CMD_LEN = 3;
 
@@ -138,8 +138,8 @@ constexpr char CmdKvsGet[KVS_CMD_LEN]{'G', 'E', 'T'};
 constexpr char CmdKvsDelete[KVS_CMD_LEN]{'D', 'E', 'L'};
 constexpr char CmdKvsGetByIdx[KVS_CMD_LEN]{'I', 'D', 'X'};
 
-constexpr char UserKvsFolderDevice   = 'D';
-constexpr char UserKvsFolderExtra    = 'E';
+constexpr char UserKvsFolderFactory  = 'F';
+constexpr char UserKvsFolderUser     = 'U';
 constexpr char UserKvsFolderSettings = 'S';
 
 constexpr size_t USER_KVS_NETWORK_FRAME_LENGTH = 240;
