@@ -1,5 +1,6 @@
 #include <esp_log.h>
 #include <esp_mac.h>
+
 #include <freertos/FreeRTOS.h>
 #include <freertos/stream_buffer.h>
 
@@ -69,6 +70,19 @@ class TxPowerPublisherCallbacks : public NimBLECharacteristicCallbacks {
 	}
 };
 
+constexpr size_t HW_ID_LEN = 12; // NOT zero terminated
+
+static void hwIdStr(char out[HW_ID_LEN]) {
+	uint8_t mac[8];
+	esp_efuse_mac_get_default(mac);
+	const char hexChr[] = "0123456789ABCDEF";
+	for (size_t i = 0; i < 6; i++) {
+		uint8_t byte   = mac[i];
+		out[i * 2]     = hexChr[byte >> 4];
+		out[i * 2 + 1] = hexChr[byte & 0x0F];
+	}
+}
+
 // Set the BLE standardized device info
 static void setupDeviceInfo(NimBLEServer *server) {
 	NimBLEService *srvDeviceInfo = server->createService(DEVICE_INFO_SVC_UUID16.value);
@@ -78,6 +92,27 @@ static void setupDeviceInfo(NimBLEServer *server) {
 		    sizeof(DEVICE_MANUFACTURER_NAME));
 		chr->setValue(DEVICE_MANUFACTURER_NAME);
 		ESP_LOGI(TAG, "Set Device manufacturer name to: '%s'", DEVICE_MANUFACTURER_NAME);
+	}
+	{ // Model number (marketing name)
+		NimBLECharacteristic *chr = srvDeviceInfo->createCharacteristic(
+		    DEVICE_MODEL_NUMBER_CHR_UUID16.value, NIMBLE_PROPERTY::READ,
+		    sizeof(boardConfig.marketingName));
+		chr->setValue(boardConfig.marketingName);
+		ESP_LOGI(TAG, "Set Device model number to: '%s'", boardConfig.marketingName);
+	}
+	{ // Serial number (eFuse MAC)
+		char hwId[HW_ID_LEN + 1]{0};
+		hwIdStr(hwId);
+		NimBLECharacteristic *chr = srvDeviceInfo->createCharacteristic(
+		    DEVICE_SERIAL_NUMBER_CHR_UUID16.value, NIMBLE_PROPERTY::READ, HW_ID_LEN);
+		chr->setValue((uint8_t *)hwId, HW_ID_LEN);
+		ESP_LOGI(TAG, "Set Device serial number to: '%s'", hwId);
+	}
+	{ // Hardware revision (board model)
+		NimBLECharacteristic *chr = srvDeviceInfo->createCharacteristic(
+		    DEVICE_HARDWARE_REV_CHR_UUID16.value, NIMBLE_PROPERTY::READ, sizeof(boardConfig.name));
+		chr->setValue(boardConfig.name);
+		ESP_LOGI(TAG, "Set Device hardware revision to: '%s'", boardConfig.name);
 	}
 	{ // Firmware version
 		char s[sizeof(GIT_DESCRIBE) + sizeof(boardConfig.name) + 1];
@@ -237,12 +272,9 @@ static void taskSetupBle(void *setupDone) {
 	ESP_LOGI(TAG, "Setting up BLE");
 	// Create the BLE Device
 	// Name the device with the mac address to make it unique for testing purposes.
-	// TODO this probably isn't the elegant way to do this.
-	uint8_t mac[8]; // size - see esp_efuse_mac_get_default() docs.
-	esp_efuse_mac_get_default(mac);
-	char bleName[CONFIG_BT_NIMBLE_GAP_DEVICE_NAME_MAX_LEN];
-	snprintf(bleName, sizeof(bleName), "DS %02x%02x%02x%02x%02x%02x", mac[5], mac[4], mac[3],
-	         mac[2], mac[1], mac[0]);
+	char bleName[CONFIG_BT_NIMBLE_GAP_DEVICE_NAME_MAX_LEN + 1] = {"DS "};
+	static_assert(sizeof(bleName) >= 3 + HW_ID_LEN + 1);
+	hwIdStr(bleName + 3);
 	NimBLEDevice::init(bleName);
 	NimBLEDevice::setMTU(BLE_ATT_MTU_MAX);
 	// NimBLEDevice::setDefaultPhy(BLE_GAP_LE_PHY_2M_MASK, BLE_GAP_LE_PHY_2M_MASK);

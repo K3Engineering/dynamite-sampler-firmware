@@ -1,6 +1,5 @@
 #include <esp_cpu.h>
 #include <esp_log.h>
-#include <esp_mac.h>
 #include <esp_pm.h>
 
 #include "adc_proc.h"
@@ -22,11 +21,6 @@ static void printHeader() {
 
 	// ESP_LOGI(TAG, "Config PM SLP IRAM OPT (put lightsleep into ram): %u",
 	// CONFIG_PM_SLP_IRAM_OPT);
-
-	uint8_t mac[8]; // size - see esp_efuse_mac_get_default() docs.
-	esp_efuse_mac_get_default(mac);
-	ESP_LOGI(TAG, "MAC address: %02x%02x%02x%02x%02x%02x", mac[5], mac[4], mac[3], mac[2], mac[1],
-	         mac[0]);
 }
 
 static void setPower() {

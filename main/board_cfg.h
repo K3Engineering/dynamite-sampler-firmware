@@ -54,6 +54,7 @@ struct AdcCfg {
 template <size_t N>
 struct K3BoardCfg {
 	char name[8];
+	char marketingName[32];
 	TMP118SensorCfg temperatureSensor;
 	FactoryResetCfg factoryReset;
 	AdcCfg<N> adc;
@@ -97,7 +98,8 @@ constexpr AdcSpiConnect adcSpiConnect2{
 
 // V3.0.0 hardware
 constexpr K3BoardCfg<4> boardv300{
-    .name = "v300",
+    .name          = "v300",
+    .marketingName = "prototype",
     .temperatureSensor =
         {
             .i2c           = i2cNotConnected,
@@ -136,7 +138,8 @@ constexpr K3BoardCfg<4> boardv300{
 
 // V4.0.0 hardware
 constexpr K3BoardCfg<4> boardv400{
-    .name = "v400",
+    .name          = "v400",
+    .marketingName = "prototype",
     .temperatureSensor =
         {
             .i2c           = i2cNotConnected,
@@ -177,7 +180,8 @@ constexpr K3BoardCfg<4> boardv400{
 
 // V5.0.0 hardware
 constexpr K3BoardCfg<4> boardv500{
-    .name = "v500",
+    .name          = "v500",
+    .marketingName = "prototype",
     .temperatureSensor =
         {
             .i2c           = i2cNotConnected,
@@ -218,7 +222,8 @@ constexpr K3BoardCfg<4> boardv500{
 
 // V6 Lite hardware
 constexpr K3BoardCfg<4> boardv600_lite{
-    .name = "v600L",
+    .name          = "v600L",
+    .marketingName = "prototype",
     .temperatureSensor =
         {
             .i2c           = i2cNotConnected,
@@ -257,7 +262,8 @@ constexpr K3BoardCfg<4> boardv600_lite{
 
 // V6 Pro hardware
 constexpr K3BoardCfg<8> boardv600_Pro{
-    .name = "v600P",
+    .name          = "v600P",
+    .marketingName = "prototype",
     .temperatureSensor =
         {
             .i2c =
@@ -314,7 +320,8 @@ constexpr K3BoardCfg<8> boardv600_Pro{
 
 // V7 Lite hardware
 constexpr K3BoardCfg<4> boardv700_lite{
-    .name = "v700L",
+    .name          = "v700L",
+    .marketingName = "Dynamite Sampler Lite Mk1",
     .temperatureSensor =
         {
             .i2c           = i2cNotConnected,
@@ -353,7 +360,8 @@ constexpr K3BoardCfg<4> boardv700_lite{
 
 // V7 Pro hardware
 constexpr K3BoardCfg<4> boardv700_Pro{
-    .name = "v700P",
+    .name          = "v700P",
+    .marketingName = "Dynamite Sampler Pro Mk1",
     .temperatureSensor =
         {
             .i2c =

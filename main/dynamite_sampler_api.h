@@ -16,10 +16,13 @@ constexpr char DEVICE_MANUFACTURER_NAME[] = "K3 Engineering";
 
 // Bluetooth assigned UUIDs
 // https://www.bluetooth.com/wp-content/uploads/Files/Specification/Assigned_Numbers.html
-constexpr uint16_t DEVICE_INFO_SVC_UUID         = 0x180A;
-constexpr uint16_t DEVICE_MAKE_NAME_CHR_UUID    = 0x2A29;
-constexpr uint16_t DEVICE_FIRMWARE_VER_CHR_UUID = 0x2A26;
-constexpr uint16_t DEVICE_TX_POWER_CHR_UUID     = 0x2A07;
+constexpr uint16_t DEVICE_INFO_SVC_UUID          = 0x180A;
+constexpr uint16_t DEVICE_MAKE_NAME_CHR_UUID     = 0x2A29;
+constexpr uint16_t DEVICE_FIRMWARE_VER_CHR_UUID  = 0x2A26;
+constexpr uint16_t DEVICE_TX_POWER_CHR_UUID      = 0x2A07;
+constexpr uint16_t DEVICE_MODEL_NUMBER_CHR_UUID  = 0x2A24;
+constexpr uint16_t DEVICE_SERIAL_NUMBER_CHR_UUID = 0x2A25;
+constexpr uint16_t DEVICE_HARDWARE_REV_CHR_UUID  = 0x2A27;
 
 // Dynamite sampler specific UUIDs
 // TODO: the ADC_FEED_CHR_UUID & OTA UUIDs were copied from sample code originally.
