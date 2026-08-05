@@ -17,11 +17,12 @@
 
 constexpr char TAG[] = "BLE";
 
+static_assert(CONFIG_BT_NIMBLE_MAX_CONNECTIONS == 1);
+
 static NimBLECharacteristic *chrAdcFeed = nullptr;
 
 StreamBufferHandle_t adcStreamBufferHandle = nullptr;
-
-DeviceLock deviceLock = DeviceLock::Open;
+DeviceLock deviceLock                      = DeviceLock::Open;
 
 static void adcOnDisconnect() {
 	if (deviceLock != DeviceLock::Streaming) {

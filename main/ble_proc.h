@@ -13,6 +13,5 @@ extern DeviceLock deviceLock;
 
 void setupBle(int core);
 void otaConditionalRollback(void);
-void otaOnDisconnect(void);
 
 #endif // _BLE_PROC_H
