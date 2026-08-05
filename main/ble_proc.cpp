@@ -10,6 +10,7 @@
 #include "ble_ota_interface.h"
 #include "ble_proc.h"
 #include "dynamite_uuid.h"
+#include "rf_test.h"
 #include "user_kvs.h"
 
 #include "board_cfg.h"
@@ -249,8 +250,12 @@ static void taskSetupBle(void *setupDone) {
 		ESP_LOGE(TAG, "KVStorage init failed");
 	}
 
-	setupAdvertising(bleName);
-	ESP_LOGI(TAG, "BLE setup done, advertising started");
+	if (rfTestStartIfEnabled()) {
+		ESP_LOGW(TAG, "RF TX test active, advertising not started");
+	} else {
+		setupAdvertising(bleName);
+		ESP_LOGI(TAG, "BLE setup done, advertising started");
+	}
 
 	*(volatile bool *)setupDone = true;
 	vTaskDelete(NULL);
