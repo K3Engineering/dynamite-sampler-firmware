@@ -4,7 +4,6 @@
 
 #include "adc_proc.h"
 #include "ble_proc.h"
-#include "hw_id.h"
 #include "i2c_proc.h"
 #include "runtime_stats.h"
 
@@ -22,10 +21,6 @@ static void printHeader() {
 
 	// ESP_LOGI(TAG, "Config PM SLP IRAM OPT (put lightsleep into ram): %u",
 	// CONFIG_PM_SLP_IRAM_OPT);
-
-	char hwId[13];
-	hwIdStr(hwId);
-	ESP_LOGI(TAG, "MAC address: %s", hwId);
 }
 
 static void setPower() {

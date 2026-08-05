@@ -1,4 +1,6 @@
 #include <esp_log.h>
+#include <esp_mac.h>
+
 #include <freertos/FreeRTOS.h>
 #include <freertos/stream_buffer.h>
 
@@ -9,7 +11,6 @@
 #include "ble_ota_interface.h"
 #include "ble_proc.h"
 #include "dynamite_uuid.h"
-#include "hw_id.h"
 #include "user_kvs.h"
 
 #include "board_cfg.h"
@@ -69,6 +70,19 @@ class TxPowerPublisherCallbacks : public NimBLECharacteristicCallbacks {
 	}
 };
 
+constexpr size_t HW_ID_LEN = 12; // NOT zero terminated
+
+static void hwIdStr(char out[HW_ID_LEN]) {
+	uint8_t mac[8];
+	esp_efuse_mac_get_default(mac);
+	const char hexChr[] = "0123456789ABCDEF";
+	for (size_t i = 0; i < 6; i++) {
+		uint8_t byte   = mac[5 - i];
+		out[i * 2]     = hexChr[byte >> 4];
+		out[i * 2 + 1] = hexChr[byte & 0x0F];
+	}
+}
+
 // Set the BLE standardized device info
 static void setupDeviceInfo(NimBLEServer *server) {
 	NimBLEService *srvDeviceInfo = server->createService(DEVICE_INFO_SVC_UUID16.value);
@@ -80,11 +94,11 @@ static void setupDeviceInfo(NimBLEServer *server) {
 		ESP_LOGI(TAG, "Set Device manufacturer name to: '%s'", DEVICE_MANUFACTURER_NAME);
 	}
 	{ // Serial number (eFuse MAC)
-		char hwId[13];
+		char hwId[HW_ID_LEN + 1]{0};
 		hwIdStr(hwId);
 		NimBLECharacteristic *chr = srvDeviceInfo->createCharacteristic(
-		    DEVICE_SERIAL_NUMBER_CHR_UUID16.value, NIMBLE_PROPERTY::READ, sizeof(hwId));
-		chr->setValue(hwId);
+		    DEVICE_SERIAL_NUMBER_CHR_UUID16.value, NIMBLE_PROPERTY::READ, HW_ID_LEN);
+		chr->setValue((uint8_t *)hwId, HW_ID_LEN);
 		ESP_LOGI(TAG, "Set Device serial number to: '%s'", hwId);
 	}
 	{ // Firmware version
