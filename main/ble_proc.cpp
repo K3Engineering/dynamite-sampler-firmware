@@ -23,6 +23,15 @@ StreamBufferHandle_t adcStreamBufferHandle = nullptr;
 
 DeviceLock deviceLock = DeviceLock::Open;
 
+static void adcOnDisconnect() {
+	if (deviceLock != DeviceLock::Streaming) {
+		return;
+	}
+	stopAdcAcquisition();
+	deviceLock = DeviceLock::Open;
+	ESP_LOGI(TAG, "adcOnDisconnect");
+}
+
 class MyServerCallbacks : public NimBLEServerCallbacks {
 	void onConnect(NimBLEServer *server, NimBLEConnInfo &connInfo) override {
 		// TODO: Figure out:
@@ -40,6 +49,8 @@ class MyServerCallbacks : public NimBLEServerCallbacks {
 	};
 
 	void onDisconnect(NimBLEServer *server, NimBLEConnInfo &connInfo, int reason) override {
+		adcOnDisconnect();
+		otaOnDisconnect();
 		NimBLEDevice::startAdvertising();
 		ESP_LOGD(TAG, "Server onDisco, core %u", xPortGetCoreID());
 	}
@@ -233,7 +244,7 @@ static void taskSetupBle(void *setupDone) {
 	         mac[2], mac[1], mac[0]);
 	NimBLEDevice::init(bleName);
 	NimBLEDevice::setMTU(BLE_ATT_MTU_MAX);
-	// ble_gap_set_prefered_default_le_phy(BLE_GAP_LE_PHY_2M_MASK, BLE_GAP_LE_PHY_2M_MASK);
+	// NimBLEDevice::setDefaultPhy(BLE_GAP_LE_PHY_2M_MASK, BLE_GAP_LE_PHY_2M_MASK);
 
 	// Create the BLE Server
 	NimBLEServer *bleServer = NimBLEDevice::createServer();
@@ -251,6 +262,7 @@ static void taskSetupBle(void *setupDone) {
 
 	setupAdvertising(bleName);
 	ESP_LOGI(TAG, "BLE setup done, advertising started");
+	ESP_LOGI(TAG, "Stack HWM %u bytes", uxTaskGetStackHighWaterMark(0));
 
 	*(volatile bool *)setupDone = true;
 	vTaskDelete(NULL);
