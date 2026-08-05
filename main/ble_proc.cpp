@@ -77,7 +77,7 @@ static void hwIdStr(char out[HW_ID_LEN]) {
 	esp_efuse_mac_get_default(mac);
 	const char hexChr[] = "0123456789ABCDEF";
 	for (size_t i = 0; i < 6; i++) {
-		uint8_t byte   = mac[5 - i];
+		uint8_t byte   = mac[i];
 		out[i * 2]     = hexChr[byte >> 4];
 		out[i * 2 + 1] = hexChr[byte & 0x0F];
 	}
