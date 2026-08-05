@@ -272,11 +272,9 @@ static void taskSetupBle(void *setupDone) {
 	ESP_LOGI(TAG, "Setting up BLE");
 	// Create the BLE Device
 	// Name the device with the mac address to make it unique for testing purposes.
-	// TODO this probably isn't the elegant way to do this.
-	char hwId[13];
-	hwIdStr(hwId);
-	char bleName[CONFIG_BT_NIMBLE_GAP_DEVICE_NAME_MAX_LEN];
-	snprintf(bleName, sizeof(bleName), "DS %s", hwId);
+	char bleName[CONFIG_BT_NIMBLE_GAP_DEVICE_NAME_MAX_LEN + 1] = {"DS "};
+	static_assert(sizeof(bleName) >= 3 + HW_ID_LEN + 1);
+	hwIdStr(bleName + 3);
 	NimBLEDevice::init(bleName);
 	NimBLEDevice::setMTU(BLE_ATT_MTU_MAX);
 	// NimBLEDevice::setDefaultPhy(BLE_GAP_LE_PHY_2M_MASK, BLE_GAP_LE_PHY_2M_MASK);
