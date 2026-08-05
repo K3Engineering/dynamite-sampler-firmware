@@ -241,6 +241,20 @@ void otaConditionalRollback() {
 	}
 }
 
+void otaOnDisconnect() {
+	if (deviceLock != DeviceLock::Ota) {
+		return;
+	}
+	esp_ota_abort(otaControlData.updateHandle);
+	otaControlData.otaStatus        = SVR_CHR_OTA_CONTROL_NOP;
+	otaControlData.updateHandle     = 0;
+	otaControlData.fileSize         = 0;
+	otaControlData.numBytesReceived = 0;
+
+	deviceLock = DeviceLock::Open;
+	ESP_LOGI(TAG, "otaOnDisconnect");
+}
+
 void setupBleOta(NimBLEServer *server) {
 	NimBLEService *srvc = server->createService(&OTA_SVC_UUID128);
 	{ // Control interface
