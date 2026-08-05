@@ -13,27 +13,26 @@ project(dynamite-sampler-firmware)
 
 set(CMAKE_CXX_STANDARD 20)
 
-# Generate an NVS image holding the Factory namespace (currently just the board
-# model) and flash it to the DynaPersistent partition on every `idf.py flash`.
-# WARNING: this rewrites the whole partition, erasing the User namespace too.
-partition_table_get_partition_info(DYNA_PERSIST_PARTITION_SIZE
-    "--partition-name DynaPersistent" "size")
-set(factory_nvs_bin ${CMAKE_CURRENT_BINARY_DIR}/factory_nvs.bin)
-
-# A custom target is always out of date. This forces cmake to run the COMMAND on every build.
-add_custom_target(
-    factory_nvs_bin_target
+# Generate a csv holding the Factory namespace (board model and model-derived
+# nominal values) and flash it to the DynaPersistent partition as an NVS image.
+# WARNING: flashing rewrites the whole partition, erasing the User namespace too.
+set(factory_nvs_csv ${CMAKE_CURRENT_BINARY_DIR}/factory_nvs.csv)
+execute_process(
     COMMAND ${PYTHON} ${CMAKE_CURRENT_SOURCE_DIR}/generate_factory_nvs.py
-            --sdkconfig ${SDKCONFIG}
-            --out ${factory_nvs_bin}
-            --size ${DYNA_PERSIST_PARTITION_SIZE}
-    BYPRODUCTS ${factory_nvs_bin}
-    COMMENT "Generating factory NVS image (board model)"
-    VERBATIM
+            --sdkconfig ${SDKCONFIG} --out ${factory_nvs_csv}
+    RESULT_VARIABLE factory_nvs_csv_result
 )
+if(NOT factory_nvs_csv_result EQUAL 0)
+    message(FATAL_ERROR "Failed to generate the factory NVS csv")
+endif()
 
-esptool_py_flash_to_partition(flash "DynaPersistent" "${factory_nvs_bin}")
-add_dependencies(flash factory_nvs_bin_target)
+# When ON (default), `idf.py flash` also writes the factory NVS image.
+# When OFF, the image is written only on demand via `idf.py DynaPersistent-flash`.
+option(DYNAMITE_FLASH_FACTORY_NVS "Flash factory NVS data on every idf.py flash" ON)
+if(DYNAMITE_FLASH_FACTORY_NVS)
+    set(factory_nvs_flash_arg FLASH_IN_PROJECT)
+endif()
+nvs_create_partition_image("DynaPersistent" "${factory_nvs_csv}" ${factory_nvs_flash_arg})
 
 # TODO this doesn't work
 # Set the env variable for github workflows
