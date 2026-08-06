@@ -67,6 +67,29 @@ For partition types see: https://docs.espressif.com/projects/esp-idf/en/latest/e
 Note: Partition table on the flash is located at `CONFIG_PARTITION_TABLE_OFFSET`, default: 0x8000.
 Partitions start at CONFIG_PARTITION_TABLE_OFFSET + 0x1000.
 
+#### Board model / factory NVS data
+
+`flash_factory_nvs.py` writes the Factory namespace to the `DynaPersistent`
+partition as an NVS image. `idf.py flash` never touches the partition; factory
+data is written only by this script.
+
+Factory namespace keys: `board_model` (e.g. `v700L`), `kvs_ver`, and the
+model-derived nominal analog values `adc_fsr`, `adc_gain`, `exc`, `afe_gain`.
+Scalar values carry a provenance tag: `"<value>,<provenance>"` (e.g.
+`"4.53,nominal"`). Calibration data overwrites these keys with a measured value
+and its own provenance tag (e.g. `"4.512,calboard_v2"`).
+
+**WARNING**: this rewrites the entire `DynaPersistent` partition, erasing the
+`User` namespace (and anything else stored in `Factory`).
+
+Run with the ESP-IDF python environment:
+
+```
+python .\flash_factory_nvs.py --board v700P   # explicit board selection
+python .\flash_factory_nvs.py                 # board read from ./sdkconfig
+python .\flash_factory_nvs.py --no-flash      # only generate factory_nvs.csv/.bin
+```
+
 #### Custom loadcell calibration flashing script
 
 You can flash the calibration data using the following script:
