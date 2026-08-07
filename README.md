@@ -51,7 +51,8 @@ You can then move the configurations into the appropriate `.commonn` or `.<confi
 ### Debugger / breakpoints
 
 launching openocd `openocd -f board/esp32s3-builtin.cfg `
-`-d4` for highests debug level
+`-d4` (highest debug level) is known to flood the connection.
+`-d2` recommended
 
 `usblogview` and `USBDriverTool` were quite helpful
 
