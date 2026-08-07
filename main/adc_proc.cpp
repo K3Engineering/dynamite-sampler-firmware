@@ -61,14 +61,16 @@ static void logADS131M0xConfig(const ADS131HwConfigData *cfg) {
 	};
 }
 
-static inline void copyAdcToLE24(void *dst, const void *src) {
+static inline void copyAdcToLE24(void *dst, const void *src, bool flip) {
 	static_assert(DYNAMITE_NET_BYTE_ORDER != AdcClass::RawOutput::SAMPLE_BYTE_ORDER);
 	static_assert(AdcFeedNetworkData::AdcSample::BYTES_PER_SAMPLE == AdcClass::DATA_WORD_LENGTH);
 	static_assert(AdcClass::DATA_WORD_LENGTH == 3, "Assumes 24-bit ADC sample");
 
-	((uint8_t *)dst)[0] = ((const uint8_t *)src)[2];
-	((uint8_t *)dst)[1] = ((const uint8_t *)src)[1];
-	((uint8_t *)dst)[2] = ((const uint8_t *)src)[0];
+	// flip does negation with a uniform -1 LSB offset
+	const uint8_t flipMask = flip ? 0xFF : 0x00;
+	((uint8_t *)dst)[0]    = ((const uint8_t *)src)[2] ^ flipMask;
+	((uint8_t *)dst)[1]    = ((const uint8_t *)src)[1] ^ flipMask;
+	((uint8_t *)dst)[2]    = ((const uint8_t *)src)[0] ^ flipMask;
 }
 
 static AdcFeedNetworkData IRAM_ATTR adcToNetwork(const AdcClass::RawOutput *adc) {
@@ -80,7 +82,9 @@ static AdcFeedNetworkData IRAM_ATTR adcToNetwork(const AdcClass::RawOutput *adc)
 			static const uint8_t translate[AdcFeedNetworkData::NUM_CHAN] = {1, 3, 5, 7};
 			src_idx                                                      = translate[i];
 		}
-		copyAdcToLE24(net.chan + i, adc->data + AdcClass::DATA_WORD_LENGTH * src_idx);
+		// Hardware: even ADC channels (0,2 on 4ch; 0,2,4,6 on 8ch) have swapped polarity
+		const bool flip = (src_idx & 1) == 0;
+		copyAdcToLE24(net.chan + i, adc->data + AdcClass::DATA_WORD_LENGTH * src_idx, flip);
 	}
 	return net;
 }
