@@ -48,44 +48,32 @@ which contains only the changes relative to the preset defaults.
 
 You can then move the configurations into the appropriate `.commonn` or `.<config>` file.
 
-### Debuger / breakpoints
+### Debugger / breakpoints
 
 launching openocd `openocd -f board/esp32s3-builtin.cfg `
-`-d4` for highests debug level
+`-d4` (highest debug level) is known to flood the connection.
+`-d2` recommended
 
 `usblogview` and `USBDriverTool` were quite helpful
 
 ### NVS Flash initialization
 
 Custom partition table file: `partitions.csv`.
-Partition to store calibration data:
-- custom type `0x40`,
-- subtype is arbitrary (since using a custom type), but just in case we are using subtype `0x06`,
-- name `"loadcell_calib"`.
-For partition types see: https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-guides/partition-tables.html
+
+Use scripts from the factory_tools repo to init / edit / flash 
+custom values onto the partitions
+
+Calibration data is stored as strings in the 
+`DynaPersistent` NVS partition (Factory/User namespaces) and
+written over BLE via the KVS protocol. The schema is
+documented in `docs/flash-schema-v1.md` (repo root of the parent project) and
+written by `factory_tools/board_calibration.py`. The old `loadcell_calib`
+partition + `flash_calibration.py` raw-flashing flow is obsolete and removed.
 
 Note: Partition table on the flash is located at `CONFIG_PARTITION_TABLE_OFFSET`, default: 0x8000.
 Partitions start at CONFIG_PARTITION_TABLE_OFFSET + 0x1000.
 
-#### Custom loadcell calibration flashing script
-
-You can flash the calibration data using the following script:
-`python .\flash_calibration.py <data1> <data1>`
-
-#### ESP tools to flash
-
-The following command copies calibr-data.bin to a partition at 0x310000.
-`python -m esptool --chip esp32s3 -b 460800 --before default_reset --after hard_reset write_flash --flash_mode dio --flash_freq 80m --flash_size detect 0x310000 calibr-data.bin`
-
-There is also a esp-idf wrapper for `esptool` called `esptool.py` that makes writing / reading
-from a partition a bit easier:
-
-`parttool.py read_partition --partition-name loadcell_calib --output loadcell_calib_outfile`
-`parttool.py write_partition --partition-name loadcell_calib --input build/calibr-data.bin  --ignore-readonly`
-
-The `--ignore-readonly` option is is idf >= 5.4.
-
-**NOTE**: The `ms-vscode.hexeditor` vscode plugin is helpfull for looking at binary data files.
+**NOTE**: The `ms-vscode.hexeditor` vscode plugin is helpful for looking at binary data files.
 
 ### Python scripts that use esp tools
 
