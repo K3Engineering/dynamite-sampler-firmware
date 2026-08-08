@@ -77,14 +77,17 @@ static AdcFeedNetworkData IRAM_ATTR adcToNetwork(const AdcClass::RawOutput *adc)
 	AdcFeedNetworkData net;
 	static_assert(AdcFeedNetworkData::NUM_CHAN <= boardConfig.adc.NCHAN);
 	for (size_t i = 0; i < AdcFeedNetworkData::NUM_CHAN; ++i) {
-		size_t src_idx = i;
 		if constexpr ((AdcFeedNetworkData::NUM_CHAN == 4) && (boardConfig.adc.NCHAN == 8)) {
 			static const uint8_t translate[AdcFeedNetworkData::NUM_CHAN] = {1, 3, 5, 7};
-			src_idx                                                      = translate[i];
+			size_t src_idx                                               = translate[i];
+			// Hardware: even ADC channels (0,2,4,6 on 8ch) have swapped polarity
+			const bool flip = (src_idx & 1) == 0;
+			copyAdcToLE24(net.chan + i, adc->data + AdcClass::DATA_WORD_LENGTH * src_idx, flip);
+		} else {
+			// Hardware: even ADC channels (0,2 on 4ch) have swapped polarity
+			const bool flip = (i & 1) == 0;
+			copyAdcToLE24(net.chan + i, adc->data + AdcClass::DATA_WORD_LENGTH * i, flip);
 		}
-		// Hardware: even ADC channels (0,2 on 4ch; 0,2,4,6 on 8ch) have swapped polarity
-		const bool flip = (src_idx & 1) == 0;
-		copyAdcToLE24(net.chan + i, adc->data + AdcClass::DATA_WORD_LENGTH * src_idx, flip);
 	}
 	return net;
 }
