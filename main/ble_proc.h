@@ -4,9 +4,9 @@
 #include <stdint.h>
 
 enum struct DeviceLock : uint8_t {
-	Open      = 0,
+	Open = 0,
 	Streaming = 1,
-	Ota       = 2,
+	Ota = 2,
 };
 
 extern DeviceLock deviceLock;

@@ -38,11 +38,11 @@ typedef struct {
 } OtaControlData;
 
 static OtaControlData otaControlData{
-    .updatePartition  = nullptr,
-    .updateHandle     = 0,
+    .updatePartition = nullptr,
+    .updateHandle = 0,
     .numBytesReceived = 0,
-    .fileSize         = 0,
-    .otaStatus        = SVR_CHR_OTA_CONTROL_NOP,
+    .fileSize = 0,
+    .otaStatus = SVR_CHR_OTA_CONTROL_NOP,
 };
 
 static bool processOtaBegin(OtaControlData *control) {
@@ -67,7 +67,7 @@ static bool processOtaBegin(OtaControlData *control) {
 	    esp_ota_begin(control->updatePartition, control->fileSize, &control->updateHandle);
 	if (err == ESP_OK) {
 		control->otaStatus = SVR_CHR_OTA_CONTROL_REQUEST_ACK;
-		deviceLock         = DeviceLock::Ota;
+		deviceLock = DeviceLock::Ota;
 	} else {
 		ESP_LOGE(TAG, "esp_ota_begin error %d (%s)", err, esp_err_to_name(err));
 	}
@@ -112,8 +112,8 @@ static bool processOtaDone(OtaControlData *control) {
 	} else if (finishUpdate(control->updateHandle) && setBootPartition(control->updatePartition)) {
 		control->otaStatus = SVR_CHR_OTA_CONTROL_DONE_ACK;
 	}
-	control->updateHandle     = 0;
-	control->fileSize         = 0;
+	control->updateHandle = 0;
+	control->fileSize = 0;
 	control->numBytesReceived = 0;
 
 	deviceLock = DeviceLock::Open;
@@ -134,9 +134,9 @@ static bool processOtaFileSize(OtaControlData *control, OtaFileSizeType sz) {
 	if (deviceLock != DeviceLock::Open) {
 		return false;
 	}
-	control->fileSize         = sz;
+	control->fileSize = sz;
 	control->numBytesReceived = 0;
-	control->otaStatus        = SVR_CHR_OTA_CONTROL_NOP;
+	control->otaStatus = SVR_CHR_OTA_CONTROL_NOP;
 	ESP_LOGI(TAG, "File size: %u", control->fileSize);
 	return true;
 }
@@ -144,7 +144,7 @@ static bool processOtaFileSize(OtaControlData *control, OtaFileSizeType sz) {
 // Implements OTA control flow, while OtaDataChrCallbacks implements binary download.
 class OtaControlChrCallbacks : public NimBLECharacteristicCallbacks {
 	void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
-		bool res           = false;
+		bool res = false;
 		const size_t omLen = pCharacteristic->getLength();
 		if (sizeof(OtaRequestType) == omLen) {
 			OtaRequestType code = pCharacteristic->getValue<OtaRequestType>();
@@ -157,7 +157,7 @@ class OtaControlChrCallbacks : public NimBLECharacteristicCallbacks {
 		} else if (sizeof(OtaFileSizeType) == omLen) {
 			static_assert(sizeof(OtaFileSizeType) == sizeof(uint32_t));
 			OtaFileSizeType val = le32toh(pCharacteristic->getValue<OtaFileSizeType>());
-			res                 = processOtaFileSize(control, val);
+			res = processOtaFileSize(control, val);
 		}
 
 		if (res) {
@@ -180,10 +180,10 @@ class OtaControlChrCallbacks : public NimBLECharacteristicCallbacks {
 		if (deviceLock != DeviceLock::Open) {
 			return;
 		}
-		control->updateHandle     = 0;
-		control->fileSize         = 0;
+		control->updateHandle = 0;
+		control->fileSize = 0;
 		control->numBytesReceived = 0;
-		control->otaStatus        = SVR_CHR_OTA_CONTROL_NOP;
+		control->otaStatus = SVR_CHR_OTA_CONTROL_NOP;
 	}
 
 	OtaControlData *const control;
@@ -207,7 +207,7 @@ class OtaDataChrCallbacks : public NimBLECharacteristicCallbacks {
 			return;
 		}
 		const size_t omLen = pCharacteristic->getLength();
-		const void *val    = getChrValuePtr(pCharacteristic);
+		const void *val = getChrValuePtr(pCharacteristic);
 		control->numBytesReceived += omLen;
 
 		if (control->numBytesReceived <= control->fileSize) {
@@ -246,9 +246,9 @@ void otaOnDisconnect() {
 		return;
 	}
 	esp_ota_abort(otaControlData.updateHandle);
-	otaControlData.otaStatus        = SVR_CHR_OTA_CONTROL_NOP;
-	otaControlData.updateHandle     = 0;
-	otaControlData.fileSize         = 0;
+	otaControlData.otaStatus = SVR_CHR_OTA_CONTROL_NOP;
+	otaControlData.updateHandle = 0;
+	otaControlData.fileSize = 0;
 	otaControlData.numBytesReceived = 0;
 
 	deviceLock = DeviceLock::Open;

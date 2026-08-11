@@ -35,11 +35,11 @@ const AdcConfigNetworkData getAdcConfig() {
 	const ADS131HwConfigData *p = &savedConfig;
 	return AdcConfigNetworkData{
 	    .version = 1,
-	    .id      = htole16(p->id),
-	    .status  = htole16(p->status),
-	    .mode    = htole16(p->mode),
-	    .clock   = htole16(p->clock),
-	    .pga     = htole16(p->pga),
+	    .id = htole16(p->id),
+	    .status = htole16(p->status),
+	    .mode = htole16(p->mode),
+	    .clock = htole16(p->clock),
+	    .pga = htole16(p->pga),
 	};
 }
 
@@ -68,9 +68,9 @@ static inline void copyAdcToLE24(void *dst, const void *src, bool flip) {
 
 	// flip does negation with a uniform -1 LSB offset
 	const uint8_t flipMask = flip ? 0xFF : 0x00;
-	((uint8_t *)dst)[0]    = ((const uint8_t *)src)[2] ^ flipMask;
-	((uint8_t *)dst)[1]    = ((const uint8_t *)src)[1] ^ flipMask;
-	((uint8_t *)dst)[2]    = ((const uint8_t *)src)[0] ^ flipMask;
+	((uint8_t *)dst)[0] = ((const uint8_t *)src)[2] ^ flipMask;
+	((uint8_t *)dst)[1] = ((const uint8_t *)src)[1] ^ flipMask;
+	((uint8_t *)dst)[2] = ((const uint8_t *)src)[0] ^ flipMask;
 }
 
 static AdcFeedNetworkData IRAM_ATTR adcToNetwork(const AdcClass::RawOutput *adc) {
@@ -79,7 +79,7 @@ static AdcFeedNetworkData IRAM_ATTR adcToNetwork(const AdcClass::RawOutput *adc)
 	for (size_t i = 0; i < AdcFeedNetworkData::NUM_CHAN; ++i) {
 		if constexpr ((AdcFeedNetworkData::NUM_CHAN == 4) && (boardConfig.adc.NCHAN == 8)) {
 			static const uint8_t translate[AdcFeedNetworkData::NUM_CHAN] = {1, 3, 5, 7};
-			size_t src_idx                                               = translate[i];
+			size_t src_idx = translate[i];
 			// Hardware: even ADC channels (0,2,4,6 on 8ch) have swapped polarity
 			const bool flip = (src_idx & 1) == 0;
 			copyAdcToLE24(net.chan + i, adc->data + AdcClass::DATA_WORD_LENGTH * src_idx, flip);
@@ -132,11 +132,11 @@ static void configureAdc() {
 	adc.setOsr(boardConfig.adc.osr);
 
 	savedConfig = {
-	    .id     = adc.readID(),
+	    .id = adc.readID(),
 	    .status = adc.readSTATUS(),
-	    .mode   = adc.readMODE(),
-	    .clock  = adc.readCLOCK(),
-	    .pga    = adc.readPGA(),
+	    .mode = adc.readMODE(),
+	    .clock = adc.readCLOCK(),
+	    .pga = adc.readPGA(),
 	};
 	logADS131M0xConfig(&savedConfig);
 }
@@ -171,7 +171,7 @@ void setupAdc(int core) {
 
 	// TODO figure out the memory stack required
 	TaskHandle_t adcReadTaskHandle = 0;
-	const UBaseType_t priority     = 24; // Highest priority possible
+	const UBaseType_t priority = 24; // Highest priority possible
 	xTaskCreatePinnedToCore(taskAdcReadAndBuffer, "task_ADC_read", 1024 * 4, NULL, priority,
 	                        &adcReadTaskHandle, core);
 	assert(adcReadTaskHandle);

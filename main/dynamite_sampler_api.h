@@ -1,5 +1,6 @@
 #ifndef __dynamite_sampler_api_h__
 #define __dynamite_sampler_api_h__
+// clang-format off
 
 #include <stdint.h>
 
@@ -157,4 +158,5 @@ struct TxPowerNetworkData {
 
 #pragma pack(pop)
 
+// clang-format on
 #endif // __dynamite_sampler_api_h__

@@ -66,49 +66,49 @@ constexpr I2cConnectCfg i2cNotConnected{
 };
 
 constexpr FactoryResetCfg resetNotConnected{
-    .pin           = GPIO_NUM_NC,
+    .pin = GPIO_NUM_NC,
     .activeLevelHi = false,
 };
 
 constexpr AdcHwConnect adcHwConnect1{
-    .cs    = GPIO_NUM_13,
-    .drdy  = GPIO_NUM_12,
+    .cs = GPIO_NUM_13,
+    .drdy = GPIO_NUM_12,
     .reset = GPIO_NUM_14,
 };
 
 constexpr AdcSpiConnect adcSpiConnect1{
     .clock = GPIO_NUM_11,
-    .miso  = GPIO_NUM_10,
-    .mosi  = GPIO_NUM_9,
+    .miso = GPIO_NUM_10,
+    .mosi = GPIO_NUM_9,
 };
 
 // Shift pins
 constexpr AdcHwConnect adcHwConnect2{
-    .cs    = GPIO_NUM_21,
-    .drdy  = GPIO_NUM_14,
+    .cs = GPIO_NUM_21,
+    .drdy = GPIO_NUM_14,
     .reset = GPIO_NUM_47,
 };
 
 // Shift pins
 constexpr AdcSpiConnect adcSpiConnect2{
     .clock = GPIO_NUM_13,
-    .miso  = GPIO_NUM_12,
-    .mosi  = GPIO_NUM_11,
+    .miso = GPIO_NUM_12,
+    .mosi = GPIO_NUM_11,
 };
 
 // V3.0.0 hardware
 constexpr K3BoardCfg<4> boardv300{
-    .name          = "v300",
+    .name = "v300",
     .marketingName = "prototype",
     .temperatureSensor =
         {
-            .i2c           = i2cNotConnected,
+            .i2c = i2cNotConnected,
             .TMP118SubType = 0,
         },
     .factoryReset = resetNotConnected,
     .adc =
         {
-            .hwConnect  = adcHwConnect1,
+            .hwConnect = adcHwConnect1,
             .spiConnect = adcSpiConnect1,
             .enable =
                 {
@@ -132,23 +132,23 @@ constexpr K3BoardCfg<4> boardv300{
                     ADS131M0xReg::CHANNEL_PGA_1, // DIRECT, top connector
                 },
             .powerMode = ADS131M0xReg::POWER_MODE_HIGH_RESOLUTION,
-            .osr       = ADS131M0xReg::OSR_4096,
+            .osr = ADS131M0xReg::OSR_4096,
         },
 };
 
 // V4.0.0 hardware
 constexpr K3BoardCfg<4> boardv400{
-    .name          = "v400",
+    .name = "v400",
     .marketingName = "prototype",
     .temperatureSensor =
         {
-            .i2c           = i2cNotConnected,
+            .i2c = i2cNotConnected,
             .TMP118SubType = 0,
         },
     .factoryReset = resetNotConnected,
     .adc =
         {
-            .hwConnect  = adcHwConnect1,
+            .hwConnect = adcHwConnect1,
             .spiConnect = adcSpiConnect1,
             .enable =
                 {
@@ -174,23 +174,23 @@ constexpr K3BoardCfg<4> boardv400{
                     ADS131M0xReg::CHANNEL_PGA_4,
                 },
             .powerMode = ADS131M0xReg::POWER_MODE_HIGH_RESOLUTION,
-            .osr       = ADS131M0xReg::OSR_4096,
+            .osr = ADS131M0xReg::OSR_4096,
         },
 };
 
 // V5.0.0 hardware
 constexpr K3BoardCfg<4> boardv500{
-    .name          = "v500",
+    .name = "v500",
     .marketingName = "prototype",
     .temperatureSensor =
         {
-            .i2c           = i2cNotConnected,
+            .i2c = i2cNotConnected,
             .TMP118SubType = 0,
         },
     .factoryReset = resetNotConnected,
     .adc =
         {
-            .hwConnect  = adcHwConnect1,
+            .hwConnect = adcHwConnect1,
             .spiConnect = adcSpiConnect1,
             .enable =
                 {
@@ -216,23 +216,23 @@ constexpr K3BoardCfg<4> boardv500{
                     ADS131M0xReg::CHANNEL_PGA_1, // OP AMP, top connector
                 },
             .powerMode = ADS131M0xReg::POWER_MODE_HIGH_RESOLUTION,
-            .osr       = ADS131M0xReg::OSR_4096,
+            .osr = ADS131M0xReg::OSR_4096,
         },
 };
 
 // V6 Lite hardware
 constexpr K3BoardCfg<4> boardv600_lite{
-    .name          = "v600L",
+    .name = "v600L",
     .marketingName = "prototype",
     .temperatureSensor =
         {
-            .i2c           = i2cNotConnected,
+            .i2c = i2cNotConnected,
             .TMP118SubType = 0,
         },
     .factoryReset = resetNotConnected,
     .adc =
         {
-            .hwConnect  = adcHwConnect1,
+            .hwConnect = adcHwConnect1,
             .spiConnect = adcSpiConnect1,
             .enable =
                 {
@@ -256,13 +256,13 @@ constexpr K3BoardCfg<4> boardv600_lite{
                     ADS131M0xReg::CHANNEL_PGA_32,
                 },
             .powerMode = ADS131M0xReg::POWER_MODE_HIGH_RESOLUTION,
-            .osr       = ADS131M0xReg::OSR_4096,
+            .osr = ADS131M0xReg::OSR_4096,
         },
 };
 
 // V6 Pro hardware
 constexpr K3BoardCfg<8> boardv600_Pro{
-    .name          = "v600P",
+    .name = "v600P",
     .marketingName = "prototype",
     .temperatureSensor =
         {
@@ -276,7 +276,7 @@ constexpr K3BoardCfg<8> boardv600_Pro{
     .factoryReset = resetNotConnected,
     .adc =
         {
-            .hwConnect  = adcHwConnect1,
+            .hwConnect = adcHwConnect1,
             .spiConnect = adcSpiConnect1,
             .enable =
                 {
@@ -314,23 +314,23 @@ constexpr K3BoardCfg<8> boardv600_Pro{
                     ADS131M0xReg::CHANNEL_PGA_1,
                 },
             .powerMode = ADS131M0xReg::POWER_MODE_HIGH_RESOLUTION,
-            .osr       = ADS131M0xReg::OSR_4096,
+            .osr = ADS131M0xReg::OSR_4096,
         },
 };
 
 // V7 Lite hardware
 constexpr K3BoardCfg<4> boardv700_lite{
-    .name          = "v700L",
+    .name = "v700L",
     .marketingName = "Dynamite Sampler Lite Mk1",
     .temperatureSensor =
         {
-            .i2c           = i2cNotConnected,
+            .i2c = i2cNotConnected,
             .TMP118SubType = 0,
         },
     .factoryReset = resetNotConnected,
     .adc =
         {
-            .hwConnect  = adcHwConnect1,
+            .hwConnect = adcHwConnect1,
             .spiConnect = adcSpiConnect1,
             .enable =
                 {
@@ -354,13 +354,13 @@ constexpr K3BoardCfg<4> boardv700_lite{
                     ADS131M0xReg::CHANNEL_PGA_32,
                 },
             .powerMode = ADS131M0xReg::POWER_MODE_HIGH_RESOLUTION,
-            .osr       = ADS131M0xReg::OSR_4096,
+            .osr = ADS131M0xReg::OSR_4096,
         },
 };
 
 // V7 Pro hardware
 constexpr K3BoardCfg<4> boardv700_Pro{
-    .name          = "v700P",
+    .name = "v700P",
     .marketingName = "Dynamite Sampler Pro Mk1",
     .temperatureSensor =
         {
@@ -375,7 +375,7 @@ constexpr K3BoardCfg<4> boardv700_Pro{
     .adc =
         {
             // TODO SPI pins are now also different
-            .hwConnect  = adcHwConnect2,
+            .hwConnect = adcHwConnect2,
             .spiConnect = adcSpiConnect2,
             .enable =
                 {
@@ -401,7 +401,7 @@ constexpr K3BoardCfg<4> boardv700_Pro{
                     ADS131M0xReg::CHANNEL_PGA_1,
                 },
             .powerMode = ADS131M0xReg::POWER_MODE_HIGH_RESOLUTION,
-            .osr       = ADS131M0xReg::OSR_4096,
+            .osr = ADS131M0xReg::OSR_4096,
         },
 };
 

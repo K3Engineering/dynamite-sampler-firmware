@@ -26,19 +26,19 @@ class TMP118 {
 	static constexpr uint16_t TMP118C_I2C_ADDR = 0x4A;
 	static constexpr uint16_t TMP118D_I2C_ADDR = 0x4B;
 
-	static constexpr uint8_t CONFIG_REG      = 0x01;
+	static constexpr uint8_t CONFIG_REG = 0x01;
 	static constexpr uint8_t TEMP_RESULT_REG = 0x00;
 
 	static constexpr uint16_t CFG_RESERVED_DEFAULTS = 0x6030;
 
-	static constexpr uint16_t CFG_CONV_RATE_4S    = 0x0000;
-	static constexpr uint16_t CFG_CONV_RATE_1S    = 0x0040;
+	static constexpr uint16_t CFG_CONV_RATE_4S = 0x0000;
+	static constexpr uint16_t CFG_CONV_RATE_1S = 0x0040;
 	static constexpr uint16_t CFG_CONV_RATE_250MS = 0x0080;
 	static constexpr uint16_t CFG_CONV_RATE_125MS = 0x00C0;
 
-	static constexpr uint16_t CFG_AVG_NONE      = 0;
-	static constexpr uint16_t CFG_AVG_4X_B2B    = 0x01 << 2;
-	static constexpr uint16_t CFG_AVG_8X_B2B    = 0x02 << 2;
+	static constexpr uint16_t CFG_AVG_NONE = 0;
+	static constexpr uint16_t CFG_AVG_4X_B2B = 0x01 << 2;
+	static constexpr uint16_t CFG_AVG_8X_B2B = 0x02 << 2;
 	static constexpr uint16_t CFG_AVG_MOVING_4X = 0x03 << 2;
 
 	i2c_master_dev_handle_t devHandle;
@@ -77,17 +77,17 @@ static inline void delayMSec(uint32_t ms) { vTaskDelay(ms / portTICK_PERIOD_MS);
 
 bool I2CMasterBus::setup(i2c_port_num_t port, gpio_num_t sda, gpio_num_t scl) {
 	const i2c_master_bus_config_t busConfig = {
-	    .i2c_port          = port,
-	    .sda_io_num        = sda,
-	    .scl_io_num        = scl,
-	    .clk_source        = I2C_CLK_SRC_DEFAULT,
+	    .i2c_port = port,
+	    .sda_io_num = sda,
+	    .scl_io_num = scl,
+	    .clk_source = I2C_CLK_SRC_DEFAULT,
 	    .glitch_ignore_cnt = 7,
-	    .intr_priority     = 0,
+	    .intr_priority = 0,
 	    .trans_queue_depth = 0, // 0 = synchronous (blocking) transactions
 	    .flags =
 	        {
 	            .enable_internal_pullup = true,
-	            .allow_pd               = false,
+	            .allow_pd = false,
 	        },
 	};
 	esp_err_t res = i2c_new_master_bus(&busConfig, &busHandle);
@@ -100,9 +100,9 @@ bool I2CMasterBus::setup(i2c_port_num_t port, gpio_num_t sda, gpio_num_t scl) {
 i2c_master_dev_handle_t I2CMasterBus::addDevice(uint16_t addr) {
 	const i2c_device_config_t devConfig = {
 	    .dev_addr_length = I2C_ADDR_BIT_LEN_7,
-	    .device_address  = addr,
-	    .scl_speed_hz    = 100000, // 100 kHz Standard Mode
-	    .scl_wait_us     = 0,
+	    .device_address = addr,
+	    .scl_speed_hz = 100000, // 100 kHz Standard Mode
+	    .scl_wait_us = 0,
 	    .flags =
 	        {
 	            .disable_ack_check = false,
