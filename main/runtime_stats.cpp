@@ -13,7 +13,7 @@ static bool printOne(const TaskStatus_t *prev, const TaskStatus_t *current, uint
 		return false;
 	}
 	uint32_t deltaTask = current->ulRunTimeCounter - prev->ulRunTimeCounter;
-	float percent      = deltaTask * 100.0f / total;
+	float percent = deltaTask * 100.0f / total;
 	ESP_LOGI(TAG, "%-16s %12u %7.2f%% %8u", current->pcTaskName, deltaTask, percent,
 	         current->usStackHighWaterMark);
 	return true;
@@ -21,8 +21,8 @@ static bool printOne(const TaskStatus_t *prev, const TaskStatus_t *current, uint
 
 static void printTaskRuntimeStatsDelta() {
 	static TaskStatus_t *prevSnapshot = nullptr;
-	static size_t prevSnapshotSize    = 0;
-	static uint32_t prevTotalRuntime  = 0;
+	static size_t prevSnapshotSize = 0;
+	static uint32_t prevTotalRuntime = 0;
 
 	const size_t currentSnapshotSize = uxTaskGetNumberOfTasks();
 	auto currentSnapshot = (TaskStatus_t *)malloc(currentSnapshotSize * sizeof(TaskStatus_t));
@@ -44,7 +44,7 @@ static void printTaskRuntimeStatsDelta() {
 		}
 	}
 	free(prevSnapshot);
-	prevSnapshot     = currentSnapshot;
+	prevSnapshot = currentSnapshot;
 	prevSnapshotSize = currentSnapshotSize;
 	prevTotalRuntime = currentTotalRuntime;
 

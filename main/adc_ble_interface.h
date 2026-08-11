@@ -9,7 +9,7 @@ extern StreamBufferHandle_t adcStreamBufferHandle;
 extern bool startupDiagnosticIsOk;
 
 // Nimble creates a GATT connection, which has some overhead.
-constexpr uint16_t BLE_PUBL_DATA_DLE         = 251;
+constexpr uint16_t BLE_PUBL_DATA_DLE = 251;
 constexpr uint16_t BLE_PUBL_DATA_ATT_PAYLOAD = BLE_PUBL_DATA_DLE - 4 - 3;
 
 constexpr size_t ADC_FEED_CHUNK_SZ =

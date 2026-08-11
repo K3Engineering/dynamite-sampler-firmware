@@ -25,8 +25,8 @@ static void printHeader() {
 
 static void setPower() {
 	constexpr esp_pm_config_t pmConfig = {
-	    .max_freq_mhz       = 80,
-	    .min_freq_mhz       = 10,
+	    .max_freq_mhz = 80,
+	    .min_freq_mhz = 10,
 	    .light_sleep_enable = false,
 	};
 	if (esp_err_t err = esp_pm_configure(&pmConfig)) {

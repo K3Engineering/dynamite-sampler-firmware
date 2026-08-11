@@ -16,25 +16,25 @@ constexpr char DEVICE_MANUFACTURER_NAME[] = "K3 Engineering";
 
 // Bluetooth assigned UUIDs
 // https://www.bluetooth.com/wp-content/uploads/Files/Specification/Assigned_Numbers.html
-constexpr uint16_t DEVICE_INFO_SVC_UUID          = 0x180A;
-constexpr uint16_t DEVICE_MAKE_NAME_CHR_UUID     = 0x2A29;
-constexpr uint16_t DEVICE_FIRMWARE_VER_CHR_UUID  = 0x2A26;
-constexpr uint16_t DEVICE_TX_POWER_CHR_UUID      = 0x2A07;
-constexpr uint16_t DEVICE_MODEL_NUMBER_CHR_UUID  = 0x2A24;
+constexpr uint16_t DEVICE_INFO_SVC_UUID = 0x180A;
+constexpr uint16_t DEVICE_MAKE_NAME_CHR_UUID = 0x2A29;
+constexpr uint16_t DEVICE_FIRMWARE_VER_CHR_UUID = 0x2A26;
+constexpr uint16_t DEVICE_TX_POWER_CHR_UUID = 0x2A07;
+constexpr uint16_t DEVICE_MODEL_NUMBER_CHR_UUID = 0x2A24;
 constexpr uint16_t DEVICE_SERIAL_NUMBER_CHR_UUID = 0x2A25;
-constexpr uint16_t DEVICE_HARDWARE_REV_CHR_UUID  = 0x2A27;
+constexpr uint16_t DEVICE_HARDWARE_REV_CHR_UUID = 0x2A27;
 
 // Dynamite sampler specific UUIDs
 // TODO: the ADC_FEED_CHR_UUID & OTA UUIDs were copied from sample code originally.
 // They should be changed to be unique.
 constexpr char DYNAMITE_SAMPLER_SVC_UUID[] = "e331016b-6618-4f8f-8997-1a2c7c9e5fa3";
-constexpr char ADC_FEED_CHR_UUID[]         = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
-constexpr char USER_KVS_CHR_UUID[]         = "10adce11-68a6-450b-9810-ca11b39fd283";
-constexpr char ADC_CONF_CHR_UUID[]         = "adcc0f19-2575-4502-9a48-0e99974eb34f";
+constexpr char ADC_FEED_CHR_UUID[] = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+constexpr char USER_KVS_CHR_UUID[] = "10adce11-68a6-450b-9810-ca11b39fd283";
+constexpr char ADC_CONF_CHR_UUID[] = "adcc0f19-2575-4502-9a48-0e99974eb34f";
 
-constexpr char OTA_SVC_UUID[]         = "d6f1d96d-594c-4c53-b1c6-144a1dfde6d8";
+constexpr char OTA_SVC_UUID[] = "d6f1d96d-594c-4c53-b1c6-144a1dfde6d8";
 constexpr char OTA_CONTROL_CHR_UUID[] = "7ad671aa-21c0-46a4-b722-270e3ae3d830";
-constexpr char OTA_DATA_CHR_UUID[]    = "23408888-1f40-4cd8-9b89-ca8d45f8a5b0";
+constexpr char OTA_DATA_CHR_UUID[] = "23408888-1f40-4cd8-9b89-ca8d45f8a5b0";
 
 // The TX characteristic if for setting only. Use the device info characteristic to
 // read the current power.
@@ -53,13 +53,13 @@ typedef uint8_t OtaReplyType;
 typedef uint32_t OtaFileSizeType;
 
 constexpr OtaRequestType SVR_CHR_OTA_CONTROL_REQUEST = 1;
-constexpr OtaRequestType SVR_CHR_OTA_CONTROL_DONE    = 4;
+constexpr OtaRequestType SVR_CHR_OTA_CONTROL_DONE = 4;
 
-constexpr OtaReplyType SVR_CHR_OTA_CONTROL_NOP         = 0;
+constexpr OtaReplyType SVR_CHR_OTA_CONTROL_NOP = 0;
 constexpr OtaReplyType SVR_CHR_OTA_CONTROL_REQUEST_ACK = 2;
 constexpr OtaReplyType SVR_CHR_OTA_CONTROL_REQUEST_NAK = 3;
-constexpr OtaReplyType SVR_CHR_OTA_CONTROL_DONE_ACK    = 5;
-constexpr OtaReplyType SVR_CHR_OTA_CONTROL_DONE_NAK    = 6;
+constexpr OtaReplyType SVR_CHR_OTA_CONTROL_DONE_ACK = 5;
+constexpr OtaReplyType SVR_CHR_OTA_CONTROL_DONE_NAK = 6;
 
 //======================== </OTA Update>
 
@@ -141,8 +141,8 @@ constexpr char CmdKvsGet[KVS_CMD_LEN]{'G', 'E', 'T'};
 constexpr char CmdKvsDelete[KVS_CMD_LEN]{'D', 'E', 'L'};
 constexpr char CmdKvsGetByIdx[KVS_CMD_LEN]{'I', 'D', 'X'};
 
-constexpr char UserKvsFolderFactory  = 'F';
-constexpr char UserKvsFolderUser     = 'U';
+constexpr char UserKvsFolderFactory = 'F';
+constexpr char UserKvsFolderUser = 'U';
 constexpr char UserKvsFolderSettings = 'S';
 
 constexpr size_t USER_KVS_NETWORK_FRAME_LENGTH = 240;

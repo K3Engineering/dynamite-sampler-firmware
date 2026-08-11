@@ -13,8 +13,8 @@ constexpr char TAG[] = "KVS";
 constexpr char DYNA_PERSIST_PARTITION[] = "DynaPersistent";
 static_assert(sizeof(DYNA_PERSIST_PARTITION) <= NVS_PART_NAME_MAX_SIZE);
 
-constexpr char FACTORY_NSPACE[]  = "Factory";
-constexpr char USER_NSPACE[]     = "User";
+constexpr char FACTORY_NSPACE[] = "Factory";
+constexpr char USER_NSPACE[] = "User";
 constexpr char SETTINGS_NSPACE[] = "Settings";
 static_assert(sizeof(FACTORY_NSPACE) <= NVS_NS_NAME_MAX_SIZE);
 static_assert(sizeof(USER_NSPACE) <= NVS_NS_NAME_MAX_SIZE);
@@ -99,13 +99,13 @@ static bool readByIdx(const char *partition, const char *nsp, const char *cmd, c
 	if (replySz <= USER_KVS_MAX_KEY_LEN + 10) {
 		return false;
 	}
-	const size_t num    = strtoul(cmd, nullptr, 16);
+	const size_t num = strtoul(cmd, nullptr, 16);
 	nvs_handle_t handle = 0;
 	if (ESP_OK != nvs_open_from_partition(partition, nsp, NVS_READONLY, &handle)) {
 		return false;
 	}
 	nvs_iterator_t it = 0;
-	esp_err_t err     = nvs_entry_find_in_handle(handle, NVS_TYPE_ANY, &it);
+	esp_err_t err = nvs_entry_find_in_handle(handle, NVS_TYPE_ANY, &it);
 	for (size_t i = 0; (ESP_OK == err) && (i < num); ++i) {
 		err = nvs_entry_next(&it);
 	}
@@ -185,7 +185,7 @@ bool processKvsCommand(const char *rq, size_t rqLen, char *reply, size_t replySz
 		return false;
 	}
 	const char *part = partitionName(rq[KVS_CMD_LEN]);
-	const char *nsp  = nameSpace(rq[KVS_CMD_LEN]);
+	const char *nsp = nameSpace(rq[KVS_CMD_LEN]);
 	if (!(part && nsp)) {
 		return false;
 	}

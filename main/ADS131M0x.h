@@ -31,7 +31,7 @@ class ADS131M0x {
 	static constexpr size_t NUM_CHANNELS = boardConfig.adc.NCHAN;
 	static_assert((NUM_CHANNELS <= 8) && (0 == NUM_CHANNELS % 2));
 	static constexpr size_t DATA_WORD_LENGTH = 3; // in bytes
-	static constexpr uint16_t RSP_RESET_OK   = 0xFF20 + NUM_CHANNELS;
+	static constexpr uint16_t RSP_RESET_OK = 0xFF20 + NUM_CHANNELS;
 
 #pragma pack(push, 1)
 	struct RawOutput {
@@ -111,7 +111,7 @@ class MockAds131 {
 	gptimer_handle_t gptimer;
 
   public:
-	static constexpr size_t NUM_CHANNELS     = ADS131M0x::NUM_CHANNELS;
+	static constexpr size_t NUM_CHANNELS = ADS131M0x::NUM_CHANNELS;
 	static constexpr size_t DATA_WORD_LENGTH = ADS131M0x::DATA_WORD_LENGTH; // in bytes
 	typedef ADS131M0x::RawOutput RawOutput;
 
@@ -120,7 +120,7 @@ class MockAds131 {
 	          gpio_num_t mosiPin);
 	void deinit() {}
 	void setWakeupTask(TaskHandle_t taskToWakeOnDrdy, size_t interval) {
-		isrData.taskToWake   = taskToWakeOnDrdy;
+		isrData.taskToWake = taskToWakeOnDrdy;
 		isrData.wakeInterval = interval;
 	}
 	bool resetAdcHw() { return true; }

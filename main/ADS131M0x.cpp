@@ -24,10 +24,10 @@ static void interruptHandlerAdcDrdy(void *param);
 
 static constexpr uint16_t crc16ccitt(const void *data, size_t count) {
 	static constexpr uint16_t CRC_INIT_VAL = 0xFFFF;
-	static constexpr uint16_t CRC_POLYNOM  = 0x1021;
+	static constexpr uint16_t CRC_POLYNOM = 0x1021;
 
 	const uint8_t *ptr = (const uint8_t *)data;
-	uint16_t crc       = CRC_INIT_VAL;
+	uint16_t crc = CRC_INIT_VAL;
 	while (count > 0) {
 		--count;
 		static_assert(sizeof(*ptr << 8) >= sizeof(crc));
@@ -46,7 +46,7 @@ static constexpr uint16_t crc16ccitt(const void *data, size_t count) {
 }
 
 bool ADS131M0x::writeRegister(uint8_t address, uint16_t value) {
-	txSmallBuff->status            = htobe16(ADS131M0xReg::CMD_WRITE_REG | (address << 7));
+	txSmallBuff->status = htobe16(ADS131M0xReg::CMD_WRITE_REG | (address << 7));
 	*(uint16_t *)txSmallBuff->data = htobe16(value);
 	spi_device_polling_transmit(spiHandle, &transDescr);
 
@@ -149,7 +149,7 @@ uint16_t ADS131M0x::readCLOCK() { return readRegister(ADS131M0xReg::REG_CLOCK); 
 uint16_t ADS131M0x::readPGA() { return readRegister(ADS131M0xReg::REG_GAIN1); }
 
 bool ADS131M0x::isCrcOk(const RawOutput *data) {
-	uint16_t crc           = be16toh(data->crc);
+	uint16_t crc = be16toh(data->crc);
 	uint16_t calculatedCrc = crc16ccitt(data, sizeof(*data) - DATA_WORD_LENGTH);
 
 	return crc == calculatedCrc;
@@ -171,11 +171,11 @@ bool ADS131M0x::resetAdcHw() {
 void ADS131M0x::init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset,
                      spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
                      gpio_num_t mosiPin) {
-	csPin    = pinCs;
-	drdyPin  = pinDrdy;
+	csPin = pinCs;
+	drdyPin = pinDrdy;
 	resetPin = pinReset;
 
-	spiHandle     = 0;
+	spiHandle = 0;
 	spiHostDevice = spiDevice;
 
 	gpio_set_level(resetPin, 0);
@@ -193,65 +193,65 @@ void ADS131M0x::init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset,
 	    (lldesc_t *)heap_caps_malloc(sizeof(lldesc_t) * RING_BUFF_SZ, MALLOC_CAP_DMA);
 	for (size_t i = 0; i < RING_BUFF_SZ; i++) {
 		isrData.rxDescArray[i] = {
-		    .size   = dmaPaddedSize(SPI_FRAME_SIZE), // Buffer capacity
-		    .length = 0,                             // to be updated by the hw
+		    .size = dmaPaddedSize(SPI_FRAME_SIZE), // Buffer capacity
+		    .length = 0,                           // to be updated by the hw
 		    .offset = 0,
-		    .sosf   = 0, // Start of sub-frame (unused)
-		    .eof    = 1, // End of Frame: DMA stops after this descriptor
-		    .owner  = 1, // 1 = Hardware (DMA) owns this
-		    .buf    = isrData.rxRingBuff + dmaPaddedSize(SPI_FRAME_SIZE) * i, // Point to data buff
-		    .empty  = 0,
+		    .sosf = 0,  // Start of sub-frame (unused)
+		    .eof = 1,   // End of Frame: DMA stops after this descriptor
+		    .owner = 1, // 1 = Hardware (DMA) owns this
+		    .buf = isrData.rxRingBuff + dmaPaddedSize(SPI_FRAME_SIZE) * i, // Point to data buff
+		    .empty = 0,
 		};
 	}
 	transDescr = {
-	    .flags            = SPI_TRANS_DMA_BUFFER_ALIGN_MANUAL,
-	    .cmd              = 0,
-	    .addr             = 0,
-	    .length           = SPI_FRAME_SIZE * 8, // in bits.
-	    .rxlength         = SPI_FRAME_SIZE * 8,
+	    .flags = SPI_TRANS_DMA_BUFFER_ALIGN_MANUAL,
+	    .cmd = 0,
+	    .addr = 0,
+	    .length = SPI_FRAME_SIZE * 8, // in bits.
+	    .rxlength = SPI_FRAME_SIZE * 8,
 	    .override_freq_hz = 0,
-	    .user             = nullptr,
-	    .tx_buffer        = txSmallBuff,
-	    .rx_buffer        = rxSmallBuff,
+	    .user = nullptr,
+	    .tx_buffer = txSmallBuff,
+	    .rx_buffer = rxSmallBuff,
 	};
 
 	assert(!spiHandle);
 	const spi_bus_config_t busCfg = {
-	    .mosi_io_num           = mosiPin,
-	    .miso_io_num           = misoPin,
-	    .sclk_io_num           = clkPin,
-	    .quadwp_io_num         = -1,
-	    .quadhd_io_num         = -1,
-	    .data4_io_num          = -1,
-	    .data5_io_num          = -1,
-	    .data6_io_num          = -1,
-	    .data7_io_num          = -1,
+	    .mosi_io_num = mosiPin,
+	    .miso_io_num = misoPin,
+	    .sclk_io_num = clkPin,
+	    .quadwp_io_num = -1,
+	    .quadhd_io_num = -1,
+	    .data4_io_num = -1,
+	    .data5_io_num = -1,
+	    .data6_io_num = -1,
+	    .data7_io_num = -1,
 	    .data_io_default_level = 0,
-	    .max_transfer_sz       = SPI_FRAME_SIZE,
-	    .flags                 = SPICOMMON_BUSFLAG_MASTER,
-	    .isr_cpu_id            = ESP_INTR_CPU_AFFINITY_AUTO,
-	    .intr_flags            = 0,
+	    .max_transfer_sz = SPI_FRAME_SIZE,
+	    .flags = SPICOMMON_BUSFLAG_MASTER,
+	    .isr_cpu_id = ESP_INTR_CPU_AFFINITY_AUTO,
+	    .intr_flags = 0,
 	};
 	esp_err_t ret = spi_bus_initialize(spiHostDevice, &busCfg, SPI_DMA_CH_AUTO);
 	assert(ESP_OK == ret);
 
 	const spi_device_interface_config_t devcfg = {
-	    .command_bits     = 0,
-	    .address_bits     = 0,
-	    .dummy_bits       = 0,
-	    .mode             = 1, // SPI mode 1
-	    .clock_source     = SPI_CLK_SRC_DEFAULT,
-	    .duty_cycle_pos   = 0,
-	    .cs_ena_pretrans  = 0,
+	    .command_bits = 0,
+	    .address_bits = 0,
+	    .dummy_bits = 0,
+	    .mode = 1, // SPI mode 1
+	    .clock_source = SPI_CLK_SRC_DEFAULT,
+	    .duty_cycle_pos = 0,
+	    .cs_ena_pretrans = 0,
 	    .cs_ena_posttrans = 0,
-	    .clock_speed_hz   = SPI_MASTER_FREQ_13M,
-	    .input_delay_ns   = 0,
-	    .sample_point     = SPI_SAMPLING_POINT_PHASE_0,
-	    .spics_io_num     = -1,
-	    .flags            = 0,
-	    .queue_size       = 1, // Queue is not used, but the library requires a non zero value.
-	    .pre_cb           = nullptr,
-	    .post_cb          = nullptr,
+	    .clock_speed_hz = SPI_MASTER_FREQ_13M,
+	    .input_delay_ns = 0,
+	    .sample_point = SPI_SAMPLING_POINT_PHASE_0,
+	    .spics_io_num = -1,
+	    .flags = 0,
+	    .queue_size = 1, // Queue is not used, but the library requires a non zero value.
+	    .pre_cb = nullptr,
+	    .post_cb = nullptr,
 	};
 	assert(devcfg.clock_speed_hz <= 15625000); // Max ADS131 SPI clock
 	ret = spi_bus_add_device(spiHostDevice, &devcfg, &spiHandle);
@@ -409,7 +409,7 @@ static bool IRAM_ATTR interruptHandlerMockTimerCb(gptimer_handle_t timer,
                                                   const gptimer_alarm_event_data_t *edata,
                                                   void *userCtx) {
 	MockAds131xIsrData *ctrl = (MockAds131xIsrData *)userCtx;
-	BaseType_t taskWoken     = pdFALSE;
+	BaseType_t taskWoken = pdFALSE;
 	if (++ctrl->headIndex == ctrl->wakeInterval) {
 		ctrl->headIndex = 0;
 		// unblock the task that will read the ADC & handle putting in the buffer
@@ -422,20 +422,20 @@ void MockAds131::init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset,
                       spi_host_device_t spiDevice, gpio_num_t clkPin, gpio_num_t misoPin,
                       gpio_num_t mosiPin) {
 	static constexpr gptimer_config_t timerConfig = {
-	    .clk_src       = GPTIMER_CLK_SRC_DEFAULT,
-	    .direction     = GPTIMER_COUNT_UP,
+	    .clk_src = GPTIMER_CLK_SRC_DEFAULT,
+	    .direction = GPTIMER_COUNT_UP,
 	    .resolution_hz = 1000 * 1000,
 	    .intr_priority = 0,
 	    .flags =
 	        {
 	            .intr_shared = 0,
-	            .allow_pd    = 0,
+	            .allow_pd = 0,
 	        },
 	};
 	gptimer_new_timer(&timerConfig, &gptimer);
 
 	static constexpr gptimer_alarm_config_t alarmConfig = {
-	    .alarm_count  = 1000,
+	    .alarm_count = 1000,
 	    .reload_count = 0,
 	    .flags =
 	        {
@@ -453,18 +453,18 @@ void MockAds131::init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset,
 
 const MockAds131::RawOutput *IRAM_ATTR MockAds131::rawReadAdc(size_t) const {
 	static RawOutput a{
-	    .status       = htobe16((ADS131M0xReg::REGMASK_STATUS_DRDY0 << NUM_CHANNELS) - 1),
+	    .status = htobe16((ADS131M0xReg::REGMASK_STATUS_DRDY0 << NUM_CHANNELS) - 1),
 	    .unusedStatus = 0,
-	    .data         = {},
-	    .crc          = 0,
-	    .unusedCrc    = 0,
+	    .data = {},
+	    .crc = 0,
+	    .unusedCrc = 0,
 	};
 	static uint32_t val[NUM_CHANNELS]{0};
 	for (size_t i = 0; i < NUM_CHANNELS; ++i) {
 		val[i] += i;
 		static_assert(DATA_WORD_LENGTH == 3, "Assumes 24-bit ADC sample");
 		static_assert(RawOutput::SAMPLE_BYTE_ORDER != __BYTE_ORDER__);
-		a.data[i * DATA_WORD_LENGTH]     = val[i] >> 16;
+		a.data[i * DATA_WORD_LENGTH] = val[i] >> 16;
 		a.data[i * DATA_WORD_LENGTH + 1] = val[i] >> 8;
 		a.data[i * DATA_WORD_LENGTH + 2] = val[i];
 	}
