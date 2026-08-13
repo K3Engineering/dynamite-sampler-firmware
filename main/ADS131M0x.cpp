@@ -235,7 +235,7 @@ void ADS131M0x::init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset,
 	esp_err_t ret = spi_bus_initialize(spiHostDevice, &busCfg, SPI_DMA_CH_AUTO);
 	assert(ESP_OK == ret);
 
-	const spi_device_interface_config_t devcfg = {
+	static constexpr spi_device_interface_config_t devcfg = {
 	    .command_bits = 0,
 	    .address_bits = 0,
 	    .dummy_bits = 0,
