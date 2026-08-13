@@ -40,7 +40,7 @@ class MyServerCallbacks : public NimBLEServerCallbacks {
 		// is this needed?
 		// Does this actually affect the packet size for the way we notify
 		// Do we need to notify in a different way?
-		server->setDataLen(connInfo.getConnHandle(), BLE_PUBL_DATA_DLE);
+		server->setDataLen(connInfo.getConnHandle(), DLE_MAX_SIZE);
 
 		// Best case, devices can handle 7.5ms interval connection (android phone)
 		// older iOS might be 15ms, Windows PC might be 30ms. Connection interval is set in
@@ -254,7 +254,7 @@ static void IRAM_ATTR taskBlePublishAdcBuffer(void *) {
 	uint16_t count = 0;
 	while (true) {
 		AdcFeedNetworkPacket packet;
-		static_assert(sizeof(packet) <= BLE_PUBL_DATA_ATT_PAYLOAD);
+		static_assert(sizeof(packet) <= ATT_PAYLOAD_MAX_SIZE);
 		// Read the ADC buffer and update the BLE characteristic
 		size_t bytesRead = xStreamBufferReceive(adcStreamBufferHandle, &packet.adc,
 		                                        sizeof(packet.adc), portMAX_DELAY);
