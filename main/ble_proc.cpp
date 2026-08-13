@@ -159,6 +159,7 @@ static void setupPowerManagerInterface(NimBLEServer *server) {
 class AdcFeedCallbacks : public NimBLECharacteristicCallbacks {
 	void onSubscribe(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo,
 	                 uint16_t subValue) override {
+		ESP_LOGI(TAG, "ADC Feed onSubscribed subValue: %u, MTU: %u", subValue, connInfo.getMTU());
 		if (subValue & 1) {
 			if (deviceLock == DeviceLock::Open) {
 				deviceLock = DeviceLock::Streaming;
