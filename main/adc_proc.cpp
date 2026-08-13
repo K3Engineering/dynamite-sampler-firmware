@@ -27,7 +27,16 @@ struct ADS131HwConfigData {
 static DRAM_ATTR AdcClass adc;
 static ADS131HwConfigData savedConfig;
 
-bool startAdcAcquisition() { return adc.startAcquisition(); }
+static TaskHandle_t adcReadTaskHandle = nullptr;
+
+bool startAdcAcquisition() {
+	const size_t nSamples = adcFeedNumSamples;
+	assert(nSamples >= ADC_FEED_MIN_SAMPLES);
+	assert(nSamples <= AdcFeedNetworkPacket::NUM_SAMPLES);
+	assert(adcReadTaskHandle);
+	adc.setWakeupTask(adcReadTaskHandle, nSamples);
+	return adc.startAcquisition();
+}
 
 void stopAdcAcquisition() { adc.stopAcquisition(); }
 
@@ -94,8 +103,7 @@ static AdcFeedNetworkData IRAM_ATTR adcToNetwork(const AdcClass::RawOutput *adc)
 
 // Task that handles calling the read adc function and placing the values in the buffer.
 static void IRAM_ATTR taskAdcReadAndBuffer(void *) {
-	static constexpr size_t N_SAMPLES = AdcFeedNetworkPacket::NUM_SAMPLES;
-	AdcFeedNetworkData toSend[N_SAMPLES];
+	AdcFeedNetworkData toSend[AdcFeedNetworkPacket::NUM_SAMPLES];
 
 	while (true) {
 		// Wait until ISR notifies this task. Normally numNotifications == 1,
@@ -104,17 +112,20 @@ static void IRAM_ATTR taskAdcReadAndBuffer(void *) {
 		if (0 == numNotifications) [[unlikely]] {
 			continue;
 		}
+		const size_t nSamples = adcFeedNumSamples;
+		assert(nSamples >= ADC_FEED_MIN_SAMPLES);
+		assert(nSamples <= AdcFeedNetworkPacket::NUM_SAMPLES);
+		const size_t bytes = nSamples * sizeof(AdcFeedNetworkData);
 		// Read ADC values. Place them in StreamBuffer. Notify the BLE task
 		const size_t idx = adc.getReadyBatchStartIdx();
-		for (size_t n = 0; n < N_SAMPLES; ++n) {
+		for (size_t n = 0; n < nSamples; ++n) {
 			const ADS131M0x::RawOutput *ptr = adc.rawReadAdc(idx + n);
 #if CONFIG_CHECK_ADC_CHECKSUM
 			assert(adc.isCrcOk(ptr));
 #endif // CONFIG_CHECK_ADC_CHECKSUM
 			toSend[n] = adcToNetwork(ptr);
 		}
-		if (sizeof(toSend) != xStreamBufferSend(adcStreamBufferHandle, toSend, sizeof(toSend), 0))
-		    [[unlikely]] {
+		if (bytes != xStreamBufferSend(adcStreamBufferHandle, toSend, bytes, 0)) [[unlikely]] {
 			ESP_LOGE(TAG, "xStreamBufferSend failed");
 		}
 	}
@@ -170,10 +181,8 @@ void setupAdc(int core) {
 		vTaskDelay(10);
 
 	// TODO figure out the memory stack required
-	TaskHandle_t adcReadTaskHandle = 0;
-	const UBaseType_t priority     = 24; // Highest priority possible
+	const UBaseType_t priority = 24; // Highest priority possible
 	xTaskCreatePinnedToCore(taskAdcReadAndBuffer, "task_ADC_read", 1024 * 4, NULL, priority,
 	                        &adcReadTaskHandle, core);
 	assert(adcReadTaskHandle);
-	adc.setWakeupTask(adcReadTaskHandle, AdcFeedNetworkPacket::NUM_SAMPLES);
 }

@@ -24,13 +24,22 @@ static NimBLECharacteristic *chrAdcFeed = nullptr;
 
 StreamBufferHandle_t adcStreamBufferHandle = nullptr;
 DeviceLock deviceLock                      = DeviceLock::Open;
+volatile size_t adcFeedNumSamples          = 0;
+
+static size_t samplesForAttMtu(uint16_t attMtu) {
+	assert(attMtu >= 23);
+	const uint16_t attPayload = (attMtu - 3 < BLE_PUBL_DATA_ATT_PAYLOAD) ? (attMtu - 3)
+	                                                                    : BLE_PUBL_DATA_ATT_PAYLOAD;
+	return (attPayload - sizeof(AdcFeedNetworkPacket::Header)) / sizeof(AdcFeedNetworkData);
+}
 
 static void adcOnDisconnect() {
 	if (deviceLock != DeviceLock::Streaming) {
 		return;
 	}
 	stopAdcAcquisition();
-	deviceLock = DeviceLock::Open;
+	adcFeedNumSamples = 0;
+	deviceLock        = DeviceLock::Open;
 	ESP_LOGI(TAG, "adcOnDisconnect");
 }
 
@@ -161,15 +170,25 @@ class AdcFeedCallbacks : public NimBLECharacteristicCallbacks {
 	                 uint16_t subValue) override {
 		if (subValue & 1) {
 			if (deviceLock == DeviceLock::Open) {
-				deviceLock = DeviceLock::Streaming;
+				const size_t n = samplesForAttMtu(connInfo.getMTU());
+				ESP_LOGI(TAG, "ADC subscribe MTU %u -> %u samples", connInfo.getMTU(),
+				         (unsigned)n);
+				if (n < ADC_FEED_MIN_SAMPLES) {
+					ESP_LOGE(TAG, "MTU too small to stream");
+					return;
+				}
+				adcFeedNumSamples = n;
+				deviceLock        = DeviceLock::Streaming;
 				if (!startAdcAcquisition()) {
-					deviceLock = DeviceLock::Open;
+					adcFeedNumSamples = 0;
+					deviceLock        = DeviceLock::Open;
 				}
 			}
 		} else {
 			if (deviceLock == DeviceLock::Streaming) {
 				stopAdcAcquisition();
-				deviceLock = DeviceLock::Open;
+				adcFeedNumSamples = 0;
+				deviceLock        = DeviceLock::Open;
 			}
 		}
 	}
@@ -254,15 +273,20 @@ static void IRAM_ATTR taskBlePublishAdcBuffer(void *) {
 	while (true) {
 		AdcFeedNetworkPacket packet;
 		static_assert(sizeof(packet) <= BLE_PUBL_DATA_ATT_PAYLOAD);
-		// Read the ADC buffer and update the BLE characteristic
-		size_t bytesRead = xStreamBufferReceive(adcStreamBufferHandle, &packet.adc,
-		                                        sizeof(packet.adc), portMAX_DELAY);
-		if (bytesRead == sizeof(packet.adc)) [[likely]] {
+		const size_t n = adcFeedNumSamples;
+		if (n == 0) {
+			xStreamBufferReset(adcStreamBufferHandle);
+			vTaskDelay(pdMS_TO_TICKS(10));
+			continue;
+		}
+		const size_t bytes     = n * sizeof(*packet.adc);
+		const size_t bytesRead = xStreamBufferReceive(adcStreamBufferHandle, &packet.adc, bytes,
+		                                              pdMS_TO_TICKS(50));
+		if (bytesRead == bytes) {
 			packet.hdr.sample_sequence_number = htole16(count);
-			chrAdcFeed->notify(packet);
-			count += sizeof(packet.adc) / sizeof(*packet.adc);
-		} else {
-			assert(0);
+			chrAdcFeed->notify(reinterpret_cast<const uint8_t *>(&packet),
+			                   sizeof(packet.hdr) + bytes);
+			count += n;
 		}
 	}
 	vTaskDelete(NULL);
@@ -302,7 +326,7 @@ static void taskSetupBle(void *setupDone) {
 
 void setupBle(int core) {
 	// This buffer is to share the ADC values from the adc read task and BLE notify task
-	adcStreamBufferHandle = xStreamBufferCreate(ADC_FEED_CHUNK_SZ * 8, ADC_FEED_CHUNK_SZ);
+	adcStreamBufferHandle = xStreamBufferCreate(ADC_FEED_CHUNK_SZ * 8, sizeof(AdcFeedNetworkData));
 	assert(adcStreamBufferHandle != NULL);
 
 	volatile bool done = false;

@@ -16,4 +16,14 @@ constexpr size_t ADC_FEED_CHUNK_SZ =
     (BLE_PUBL_DATA_ATT_PAYLOAD / sizeof(AdcFeedNetworkData)) * sizeof(AdcFeedNetworkData);
 static_assert(ADC_FEED_CHUNK_SZ <= BLE_PUBL_DATA_ATT_PAYLOAD);
 
+// Smallest N that still carries 1 ksps in one notify per 15 ms connection event.
+// ATT MTU 185 => payload 182 => 15 samples + 2-byte header.
+constexpr size_t ADC_FEED_MIN_SAMPLES = 15;
+static_assert(ADC_FEED_MIN_SAMPLES * sizeof(AdcFeedNetworkData) +
+                  sizeof(AdcFeedNetworkPacket::Header) + 3 ==
+              185);
+
+// Samples per notify for the current stream. 0 when not streaming. Frozen at subscribe.
+extern volatile size_t adcFeedNumSamples;
+
 #endif // _ADC_BLE_INTERFACE_H
