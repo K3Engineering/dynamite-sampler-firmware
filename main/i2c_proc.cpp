@@ -120,7 +120,7 @@ bool TMP118::config(I2CMasterBus &bus, char subType) {
 	if (!devHandle) {
 		return false;
 	}
-	const WriteCommand cfg = {
+	static constexpr WriteCommand cfg = {
 	    .regPtr = CONFIG_REG,
 	    .regVal = htobe16(CFG_RESERVED_DEFAULTS | CFG_CONV_RATE_1S | CFG_AVG_8X_B2B),
 	};
@@ -133,7 +133,7 @@ bool TMP118::config(I2CMasterBus &bus, char subType) {
 }
 
 void TMP118::readTemperature() {
-	const ReadCommand cmdGetVal = {
+	static constexpr ReadCommand cmdGetVal = {
 	    .regPtr = TEMP_RESULT_REG,
 	};
 	uint16_t rxBuff = 0;

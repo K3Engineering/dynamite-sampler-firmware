@@ -75,7 +75,7 @@ constexpr size_t HW_ID_LEN = 12; // NOT zero terminated
 static void hwIdStr(char out[HW_ID_LEN]) {
 	uint8_t mac[8];
 	esp_efuse_mac_get_default(mac);
-	const char hexChr[] = "0123456789ABCDEF";
+	static constexpr char hexChr[] = "0123456789ABCDEF";
 	for (size_t i = 0; i < 6; i++) {
 		uint8_t byte = mac[i];
 		out[i * 2] = hexChr[byte >> 4];
