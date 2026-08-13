@@ -112,7 +112,12 @@ static void IRAM_ATTR taskAdcReadAndBuffer(void *) {
 		if (0 == numNotifications) [[unlikely]] {
 			continue;
 		}
+		// A DRDY wakeup can already be pending when the BLE task stops the
+		// stream and zeroes adcFeedNumSamples; that wakeup is stale.
 		const size_t nSamples = adcFeedNumSamples;
+		if (nSamples == 0) {
+			continue;
+		}
 		assert(nSamples >= ADC_FEED_MIN_SAMPLES);
 		assert(nSamples <= AdcFeedNetworkPacket::NUM_SAMPLES);
 		const size_t bytes = nSamples * sizeof(AdcFeedNetworkData);
@@ -125,9 +130,17 @@ static void IRAM_ATTR taskAdcReadAndBuffer(void *) {
 #endif // CONFIG_CHECK_ADC_CHECKSUM
 			toSend[n] = adcToNetwork(ptr);
 		}
-		if (bytes != xStreamBufferSend(adcStreamBufferHandle, toSend, bytes, 0)) [[unlikely]] {
-			ESP_LOGE(TAG, "xStreamBufferSend failed");
+		// All-or-nothing: a partial send is a non-multiple of the sample
+		// size and would misalign every packet after it. A dropped batch
+		// shows up as a sequence gap on the client instead.
+		if (xStreamBufferSpacesAvailable(adcStreamBufferHandle) < bytes) [[unlikely]] {
+			ESP_LOGE(TAG, "ADC stream buffer full, dropped %u samples", (unsigned)nSamples);
+			continue;
 		}
+		// Single producer: space can only grow between the check and the send.
+		const size_t sent = xStreamBufferSend(adcStreamBufferHandle, toSend, bytes, 0);
+		assert(sent == bytes);
+		(void)sent;
 	}
 	vTaskDelete(NULL);
 }

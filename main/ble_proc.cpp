@@ -1,3 +1,5 @@
+#include <algorithm>
+
 #include <esp_log.h>
 #include <esp_mac.h>
 
@@ -28,8 +30,7 @@ volatile size_t adcFeedNumSamples          = 0;
 
 static size_t samplesForAttMtu(uint16_t attMtu) {
 	assert(attMtu >= 23);
-	const uint16_t attPayload = (attMtu - 3 < BLE_PUBL_DATA_ATT_PAYLOAD) ? (attMtu - 3)
-	                                                                    : BLE_PUBL_DATA_ATT_PAYLOAD;
+	const uint16_t attPayload = std::min<uint16_t>(attMtu - 3, BLE_PUBL_DATA_ATT_PAYLOAD);
 	return (attPayload - sizeof(AdcFeedNetworkPacket::Header)) / sizeof(AdcFeedNetworkData);
 }
 
@@ -287,6 +288,11 @@ static void IRAM_ATTR taskBlePublishAdcBuffer(void *) {
 			chrAdcFeed->notify(reinterpret_cast<const uint8_t *>(&packet),
 			                   sizeof(packet.hdr) + bytes);
 			count += n;
+		} else if (bytesRead != 0) {
+			// 0 bytes is the teardown poll; a nonzero short read is lost
+			// samples that the sequence counter cannot see.
+			ESP_LOGE(TAG, "Dropped partial ADC chunk: %u of %u bytes", (unsigned)bytesRead,
+			         (unsigned)bytes);
 		}
 	}
 	vTaskDelete(NULL);
