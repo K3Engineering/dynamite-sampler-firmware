@@ -172,6 +172,7 @@ class AdcFeedCallbacks : public NimBLECharacteristicCallbacks {
 				if (adcFeedSamplesPerChunk > AdcFeedNetworkPacket::MAX_NUM_SAMPLES) {
 					adcFeedSamplesPerChunk = AdcFeedNetworkPacket::MAX_NUM_SAMPLES;
 				}
+				ESP_LOGI(TAG, "Samples per chunk %u", adcFeedSamplesPerChunk);
 				if (!startAdcAcquisition(adcFeedSamplesPerChunk)) {
 					deviceLock = DeviceLock::Open;
 				}
