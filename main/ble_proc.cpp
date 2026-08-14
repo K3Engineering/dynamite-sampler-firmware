@@ -167,7 +167,7 @@ class AdcFeedCallbacks : public NimBLECharacteristicCallbacks {
 				deviceLock = DeviceLock::Streaming;
 
 				adcFeedSamplesPerChunk =
-				    (connInfo.getMTU() - ATT_HEADER_SIZE - sizeof(AdcFeedNetworkPacket::Header)) /
+				    (185 - ATT_HEADER_SIZE - sizeof(AdcFeedNetworkPacket::Header)) /
 				    sizeof(AdcFeedNetworkData);
 				if (adcFeedSamplesPerChunk > AdcFeedNetworkPacket::MAX_NUM_SAMPLES) {
 					adcFeedSamplesPerChunk = AdcFeedNetworkPacket::MAX_NUM_SAMPLES;
@@ -270,8 +270,8 @@ static void IRAM_ATTR taskBlePublishAdcBuffer(void *) {
 		if (bytesRead == sizeof(packet.adc)) [[likely]] {
 			packet.hdr.sample_sequence_number = htole16(count);
 			chrAdcFeed->notify((uint8_t *)&packet,
-			                   sizeof(packet.hdr) + adcFeedSamplesPerChunk * sizeof(packet.adc[0]));
-			count += sizeof(packet.adc) / sizeof(*packet.adc);
+			                   sizeof(packet.hdr) + adcFeedSamplesPerChunk * sizeof(*packet.adc));
+			count += adcFeedSamplesPerChunk;
 		} else {
 			assert(0);
 		}
