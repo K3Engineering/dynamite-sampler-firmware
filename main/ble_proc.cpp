@@ -22,7 +22,9 @@ static_assert(CONFIG_BT_NIMBLE_MAX_CONNECTIONS == 1);
 
 static NimBLECharacteristic *chrAdcFeed = nullptr;
 
-StreamBufferHandle_t adcStreamBufferHandle = nullptr;
+StreamBufferHandle_t adcStreamBufferHandle = NULL;
+static size_t adcFeedSamplesPerChunk = 0;
+
 DeviceLock deviceLock = DeviceLock::Open;
 
 static void adcOnDisconnect() {
@@ -159,11 +161,18 @@ static void setupPowerManagerInterface(NimBLEServer *server) {
 class AdcFeedCallbacks : public NimBLECharacteristicCallbacks {
 	void onSubscribe(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo,
 	                 uint16_t subValue) override {
-		ESP_LOGI(TAG, "ADC Feed onSubscribed subValue: %u, MTU: %u", subValue, connInfo.getMTU());
+		ESP_LOGI(TAG, "ADC Feed onSubscr sub %u, MTU %u", subValue, connInfo.getMTU());
 		if (subValue & 1) {
 			if (deviceLock == DeviceLock::Open) {
 				deviceLock = DeviceLock::Streaming;
-				if (!startAdcAcquisition()) {
+
+				adcFeedSamplesPerChunk =
+				    (connInfo.getMTU() - ATT_HEADER_SIZE - sizeof(AdcFeedNetworkPacket::Header)) /
+				    sizeof(AdcFeedNetworkData);
+				if (adcFeedSamplesPerChunk > AdcFeedNetworkPacket::MAX_NUM_SAMPLES) {
+					adcFeedSamplesPerChunk = AdcFeedNetworkPacket::MAX_NUM_SAMPLES;
+				}
+				if (!startAdcAcquisition(adcFeedSamplesPerChunk)) {
 					deviceLock = DeviceLock::Open;
 				}
 			}
@@ -260,7 +269,8 @@ static void IRAM_ATTR taskBlePublishAdcBuffer(void *) {
 		                                        sizeof(packet.adc), portMAX_DELAY);
 		if (bytesRead == sizeof(packet.adc)) [[likely]] {
 			packet.hdr.sample_sequence_number = htole16(count);
-			chrAdcFeed->notify(packet);
+			chrAdcFeed->notify((uint8_t *)&packet,
+			                   sizeof(packet.hdr) + adcFeedSamplesPerChunk * sizeof(packet.adc[0]));
 			count += sizeof(packet.adc) / sizeof(*packet.adc);
 		} else {
 			assert(0);
@@ -302,8 +312,8 @@ static void taskSetupBle(void *setupDone) {
 }
 
 void setupBle(int core) {
-	// This buffer is to share the ADC values from the adc read task and BLE notify task
-	adcStreamBufferHandle = xStreamBufferCreate(ADC_FEED_CHUNK_SZ * 8, ADC_FEED_CHUNK_SZ);
+	// Buffer to pass the ADC values from the ADC task to BLE task
+	adcStreamBufferHandle = xStreamBufferCreate(ADC_FEED_MAX_CHUNK_SZ * 8, ADC_FEED_MAX_CHUNK_SZ);
 	assert(adcStreamBufferHandle != NULL);
 
 	volatile bool done = false;

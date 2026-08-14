@@ -25,8 +25,8 @@ constexpr uint16_t ATT_PAYLOAD_MAX_SIZE = DLE_MAX_SIZE - L2CAP_HEADER_SIZE - ATT
 // bytes. The ATT payload will be the ATT size minus the ATT header 185-3=182
 // TODO: the actual payload size should be calculated
 
-constexpr size_t ADC_FEED_CHUNK_SZ =
+constexpr size_t ADC_FEED_MAX_CHUNK_SZ =
     (ATT_PAYLOAD_MAX_SIZE / sizeof(AdcFeedNetworkData)) * sizeof(AdcFeedNetworkData);
-static_assert(ADC_FEED_CHUNK_SZ <= ATT_PAYLOAD_MAX_SIZE);
+static_assert(ADC_FEED_MAX_CHUNK_SZ <= ATT_PAYLOAD_MAX_SIZE);
 
 #endif // _ADC_BLE_INTERFACE_H

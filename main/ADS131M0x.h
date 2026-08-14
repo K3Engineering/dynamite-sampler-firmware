@@ -69,10 +69,11 @@ class ADS131M0x {
 
 	void setWakeupTask(TaskHandle_t taskToWakeOnDrdy, size_t interval);
 
-	bool startAcquisition();
+	bool startAcquisition(size_t interval);
 	void stopAcquisition();
 
 	size_t getReadyBatchStartIdx() const { return isrData.tailIndex - isrData.wakeInterval; }
+	size_t getWakeInterval() const { return isrData.wakeInterval; }
 	const RawOutput *rawReadAdc(size_t idx) const;
 
 	static bool isCrcOk(const RawOutput *data);

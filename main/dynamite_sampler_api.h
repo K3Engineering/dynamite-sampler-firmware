@@ -80,15 +80,15 @@ struct AdcFeedNetworkData {
 };
 
 struct AdcFeedNetworkPacket {
-	static constexpr size_t BLE_PAYLOAD_SZ = 244;
+	static constexpr size_t BLE_MAX_PAYLOAD_SZ = 244;
 
 	struct Header {
 		uint16_t sample_sequence_number;
 	};
 	Header hdr;
-	static constexpr size_t NUM_SAMPLES =
-	    (BLE_PAYLOAD_SZ - sizeof(Header)) / sizeof(AdcFeedNetworkData);
-	AdcFeedNetworkData adc[NUM_SAMPLES];
+	static constexpr size_t MAX_NUM_SAMPLES =
+	    (BLE_MAX_PAYLOAD_SZ - sizeof(Header)) / sizeof(AdcFeedNetworkData);
+	AdcFeedNetworkData adc[MAX_NUM_SAMPLES];
 };
 
 struct AdcConfigNetworkData {
