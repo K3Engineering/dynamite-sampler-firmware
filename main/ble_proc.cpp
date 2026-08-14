@@ -167,7 +167,7 @@ class AdcFeedCallbacks : public NimBLECharacteristicCallbacks {
 				deviceLock = DeviceLock::Streaming;
 
 				adcFeedSamplesPerChunk =
-				    (185 - ATT_HEADER_SIZE - sizeof(AdcFeedNetworkPacket::Header)) /
+				    (connInfo.getMTU() - ATT_HEADER_SIZE - sizeof(AdcFeedNetworkPacket::Header)) /
 				    sizeof(AdcFeedNetworkData);
 				if (adcFeedSamplesPerChunk > AdcFeedNetworkPacket::MAX_NUM_SAMPLES) {
 					adcFeedSamplesPerChunk = AdcFeedNetworkPacket::MAX_NUM_SAMPLES;
