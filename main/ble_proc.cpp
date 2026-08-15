@@ -20,6 +20,14 @@ constexpr char TAG[] = "BLE";
 
 static_assert(CONFIG_BT_NIMBLE_MAX_CONNECTIONS == 1);
 
+struct DleConnInfo {
+	uint16_t maxTxOctets;
+	uint16_t maxRxOctets;
+	uint16_t maxTxTime;
+	uint16_t maxRxTime;
+	bool negotiated;
+};
+
 static NimBLECharacteristic *chrAdcFeed = nullptr;
 
 StreamBufferHandle_t adcStreamBufferHandle = NULL;
@@ -27,45 +35,42 @@ static size_t adcFeedSamplesPerChunk = 0;
 
 DeviceLock deviceLock = DeviceLock::Open;
 
-struct DleInfo {
-	uint16_t maxTxOctets = 0x001B; // BLE defaults: 27 octets
-	uint16_t maxRxOctets = 0x001B;
-	uint16_t maxTxTime = 0x0148; // 328 us (units are 8 us)
-	uint16_t maxRxTime = 0x0148;
-	bool negotiated = false;
+constexpr DleConnInfo dleInfoDefaults{
+    .maxTxOctets = 0x001B, // BLE defaults: 27 octets
+    .maxRxOctets = 0x001B,
+    .maxTxTime = 0x0148, // 328 us (units are 8 us)
+    .maxRxTime = 0x0148,
+    .negotiated = false,
 };
-static DleInfo g_dle;
 
-static void dleResetToDefaults() {
-	g_dle.maxTxOctets = 0x001B; // 27 octets
-	g_dle.maxRxOctets = 0x001B;
-	g_dle.maxTxTime = 0x0148; // 328 us
-	g_dle.maxRxTime = 0x0148;
-	g_dle.negotiated = false;
-}
+static DleConnInfo dleConnInfo{dleInfoDefaults};
 
-static int dleGapListener(struct ble_gap_event *event, void *arg) {
+static int dleGapListener(ble_gap_event *event, void *arg) {
 	switch (event->type) {
 	case BLE_GAP_EVENT_CONNECT:
 		if (event->connect.status == 0) {
 			// New connection: forget the previous peer's negotiated DLE.
 			// If this peer supports DLE, DATA_LEN_CHG will overwrite these shortly.
-			dleResetToDefaults();
+			dleConnInfo = dleInfoDefaults;
 		}
 		break;
 
 	case BLE_GAP_EVENT_DISCONNECT:
-		dleResetToDefaults(); // belt and braces: no stale values while disconnected
+		dleConnInfo = dleInfoDefaults; // belt and braces: no stale values while disconnected
 		break;
 
 	case BLE_GAP_EVENT_DATA_LEN_CHG:
-		g_dle.maxTxOctets = event->data_len_chg.max_tx_octets;
-		g_dle.maxRxOctets = event->data_len_chg.max_rx_octets;
-		g_dle.maxTxTime = event->data_len_chg.max_tx_time;
-		g_dle.maxRxTime = event->data_len_chg.max_rx_time;
-		g_dle.negotiated = true;
+		dleConnInfo.maxTxOctets = event->data_len_chg.max_tx_octets;
+		dleConnInfo.maxRxOctets = event->data_len_chg.max_rx_octets;
+		dleConnInfo.maxTxTime = event->data_len_chg.max_tx_time;
+		dleConnInfo.maxRxTime = event->data_len_chg.max_rx_time;
+		dleConnInfo.negotiated = true;
 		ESP_LOGD(TAG, "Gap event data len chg octets Tx,Rx (%u, %u), time Tx,Rx (%u,%u)",
-		         g_dle.maxTxOctets, g_dle.maxRxOctets, g_dle.maxTxTime, g_dle.maxRxTime);
+		         dleConnInfo.maxTxOctets, dleConnInfo.maxRxOctets, dleConnInfo.maxTxTime,
+		         dleConnInfo.maxRxTime);
+		break;
+
+	default:
 		break;
 	}
 	return 0;
@@ -206,13 +211,13 @@ class AdcFeedCallbacks : public NimBLECharacteristicCallbacks {
 	void onSubscribe(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo,
 	                 uint16_t subValue) override {
 		ESP_LOGI(TAG, "ADC Feed onSubscr sub %u, MTU %u", subValue, connInfo.getMTU());
-		ESP_LOGD(TAG, "The TX octet is %u", g_dle.maxTxOctets);
+		ESP_LOGD(TAG, "The TX octet is %u", dleConnInfo.maxTxOctets);
 		if (subValue & 1) {
 			if (deviceLock == DeviceLock::Open) {
 				deviceLock = DeviceLock::Streaming;
 
-				adcFeedSamplesPerChunk = (g_dle.maxTxOctets - L2CAP_HEADER_SIZE - ATT_HEADER_SIZE -
-				                          sizeof(AdcFeedNetworkPacket::Header)) /
+				adcFeedSamplesPerChunk = (dleConnInfo.maxTxOctets - L2CAP_HEADER_SIZE -
+				                          ATT_HEADER_SIZE - sizeof(AdcFeedNetworkPacket::Header)) /
 				                         sizeof(AdcFeedNetworkData);
 				if (adcFeedSamplesPerChunk > AdcFeedNetworkPacket::MAX_NUM_SAMPLES) {
 					adcFeedSamplesPerChunk = AdcFeedNetworkPacket::MAX_NUM_SAMPLES;
