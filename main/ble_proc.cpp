@@ -306,7 +306,8 @@ static void taskSetupBle(void *setupDone) {
 	}
 
 	setupAdvertising(bleName);
-	ESP_LOGI(TAG, "BLE setup done, advertising started");
+	ESP_LOGI(TAG, "Setup done, advertising started");
+	ESP_LOGI(TAG, "Setup stack HWM %u", uxTaskGetStackHighWaterMark(NULL));
 
 	*(volatile bool *)setupDone = true;
 	vTaskDelete(NULL);

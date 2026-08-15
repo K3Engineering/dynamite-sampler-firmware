@@ -2,6 +2,8 @@
 #include <esp_log.h>
 #include <esp_pm.h>
 
+#include <freertos/FreeRTOS.h>
+
 #include "adc_proc.h"
 #include "ble_proc.h"
 #include "i2c_proc.h"
@@ -47,5 +49,5 @@ extern "C" void app_main(void) {
 
 	otaConditionalRollback();
 
-	ESP_LOGI(TAG, "Started!");
+	ESP_LOGI(TAG, "Started! main stack HWM %u", uxTaskGetStackHighWaterMark(NULL));
 }

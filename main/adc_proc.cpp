@@ -154,6 +154,7 @@ static void taskSetupAdc(void *setupDone) {
 
 	if (adc.resetAdcHw()) {
 		configureAdc();
+		ESP_LOGI(TAG, "Setup stack HWM %u", uxTaskGetStackHighWaterMark(NULL));
 		*(volatile bool *)setupDone = true;
 	} else {
 		startupDiagnosticIsOk = false;
