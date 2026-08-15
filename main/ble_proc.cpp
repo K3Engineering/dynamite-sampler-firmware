@@ -27,6 +27,50 @@ static size_t adcFeedSamplesPerChunk = 0;
 
 DeviceLock deviceLock = DeviceLock::Open;
 
+struct DleInfo {
+	uint16_t maxTxOctets = 0x001B; // BLE defaults: 27 octets
+	uint16_t maxRxOctets = 0x001B;
+	uint16_t maxTxTime = 0x0148; // 328 us (units are 8 us)
+	uint16_t maxRxTime = 0x0148;
+	bool negotiated = false;
+};
+static DleInfo g_dle;
+
+static void dleResetToDefaults() {
+	g_dle.maxTxOctets = 0x001B; // 27 octets
+	g_dle.maxRxOctets = 0x001B;
+	g_dle.maxTxTime = 0x0148; // 328 us
+	g_dle.maxRxTime = 0x0148;
+	g_dle.negotiated = false;
+}
+
+static int dleGapListener(struct ble_gap_event *event, void *arg) {
+	switch (event->type) {
+	case BLE_GAP_EVENT_CONNECT:
+		if (event->connect.status == 0) {
+			// New connection: forget the previous peer's negotiated DLE.
+			// If this peer supports DLE, DATA_LEN_CHG will overwrite these shortly.
+			dleResetToDefaults();
+		}
+		break;
+
+	case BLE_GAP_EVENT_DISCONNECT:
+		dleResetToDefaults(); // belt and braces: no stale values while disconnected
+		break;
+
+	case BLE_GAP_EVENT_DATA_LEN_CHG:
+		g_dle.maxTxOctets = event->data_len_chg.max_tx_octets;
+		g_dle.maxRxOctets = event->data_len_chg.max_rx_octets;
+		g_dle.maxTxTime = event->data_len_chg.max_tx_time;
+		g_dle.maxRxTime = event->data_len_chg.max_rx_time;
+		g_dle.negotiated = true;
+		ESP_LOGD(TAG, "Gap event data len chg octets Tx,Rx (%u, %u), time Tx,Rx (%u,%u)",
+		         g_dle.maxTxOctets, g_dle.maxRxOctets, g_dle.maxTxTime, g_dle.maxRxTime);
+		break;
+	}
+	return 0;
+}
+
 static void adcOnDisconnect() {
 	if (deviceLock != DeviceLock::Streaming) {
 		return;
@@ -162,13 +206,14 @@ class AdcFeedCallbacks : public NimBLECharacteristicCallbacks {
 	void onSubscribe(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo,
 	                 uint16_t subValue) override {
 		ESP_LOGI(TAG, "ADC Feed onSubscr sub %u, MTU %u", subValue, connInfo.getMTU());
+		ESP_LOGD(TAG, "The TX octet is %u", g_dle.maxTxOctets);
 		if (subValue & 1) {
 			if (deviceLock == DeviceLock::Open) {
 				deviceLock = DeviceLock::Streaming;
 
-				adcFeedSamplesPerChunk =
-				    (connInfo.getMTU() - ATT_HEADER_SIZE - sizeof(AdcFeedNetworkPacket::Header)) /
-				    sizeof(AdcFeedNetworkData);
+				adcFeedSamplesPerChunk = (g_dle.maxTxOctets - L2CAP_HEADER_SIZE - ATT_HEADER_SIZE -
+				                          sizeof(AdcFeedNetworkPacket::Header)) /
+				                         sizeof(AdcFeedNetworkData);
 				if (adcFeedSamplesPerChunk > AdcFeedNetworkPacket::MAX_NUM_SAMPLES) {
 					adcFeedSamplesPerChunk = AdcFeedNetworkPacket::MAX_NUM_SAMPLES;
 				}
@@ -289,6 +334,7 @@ static void taskSetupBle(void *setupDone) {
 	hwIdStr(bleName + 3);
 	NimBLEDevice::init(bleName);
 	NimBLEDevice::setMTU(BLE_ATT_MTU_MAX);
+	NimBLEDevice::setCustomGapHandler(dleGapListener);
 	// NimBLEDevice::setDefaultPhy(BLE_GAP_LE_PHY_2M_MASK, BLE_GAP_LE_PHY_2M_MASK);
 
 	// Create the BLE Server
@@ -319,7 +365,8 @@ void setupBle(int core) {
 	assert(adcStreamBufferHandle != NULL);
 
 	volatile bool done = false;
-	xTaskCreatePinnedToCore(taskSetupBle, "task_BLE_setup", 1024 * 6, (void *)&done, 1, NULL, core);
+	xTaskCreatePinnedToCore(taskSetupBle, "task_BLE_setup", 1024 * 10, (void *)&done, 1, NULL,
+	                        core);
 	while (!done)
 		vTaskDelay(10);
 
