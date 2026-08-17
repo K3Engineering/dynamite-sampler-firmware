@@ -20,10 +20,61 @@ constexpr char TAG[] = "BLE";
 
 static_assert(CONFIG_BT_NIMBLE_MAX_CONNECTIONS == 1);
 
+struct DleConnInfo {
+	uint16_t maxTxOctets;
+	uint16_t maxRxOctets;
+	uint16_t maxTxTime;
+	uint16_t maxRxTime;
+	bool negotiated;
+};
+
 static NimBLECharacteristic *chrAdcFeed = nullptr;
 
-StreamBufferHandle_t adcStreamBufferHandle = nullptr;
+StreamBufferHandle_t adcStreamBufferHandle = NULL;
+static size_t adcFeedSamplesPerChunk = 0;
+
 DeviceLock deviceLock = DeviceLock::Open;
+
+constexpr DleConnInfo dleInfoDefaults{
+    .maxTxOctets = 0x001B, // BLE defaults: 27 octets
+    .maxRxOctets = 0x001B,
+    .maxTxTime = 0x0148, // 328 us (units are 8 us)
+    .maxRxTime = 0x0148,
+    .negotiated = false,
+};
+
+static DleConnInfo dleConnInfo{dleInfoDefaults};
+
+static int dleGapListener(ble_gap_event *event, void *arg) {
+	switch (event->type) {
+	case BLE_GAP_EVENT_CONNECT:
+		if (event->connect.status == 0) {
+			// New connection: forget the previous peer's negotiated DLE.
+			// If this peer supports DLE, DATA_LEN_CHG will overwrite these shortly.
+			dleConnInfo = dleInfoDefaults;
+		}
+		break;
+
+	case BLE_GAP_EVENT_DISCONNECT:
+		dleConnInfo = dleInfoDefaults; // no stale values while disconnected
+		break;
+
+	case BLE_GAP_EVENT_DATA_LEN_CHG:
+		dleConnInfo.maxTxOctets = event->data_len_chg.max_tx_octets;
+		dleConnInfo.maxRxOctets = event->data_len_chg.max_rx_octets;
+		dleConnInfo.maxTxTime = event->data_len_chg.max_tx_time;
+		dleConnInfo.maxRxTime = event->data_len_chg.max_rx_time;
+		dleConnInfo.negotiated = true;
+		ESP_LOGD(TAG, "Gap event data len chg octets Tx,Rx (%u, %u), time Tx,Rx (%u,%u)",
+		         dleConnInfo.maxTxOctets, dleConnInfo.maxRxOctets, dleConnInfo.maxTxTime,
+		         dleConnInfo.maxRxTime);
+		break;
+
+	default:
+		break;
+	}
+	return 0;
+}
 
 static void adcOnDisconnect() {
 	if (deviceLock != DeviceLock::Streaming) {
@@ -159,11 +210,20 @@ static void setupPowerManagerInterface(NimBLEServer *server) {
 class AdcFeedCallbacks : public NimBLECharacteristicCallbacks {
 	void onSubscribe(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo,
 	                 uint16_t subValue) override {
-		ESP_LOGI(TAG, "ADC Feed onSubscribed subValue: %u, MTU: %u", subValue, connInfo.getMTU());
+		ESP_LOGI(TAG, "ADC Feed onSubscr sub %u, MTU %u", subValue, connInfo.getMTU());
+		ESP_LOGD(TAG, "The TX octet is %u", dleConnInfo.maxTxOctets);
 		if (subValue & 1) {
 			if (deviceLock == DeviceLock::Open) {
 				deviceLock = DeviceLock::Streaming;
-				if (!startAdcAcquisition()) {
+
+				adcFeedSamplesPerChunk = (dleConnInfo.maxTxOctets - L2CAP_HEADER_SIZE -
+				                          ATT_HEADER_SIZE - sizeof(AdcFeedNetworkPacket::Header)) /
+				                         sizeof(AdcFeedNetworkData);
+				if (adcFeedSamplesPerChunk > AdcFeedNetworkPacket::MAX_NUM_SAMPLES) {
+					adcFeedSamplesPerChunk = AdcFeedNetworkPacket::MAX_NUM_SAMPLES;
+				}
+				ESP_LOGI(TAG, "Samples per chunk %u", adcFeedSamplesPerChunk);
+				if (!startAdcAcquisition(adcFeedSamplesPerChunk)) {
 					deviceLock = DeviceLock::Open;
 				}
 			}
@@ -260,8 +320,9 @@ static void IRAM_ATTR taskBlePublishAdcBuffer(void *) {
 		                                        sizeof(packet.adc), portMAX_DELAY);
 		if (bytesRead == sizeof(packet.adc)) [[likely]] {
 			packet.hdr.sample_sequence_number = htole16(count);
-			chrAdcFeed->notify(packet);
-			count += sizeof(packet.adc) / sizeof(*packet.adc);
+			chrAdcFeed->notify((uint8_t *)&packet,
+			                   sizeof(packet.hdr) + adcFeedSamplesPerChunk * sizeof(*packet.adc));
+			count += adcFeedSamplesPerChunk;
 		} else {
 			assert(0);
 		}
@@ -278,6 +339,7 @@ static void taskSetupBle(void *setupDone) {
 	hwIdStr(bleName + 3);
 	NimBLEDevice::init(bleName);
 	NimBLEDevice::setMTU(BLE_ATT_MTU_MAX);
+	NimBLEDevice::setCustomGapHandler(dleGapListener);
 	// NimBLEDevice::setDefaultPhy(BLE_GAP_LE_PHY_2M_MASK, BLE_GAP_LE_PHY_2M_MASK);
 
 	// Create the BLE Server
@@ -295,19 +357,21 @@ static void taskSetupBle(void *setupDone) {
 	}
 
 	setupAdvertising(bleName);
-	ESP_LOGI(TAG, "BLE setup done, advertising started");
+	ESP_LOGI(TAG, "Setup done, advertising started");
+	ESP_LOGI(TAG, "Setup stack HWM %u", uxTaskGetStackHighWaterMark(NULL));
 
 	*(volatile bool *)setupDone = true;
 	vTaskDelete(NULL);
 }
 
 void setupBle(int core) {
-	// This buffer is to share the ADC values from the adc read task and BLE notify task
-	adcStreamBufferHandle = xStreamBufferCreate(ADC_FEED_CHUNK_SZ * 8, ADC_FEED_CHUNK_SZ);
+	// Buffer to pass the ADC values from the ADC task to BLE task
+	adcStreamBufferHandle = xStreamBufferCreate(ADC_FEED_MAX_CHUNK_SZ * 8, ADC_FEED_MAX_CHUNK_SZ);
 	assert(adcStreamBufferHandle != NULL);
 
 	volatile bool done = false;
-	xTaskCreatePinnedToCore(taskSetupBle, "task_BLE_setup", 1024 * 6, (void *)&done, 1, NULL, core);
+	xTaskCreatePinnedToCore(taskSetupBle, "task_BLE_setup", 1024 * 10, (void *)&done, 1, NULL,
+	                        core);
 	while (!done)
 		vTaskDelay(10);
 

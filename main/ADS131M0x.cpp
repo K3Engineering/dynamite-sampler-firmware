@@ -375,7 +375,10 @@ static void hijackDmaSpi(ADS131M0xIsrData *ctrl) {
 	spi_ll_dma_rx_enable(ctrl->spiHw, true);
 }
 
-bool ADS131M0x::startAcquisition() {
+bool ADS131M0x::startAcquisition(size_t interval) {
+	assert(interval < RING_BUFF_SZ / 2);
+	isrData.wakeInterval = interval;
+
 	txSmallBuff->status = 0;
 	if (ESP_OK != spi_device_polling_start(spiHandle, &transDescr, portMAX_DELAY)) {
 		return false;

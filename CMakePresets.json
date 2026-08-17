@@ -1,0 +1,66 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "debug",
+      "binaryDir": "${sourceDir}/build/debug",
+      "cacheVariables": {
+        "IDF_TARGET": "esp32s3",
+        "SDKCONFIG_DEFAULTS": "${sourceDir}/sdkconfig.common;${sourceDir}/sdkconfig.debug",
+        "SDKCONFIG": "${sourceDir}/build/sdkconfig.debug"
+      },
+      "vendor": {
+        "espressif/vscode-esp-idf": {
+          "schemaVersion": 1,
+          "settings": [
+            {
+              "type": "compileArgs",
+              "value": [
+                "-DIDF_TARGET=esp32s3"
+              ]
+            },
+            {
+              "type": "openOCD",
+              "value": {
+                "debugLevel": 2
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "release",
+      "binaryDir": "${sourceDir}/build/release",
+      "cacheVariables": {
+        "IDF_TARGET": "esp32s3",
+        "SDKCONFIG_DEFAULTS": "${sourceDir}/sdkconfig.common;${sourceDir}/sdkconfig.release",
+        "SDKCONFIG": "${sourceDir}/build/sdkconfig.release"
+      },
+      "vendor": {
+        "espressif/vscode-esp-idf": {
+          "schemaVersion": 1,
+          "settings": [
+            {
+              "type": "compileArgs",
+              "value": [
+                "-DIDF_TARGET=esp32s3"
+              ]
+            },
+            {
+              "type": "openOCD",
+              "value": {
+                "debugLevel": 2
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

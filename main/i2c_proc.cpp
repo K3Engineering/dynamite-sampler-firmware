@@ -155,6 +155,7 @@ static void taskSetupI2C(void *setupDone) {
 	if (bus.setup(I2C_NUM_0, boardConfig.temperatureSensor.i2c.masterSdaIo,
 	              boardConfig.temperatureSensor.i2c.masterSclIo) &&
 	    sensor.config(bus, boardConfig.temperatureSensor.TMP118SubType)) {
+		ESP_LOGI(TAG, "Setup stack HWM %u", uxTaskGetStackHighWaterMark(NULL));
 		*(volatile bool *)setupDone = true;
 	} else {
 		// TODO: improve error handlng
