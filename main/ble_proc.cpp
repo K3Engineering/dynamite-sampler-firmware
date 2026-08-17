@@ -56,7 +56,7 @@ static int dleGapListener(ble_gap_event *event, void *arg) {
 		break;
 
 	case BLE_GAP_EVENT_DISCONNECT:
-		dleConnInfo = dleInfoDefaults; // belt and braces: no stale values while disconnected
+		dleConnInfo = dleInfoDefaults; // no stale values while disconnected
 		break;
 
 	case BLE_GAP_EVENT_DATA_LEN_CHG:
