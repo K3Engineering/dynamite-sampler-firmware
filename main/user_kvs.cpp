@@ -5,6 +5,7 @@
 #include "dynamite_sampler_api.h"
 #include "user_kvs.h"
 
+#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -99,7 +100,13 @@ static bool readByIdx(const char *partition, const char *nsp, const char *cmd, c
 	if (replySz <= USER_KVS_MAX_KEY_LEN + 10) {
 		return false;
 	}
-	const size_t num = strtoul(cmd, nullptr, 16);
+	char *end = nullptr;
+	const size_t num = strtoul(cmd, &end, 16);
+	// reject anything that is not a plain hex number ("zz", " 1", "+2", "1x");
+	// an oversized value clamps and harmlessly iterates past the last entry
+	if (!isxdigit(static_cast<unsigned char>(cmd[0])) || *end != '\0') {
+		return false;
+	}
 	nvs_handle_t handle = 0;
 	if (ESP_OK != nvs_open_from_partition(partition, nsp, NVS_READONLY, &handle)) {
 		return false;
