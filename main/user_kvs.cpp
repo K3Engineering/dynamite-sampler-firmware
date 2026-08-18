@@ -5,6 +5,7 @@
 #include "dynamite_sampler_api.h"
 #include "user_kvs.h"
 
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -93,13 +94,43 @@ static bool deleteKey(const char *partition, const char *nsp, const char *cmd) {
 	return ESP_OK == err;
 }
 
+constexpr bool parseHexIdx(const char *cmd, size_t &num) {
+	// "N..." number in hex, null terminated; saturates on overflow, which
+	// harmlessly iterates past the last NVS entry in readByIdx
+	num = 0;
+	if (!cmd[0]) {
+		return false;
+	}
+	for (const char *cur = cmd; *cur; ++cur) {
+		const char c = *cur;
+		size_t digit = 0;
+		if (('0' <= c) && (c <= '9')) {
+			digit = c - '0';
+		} else if (('a' <= c) && (c <= 'f')) {
+			digit = c - 'a' + 10;
+		} else if (('A' <= c) && (c <= 'F')) {
+			digit = c - 'A' + 10;
+		} else {
+			return false;
+		}
+		if (num > (SIZE_MAX - digit) / 16) {
+			num = SIZE_MAX;
+		} else {
+			num = num * 16 + digit;
+		}
+	}
+	return true;
+}
+
 static bool readByIdx(const char *partition, const char *nsp, const char *cmd, char *reply,
                       size_t replySz) {
-	// "N..." number in hex, null terminated
 	if (replySz <= USER_KVS_MAX_KEY_LEN + 10) {
 		return false;
 	}
-	const size_t num = strtoul(cmd, nullptr, 16);
+	size_t num = 0;
+	if (!parseHexIdx(cmd, num)) {
+		return false;
+	}
 	nvs_handle_t handle = 0;
 	if (ESP_OK != nvs_open_from_partition(partition, nsp, NVS_READONLY, &handle)) {
 		return false;
