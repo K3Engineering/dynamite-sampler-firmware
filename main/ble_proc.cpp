@@ -370,8 +370,7 @@ void setupBle(int core) {
 	assert(adcStreamBufferHandle != NULL);
 
 	volatile bool done = false;
-	xTaskCreatePinnedToCore(taskSetupBle, "task_BLE_setup", 1024 * 10, (void *)&done, 1, NULL,
-	                        core);
+	xTaskCreatePinnedToCore(taskSetupBle, "task_BLE_setup", 1024 * 6, (void *)&done, 1, NULL, core);
 	while (!done)
 		vTaskDelay(10);
 

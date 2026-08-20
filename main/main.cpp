@@ -9,6 +9,11 @@
 #include "i2c_proc.h"
 #include "runtime_stats.h"
 
+#include "tinyusb.h"
+#include "tinyusb_cdc_acm.h"
+#include "tinyusb_console.h"
+#include "tinyusb_default_config.h"
+
 constexpr char TAG[] = "DYNA";
 
 // Core0 is for BLE
@@ -37,6 +42,65 @@ static void setPower() {
 	// ESP_ERROR_CHECK(esp_pm_configure(&pm_config));
 }
 
+static constexpr tinyusb_cdcacm_itf_t CDC_PORT_DATA = TINYUSB_CDC_ACM_0;
+static constexpr tinyusb_cdcacm_itf_t CDC_PORT_FLASH = TINYUSB_CDC_ACM_1;
+
+static void taskHello(void *) {
+	while (1) {
+		if (tud_cdc_n_connected(CDC_PORT_DATA)) {
+			printf("Success! High-Speed CDC stream active under IDF v6.0.\n");
+			tinyusb_cdcacm_write_flush(CDC_PORT_DATA, 0);
+		}
+		vTaskDelay(pdMS_TO_TICKS(1000));
+	}
+	vTaskDelete(NULL);
+}
+
+static void flashPortRxCb(int itf, cdcacm_event_t *event) {
+	uint8_t rx_buffer[64];
+	size_t rx_size = 0;
+
+	esp_err_t ret =
+	    tinyusb_cdcacm_read((tinyusb_cdcacm_itf_t)itf, rx_buffer, sizeof(rx_buffer), &rx_size);
+	if (ret == ESP_OK && rx_size > 0) {
+		if (rx_buffer[0] == 'R') {
+			ESP_LOGW(TAG, "Reboot command received on Port 2! Restarting...");
+			vTaskDelay(pdMS_TO_TICKS(500)); // Allow buffers to flush
+			esp_restart();
+		}
+	}
+}
+
+static void tinyUsb() {
+	ESP_LOGI(TAG, "Initializing Decoupled TinyUSB Stack...");
+
+	static constexpr tinyusb_config_t tusbCfg = TINYUSB_DEFAULT_CONFIG();
+	ESP_ERROR_CHECK(tinyusb_driver_install(&tusbCfg));
+
+	static constexpr tinyusb_config_cdcacm_t acmCfgData = {
+	    .cdc_port = CDC_PORT_DATA,
+	    .callback_rx = NULL,
+	    .callback_rx_wanted_char = NULL,
+	    .callback_line_state_changed = NULL,
+	    .callback_line_coding_changed = NULL,
+	};
+	ESP_ERROR_CHECK(tinyusb_cdcacm_init(&acmCfgData));
+	static constexpr tinyusb_config_cdcacm_t acmCfgFlash = {
+	    .cdc_port = CDC_PORT_FLASH,
+	    .callback_rx = flashPortRxCb,
+	    .callback_rx_wanted_char = NULL,
+	    .callback_line_state_changed = NULL,
+	    .callback_line_coding_changed = NULL,
+	};
+	ESP_ERROR_CHECK(tinyusb_cdcacm_init(&acmCfgFlash));
+
+	ESP_ERROR_CHECK(tinyusb_console_init(CDC_PORT_DATA));
+
+	xTaskCreatePinnedToCore(taskHello, "taskHello", 1024 * 4, NULL, 1, nullptr, 1);
+
+	ESP_LOGI(TAG, "USB-OTG Device Loop Active!");
+}
+
 extern "C" void app_main(void) {
 	printHeader();
 
@@ -50,4 +114,6 @@ extern "C" void app_main(void) {
 	otaConditionalRollback();
 
 	ESP_LOGI(TAG, "Started! main stack HWM %u", uxTaskGetStackHighWaterMark(NULL));
+
+	tinyUsb();
 }
