@@ -3,4 +3,5 @@ dependencies:
   esp-nimble-cpp:
     git: https://github.com/h2zero/esp-nimble-cpp
     version: "2.5.0"
-    
+  espressif/esp_tinyusb:
+    version: "^2.2.0"
