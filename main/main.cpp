@@ -39,7 +39,6 @@ static void setPower() {
 	if (esp_err_t err = esp_pm_configure(&pmConfig)) {
 		ESP_LOGE(TAG, "pm err %d", err);
 	}
-	// ESP_ERROR_CHECK(esp_pm_configure(&pm_config));
 }
 
 static constexpr tinyusb_cdcacm_itf_t CDC_PORT_DATA = TINYUSB_CDC_ACM_0;
@@ -87,16 +86,17 @@ static void tinyUsb() {
 	ESP_ERROR_CHECK(tinyusb_cdcacm_init(&acmCfgData));
 	static constexpr tinyusb_config_cdcacm_t acmCfgFlash = {
 	    .cdc_port = CDC_PORT_FLASH,
-	    .callback_rx = flashPortRxCb,
+	    .callback_rx = NULL,
 	    .callback_rx_wanted_char = NULL,
 	    .callback_line_state_changed = NULL,
 	    .callback_line_coding_changed = NULL,
 	};
 	ESP_ERROR_CHECK(tinyusb_cdcacm_init(&acmCfgFlash));
 
-	ESP_ERROR_CHECK(tinyusb_console_init(CDC_PORT_DATA));
+	ESP_ERROR_CHECK(tinyusb_console_init(CDC_PORT_FLASH));
+	// esp_log_set_vprintf(vprintf);
 
-	xTaskCreatePinnedToCore(taskHello, "taskHello", 1024 * 4, NULL, 1, nullptr, 1);
+	// xTaskCreatePinnedToCore(taskHello, "taskHello", 1024 * 4, NULL, 1, nullptr, 1);
 
 	ESP_LOGI(TAG, "USB-OTG Device Loop Active!");
 }
