@@ -1,6 +1,10 @@
 #include <esp_cpu.h>
 #include <esp_log.h>
 #include <esp_pm.h>
+#include <esp_timer.h>
+
+#include <soc/rtc_cntl_reg.h>
+#include <soc/soc.h>
 
 #include <freertos/FreeRTOS.h>
 
@@ -55,6 +59,30 @@ static void taskHello(void *) {
 	vTaskDelete(NULL);
 }
 
+// Reboot straight into the ROM USB download mode so esptool/idf.py can flash.
+// RTC_CNTL_OPTION1_REG survives a software reset; when RTC_CNTL_FORCE_DOWNLOAD_BOOT
+// is set, the boot ROM enters download mode (USB enumerates) instead of booting
+// the app. A plain esp_restart() just reboots the app and cannot be flashed.
+//
+// The cdcacm callbacks run in the TinyUSB task (inside CDC driver event dispatch),
+// so they only raise this flag. The main task performs the graceful teardown:
+// esp_restart() during an active USB session leaves the OTG PHY in a state the
+// next boot cannot recover without a power cycle, so the USB stack must be
+// fully uninstalled (which also makes the host detach cleanly) before resetting.
+static volatile bool s_downloadRequested = false;
+
+static void requestDownloadMode() {
+	s_downloadRequested = true;
+}
+
+static void downloadModeShutdownAndReboot() {
+	vTaskDelay(pdMS_TO_TICKS(100)); // Let the triggering control transfer finish
+	tinyusb_driver_uninstall();
+	vTaskDelay(pdMS_TO_TICKS(100)); // Let the detach propagate to the host
+	REG_WRITE(RTC_CNTL_OPTION1_REG, RTC_CNTL_FORCE_DOWNLOAD_BOOT);
+	esp_restart();
+}
+
 static void flashPortRxCb(int itf, cdcacm_event_t *event) {
 	uint8_t rx_buffer[64];
 	size_t rx_size = 0;
@@ -63,10 +91,19 @@ static void flashPortRxCb(int itf, cdcacm_event_t *event) {
 	    tinyusb_cdcacm_read((tinyusb_cdcacm_itf_t)itf, rx_buffer, sizeof(rx_buffer), &rx_size);
 	if (ret == ESP_OK && rx_size > 0) {
 		if (rx_buffer[0] == 'R') {
-			ESP_LOGW(TAG, "Reboot command received on Port 2! Restarting...");
-			vTaskDelay(pdMS_TO_TICKS(500)); // Allow buffers to flush
-			esp_restart();
+			requestDownloadMode(); // No logging here: we are in the TinyUSB task
 		}
+	}
+}
+
+// Reset-to-download trigger: "1200 baud touch" (same convention as the Arduino
+// IDE upload). A DTR/RTS-based emulation of esptool's auto-reset circuit was
+// considered and rejected: rapid SET_CONTROL_LINE_STATE toggling wedges the
+// esp_tinyusb/tinyusb stack on this IDF version (control endpoint dies until
+// power cycle), while a single SET_LINE_CODING is always delivered cleanly.
+static void flashPortLineCodingCb(int itf, cdcacm_event_t *event) {
+	if (event->line_coding_changed_data.p_line_coding->bit_rate == 1200) {
+		requestDownloadMode();
 	}
 }
 
@@ -86,10 +123,10 @@ static void tinyUsb() {
 	ESP_ERROR_CHECK(tinyusb_cdcacm_init(&acmCfgData));
 	static constexpr tinyusb_config_cdcacm_t acmCfgFlash = {
 	    .cdc_port = CDC_PORT_FLASH,
-	    .callback_rx = NULL,
+	    .callback_rx = flashPortRxCb,
 	    .callback_rx_wanted_char = NULL,
 	    .callback_line_state_changed = NULL,
-	    .callback_line_coding_changed = NULL,
+	    .callback_line_coding_changed = flashPortLineCodingCb,
 	};
 	ESP_ERROR_CHECK(tinyusb_cdcacm_init(&acmCfgFlash));
 
@@ -116,4 +153,15 @@ extern "C" void app_main(void) {
 	ESP_LOGI(TAG, "Started! main stack HWM %u", uxTaskGetStackHighWaterMark(NULL));
 
 	tinyUsb();
+
+	// Watch for a download-mode request raised by a TinyUSB callback (1200 baud
+	// touch on the console port or the 'R' command). Only this task is allowed
+	// to tear down USB and reboot; doing it inside a TinyUSB callback kills the
+	// USB stack / leaves the OTG PHY unrecoverable until power cycle.
+	while (1) {
+		if (s_downloadRequested) {
+			downloadModeShutdownAndReboot();
+		}
+		vTaskDelay(pdMS_TO_TICKS(50));
+	}
 }

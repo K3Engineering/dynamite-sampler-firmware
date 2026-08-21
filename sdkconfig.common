@@ -67,3 +67,10 @@ CONFIG_NEWLIB_NANO_FORMAT=y
 
 CONFIG_LIBC_PICOLIBC=y
 CONFIG_LIBC_PICOLIBC_NEWLIB_COMPATIBILITY=y
+
+# TinyUSB: expose 2 CDC-ACM COM ports on the USB OTG pins (GPIO19/20).
+# Port 0 = ADC data stream, port 1 = console + esptool reset-to-download.
+# NOTE: without these, tinyusb_cdcacm_init() fails (CFG_TUD_CDC == 0) and no
+# COM ports enumerate.
+CONFIG_TINYUSB_CDC_ENABLED=y
+CONFIG_TINYUSB_CDC_COUNT=2
