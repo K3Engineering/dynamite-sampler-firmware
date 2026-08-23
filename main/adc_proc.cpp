@@ -94,8 +94,6 @@ static AdcFeedNetworkData IRAM_ATTR adcToNetwork(const AdcClass::RawOutput *adc)
 
 // Task that handles calling the read adc function and placing the values in the buffer.
 static void IRAM_ATTR taskAdcReadAndBuffer(void *) {
-	AdcFeedNetworkPacket toSend;
-
 	while (true) {
 		// Wait until ISR notifies this task. Normally numNotifications == 1,
 		// numNotifications > 1 in case we cannot keep up with adc and have some data lost.
@@ -103,18 +101,25 @@ static void IRAM_ATTR taskAdcReadAndBuffer(void *) {
 		if (0 == numNotifications) [[unlikely]] {
 			continue;
 		}
-		// Read ADC values. Place them in StreamBuffer. Notify the BLE task
+		AdcFeedNetworkPacket *toSend;
+		const size_t numSamples = adc.getWakeInterval();
+		const size_t packetSize = sizeof(toSend->hdr) + numSamples * sizeof(*toSend->adc);
+		// Allocate space for the data
+		if (!xRingbufferSendAcquire(adcRingBufferHandle, (void **)&toSend, packetSize, 0))
+		    [[unlikely]] {
+			assert(0);
+		}
+		// Read ADC values. Place them in Buffer. Notify the BLE task
 		const size_t idx = adc.getReadyBatchStartIdx();
-		for (size_t n = 0; n < adc.getWakeInterval(); ++n) {
+		for (size_t n = 0; n < numSamples; ++n) {
 			const ADS131M0x::RawOutput *ptr = adc.rawReadAdc(idx + n);
 #if CONFIG_CHECK_ADC_CHECKSUM
 			assert(adc.isCrcOk(ptr));
 #endif // CONFIG_CHECK_ADC_CHECKSUM
-			toSend.adc[n] = adcToNetwork(ptr);
+			toSend->adc[n] = adcToNetwork(ptr);
 		}
-		if (sizeof(toSend.adc) != xStreamBufferSend(adcStreamBufferHandle, toSend.adc,
-		                                            sizeof(toSend.adc), 0)) [[unlikely]] {
-			ESP_LOGE(TAG, "xStreamBufferSend failed");
+		if (!xRingbufferSendComplete(adcRingBufferHandle, toSend)) [[unlikely]] {
+			ESP_LOGE(TAG, "xRingbufferSendComplete failed");
 		}
 	}
 	vTaskDelete(NULL);
