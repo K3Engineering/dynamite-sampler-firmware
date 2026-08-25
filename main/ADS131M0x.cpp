@@ -52,7 +52,9 @@ bool ADS131M0x::writeRegister(uint8_t address, uint16_t value) {
 
 	txSmallBuff->status = 0;
 	spi_device_polling_transmit(spiHandle, &transDescr);
-
+#if CONFIG_CHECK_ADC_CHECKSUM
+	assert(isCrcOk(rxSmallBuff));
+#endif
 	return rxSmallBuff->status == htobe16(ADS131M0xReg::RSP_WRITE_REG | (address << 7));
 }
 
@@ -62,24 +64,19 @@ uint16_t ADS131M0x::readRegister(uint8_t address) {
 
 	txSmallBuff->status = 0;
 	spi_device_polling_transmit(spiHandle, &transDescr);
-
+#if CONFIG_CHECK_ADC_CHECKSUM
+	assert(isCrcOk(rxSmallBuff));
+#endif
 	return be16toh(rxSmallBuff->status);
 }
 
 /**
  * @brief Write a value to the register, applying the mask to touch only the necessary bits.
- * It does not carry out the shift of bits (shift), it is necessary to pass the shifted value to the
- * correct position
+ * Only bits with 1 in the mask are affected.
  */
 bool ADS131M0x::writeRegisterMasked(uint8_t address, uint16_t value, uint16_t mask) {
-	// Read the current content of the register
 	uint16_t registerContents = readRegister(address);
-	// Change the mask bit by bit (it remains 1 in the bits that must not be touched and 0 in the
-	// bits to be modified) An AND is performed with the current content of the record. "0" remain
-	// in the part to be modified
 	registerContents &= ~mask;
-	// OR is made with the value to load in the registry. value must be in the correct position
-	// (shitf)
 	registerContents |= value;
 	return writeRegister(address, registerContents);
 }
