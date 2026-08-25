@@ -1,11 +1,11 @@
 #ifndef _ADC_BLE_INTERFACE_H
 #define _ADC_BLE_INTERFACE_H
 
-#include <freertos/stream_buffer.h>
+#include <freertos/ringbuf.h>
 
 #include "dynamite_sampler_api.h"
 
-extern StreamBufferHandle_t adcStreamBufferHandle;
+extern RingbufHandle_t adcRingBufferHandle;
 extern bool startupDiagnosticIsOk;
 
 // BLE can transmit a certain size over the air in a single transmission (Link Layer or LL). This is

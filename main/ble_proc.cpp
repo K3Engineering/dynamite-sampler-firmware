@@ -2,7 +2,7 @@
 #include <esp_mac.h>
 
 #include <freertos/FreeRTOS.h>
-#include <freertos/stream_buffer.h>
+#include <freertos/ringbuf.h>
 
 #include <NimBLEDevice.h>
 
@@ -30,7 +30,7 @@ struct DleConnInfo {
 
 static NimBLECharacteristic *chrAdcFeed = nullptr;
 
-StreamBufferHandle_t adcStreamBufferHandle = NULL;
+RingbufHandle_t adcRingBufferHandle = NULL;
 static size_t adcFeedSamplesPerChunk = 0;
 
 DeviceLock deviceLock = DeviceLock::Open;
@@ -311,21 +311,23 @@ static void setupAdvertising(const char *name) {
 
 // Task that is notified when the ADC buffer is ready to be sent
 static void IRAM_ATTR taskBlePublishAdcBuffer(void *) {
+	static_assert(sizeof(AdcFeedNetworkPacket) <= ATT_PAYLOAD_MAX_SIZE);
 	uint16_t count = 0;
 	while (true) {
-		AdcFeedNetworkPacket packet;
-		static_assert(sizeof(packet) <= ATT_PAYLOAD_MAX_SIZE);
-		// Read the ADC buffer and update the BLE characteristic
-		size_t bytesRead = xStreamBufferReceive(adcStreamBufferHandle, &packet.adc,
-		                                        sizeof(packet.adc), portMAX_DELAY);
-		if (bytesRead == sizeof(packet.adc)) [[likely]] {
-			packet.hdr.sample_sequence_number = htole16(count);
-			chrAdcFeed->notify((uint8_t *)&packet,
-			                   sizeof(packet.hdr) + adcFeedSamplesPerChunk * sizeof(*packet.adc));
+		size_t bytesRead = 0;
+		AdcFeedNetworkPacket *packet = (AdcFeedNetworkPacket *)xRingbufferReceive(
+		    adcRingBufferHandle, &bytesRead, portMAX_DELAY);
+		const size_t packetSize =
+		    sizeof(packet->hdr) + adcFeedSamplesPerChunk * sizeof(*packet->adc);
+		if (bytesRead == packetSize) [[likely]] {
+			// Update the BLE characteristic
+			packet->hdr.sample_sequence_number = htole16(count);
+			chrAdcFeed->notify((uint8_t *)packet, bytesRead);
 			count += adcFeedSamplesPerChunk;
 		} else {
-			assert(0);
+			ESP_LOGE(TAG, "xRingbufferReceive wrong size");
 		}
+		vRingbufferReturnItem(adcRingBufferHandle, packet);
 	}
 	vTaskDelete(NULL);
 }
@@ -365,13 +367,13 @@ static void taskSetupBle(void *setupDone) {
 }
 
 void setupBle(int core) {
-	// Buffer to pass the ADC values from the ADC task to BLE task
-	adcStreamBufferHandle = xStreamBufferCreate(ADC_FEED_MAX_CHUNK_SZ * 8, ADC_FEED_MAX_CHUNK_SZ);
-	assert(adcStreamBufferHandle != NULL);
+	// Buffer to pass the ADC values from the ADC task to BLE task, size need not to be exact
+	adcRingBufferHandle =
+	    xRingbufferCreate(sizeof(AdcFeedNetworkPacket) * 10, RINGBUF_TYPE_NOSPLIT);
+	assert(adcRingBufferHandle != NULL);
 
 	volatile bool done = false;
-	xTaskCreatePinnedToCore(taskSetupBle, "task_BLE_setup", 1024 * 10, (void *)&done, 1, NULL,
-	                        core);
+	xTaskCreatePinnedToCore(taskSetupBle, "task_BLE_setup", 1024 * 6, (void *)&done, 1, NULL, core);
 	while (!done)
 		vTaskDelay(10);
 
