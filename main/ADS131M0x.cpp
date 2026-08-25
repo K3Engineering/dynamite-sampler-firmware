@@ -52,9 +52,9 @@ bool ADS131M0x::writeRegister(uint8_t address, uint16_t value) {
 
 	txSmallBuff->status = 0;
 	spi_device_polling_transmit(spiHandle, &transDescr);
-#if CONFIG_CHECK_ADC_CHECKSUM
-	assert(isCrcOk(rxSmallBuff));
-#endif
+	if constexpr (checkAdcRwChecksum) {
+		assert(isCrcOk(rxSmallBuff));
+	}
 	return rxSmallBuff->status == htobe16(ADS131M0xReg::RSP_WRITE_REG | (address << 7));
 }
 
@@ -64,9 +64,9 @@ uint16_t ADS131M0x::readRegister(uint8_t address) {
 
 	txSmallBuff->status = 0;
 	spi_device_polling_transmit(spiHandle, &transDescr);
-#if CONFIG_CHECK_ADC_CHECKSUM
-	assert(isCrcOk(rxSmallBuff));
-#endif
+	if constexpr (checkAdcRwChecksum) {
+		assert(isCrcOk(rxSmallBuff));
+	}
 	return be16toh(rxSmallBuff->status);
 }
 

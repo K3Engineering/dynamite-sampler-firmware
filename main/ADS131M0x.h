@@ -15,6 +15,14 @@
 
 #include "board_cfg.h"
 
+#if CONFIG_CHECK_ADC_CHECKSUM
+constexpr bool checkAdcRwChecksum = true;
+constexpr bool checkAdcDataChecksum = true;
+#else
+constexpr bool checkAdcRwChecksum = false;
+constexpr bool checkAdcDataChecksum = false;
+#endif
+
 struct ADS131M0xIsrData {
 	uint8_t *rxRingBuff;
 	lldesc_t *rxDescArray;
