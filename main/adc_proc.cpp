@@ -107,9 +107,9 @@ static void IRAM_ATTR taskAdcReadAndBuffer(void *) {
 		const size_t idx = adc.getReadyBatchStartIdx();
 		for (size_t n = 0; n < adc.getWakeInterval(); ++n) {
 			const ADS131M0x::RawOutput *ptr = adc.rawReadAdc(idx + n);
-#if CONFIG_CHECK_ADC_CHECKSUM
-			assert(adc.isCrcOk(ptr));
-#endif // CONFIG_CHECK_ADC_CHECKSUM
+			if constexpr (checkAdcDataChecksum) {
+				assert(adc.isCrcOk(ptr));
+			}
 			toSend.adc[n] = adcToNetwork(ptr);
 		}
 		if (sizeof(toSend.adc) != xStreamBufferSend(adcStreamBufferHandle, toSend.adc,
