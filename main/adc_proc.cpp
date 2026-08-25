@@ -108,6 +108,7 @@ static void IRAM_ATTR taskAdcReadAndBuffer(void *) {
 		if (!xRingbufferSendAcquire(adcRingBufferHandle, (void **)&toSend, packetSize, 0))
 		    [[unlikely]] {
 			assert(0);
+			break;
 		}
 		// Read ADC values. Place them in Buffer. Notify the BLE task
 		const size_t idx = adc.getReadyBatchStartIdx();
@@ -119,7 +120,8 @@ static void IRAM_ATTR taskAdcReadAndBuffer(void *) {
 			toSend->adc[n] = adcToNetwork(ptr);
 		}
 		if (!xRingbufferSendComplete(adcRingBufferHandle, toSend)) [[unlikely]] {
-			ESP_LOGE(TAG, "xRingbufferSendComplete failed");
+			assert(0);
+			break;
 		}
 	}
 	vTaskDelete(NULL);
