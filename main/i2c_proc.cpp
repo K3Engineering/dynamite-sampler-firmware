@@ -183,8 +183,7 @@ void setupI2C(int core) {
 		return;
 	}
 	volatile bool done = false;
-	xTaskCreatePinnedToCore(taskSetupI2C, "task_I2C_setup", 1024 * 2, (void *)&done, 1, NULL,
-	                        core);
+	xTaskCreatePinnedToCore(taskSetupI2C, "task_I2C_setup", 1024 * 2, (void *)&done, 1, NULL, core);
 	while (!done) {
 		vTaskDelay(10);
 	}
