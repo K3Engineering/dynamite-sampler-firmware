@@ -12,7 +12,7 @@
 #include "adc_proc.h"
 
 #include "ADS131M0x_reg.h"
-#include "board_cfg.h"
+#include "board_id.h"
 
 constexpr char TAG[] = "ADC";
 
@@ -75,19 +75,11 @@ static inline void copyAdcToLE24(void *dst, const void *src, bool flip) {
 
 static AdcFeedNetworkData IRAM_ATTR adcToNetwork(const AdcClass::RawOutput *adc) {
 	AdcFeedNetworkData net;
-	static_assert(AdcFeedNetworkData::NUM_CHAN <= boardConfig.adc.NCHAN);
+	static_assert(AdcFeedNetworkData::NUM_CHAN == AdcClass::NUM_CHANNELS);
 	for (size_t i = 0; i < AdcFeedNetworkData::NUM_CHAN; ++i) {
-		if constexpr ((AdcFeedNetworkData::NUM_CHAN == 4) && (boardConfig.adc.NCHAN == 8)) {
-			static const uint8_t translate[AdcFeedNetworkData::NUM_CHAN] = {1, 3, 5, 7};
-			size_t src_idx = translate[i];
-			// Hardware: even ADC channels (0,2,4,6 on 8ch) have swapped polarity
-			const bool flip = (src_idx & 1) == 0;
-			copyAdcToLE24(net.chan + i, adc->data + AdcClass::DATA_WORD_LENGTH * src_idx, flip);
-		} else {
-			// Hardware: even ADC channels (0,2 on 4ch) have swapped polarity
-			const bool flip = (i & 1) == 0;
-			copyAdcToLE24(net.chan + i, adc->data + AdcClass::DATA_WORD_LENGTH * i, flip);
-		}
+		// Hardware: even ADC channels (0,2) have swapped polarity
+		const bool flip = (i & 1) == 0;
+		copyAdcToLE24(net.chan + i, adc->data + AdcClass::DATA_WORD_LENGTH * i, flip);
 	}
 	return net;
 }
@@ -121,14 +113,15 @@ static void IRAM_ATTR taskAdcReadAndBuffer(void *) {
 }
 
 static void configureAdc() {
-	static_assert(boardConfig.adc.NCHAN == adc.NUM_CHANNELS);
+	static_assert(AdcCfg::NCHAN == AdcClass::NUM_CHANNELS);
+	const AdcCfg *cfg = &boardCfg()->adc;
 	for (uint8_t chan = 0; chan < adc.NUM_CHANNELS; ++chan) {
-		adc.setChannelEnable(chan, boardConfig.adc.enable[chan]);
-		adc.setChannelInputSelection(chan, boardConfig.adc.input[chan]);
-		adc.setChannelPGA(chan, boardConfig.adc.pga[chan]);
+		adc.setChannelEnable(chan, cfg->enable[chan]);
+		adc.setChannelInputSelection(chan, cfg->input[chan]);
+		adc.setChannelPGA(chan, cfg->pga[chan]);
 	}
-	adc.setPowerMode(boardConfig.adc.powerMode);
-	adc.setOsr(boardConfig.adc.osr);
+	adc.setPowerMode(cfg->powerMode);
+	adc.setOsr(cfg->osr);
 
 	savedConfig = {
 	    .id = adc.readID(),
@@ -141,16 +134,15 @@ static void configureAdc() {
 }
 
 static void taskSetupAdc(void *setupDone) {
-	ESP_LOGI(TAG, "Board %s, ADC[CS=%d DRDY=%d RESET=%d CLK=%d MISO=%d MOSI=%d]", boardConfig.name,
-	         boardConfig.adc.hwConnect.cs, boardConfig.adc.hwConnect.drdy,
-	         boardConfig.adc.hwConnect.reset, boardConfig.adc.spiConnect.clock,
-	         boardConfig.adc.spiConnect.miso, boardConfig.adc.spiConnect.mosi);
+	const BoardCfg *cfg = boardCfg();
+	ESP_LOGI(TAG, "Board %s, ADC[CS=%d DRDY=%d RESET=%d CLK=%d MISO=%d MOSI=%d]", cfg->name,
+	         cfg->adc.hwConnect.cs, cfg->adc.hwConnect.drdy, cfg->adc.hwConnect.reset,
+	         cfg->adc.spiConnect.clock, cfg->adc.spiConnect.miso, cfg->adc.spiConnect.mosi);
 
 	ESP_LOGI(TAG, "setting up adc on core: %u", esp_cpu_get_core_id());
 
-	adc.init(boardConfig.adc.hwConnect.cs, boardConfig.adc.hwConnect.drdy,
-	         boardConfig.adc.hwConnect.reset, SPI3_HOST, boardConfig.adc.spiConnect.clock,
-	         boardConfig.adc.spiConnect.miso, boardConfig.adc.spiConnect.mosi);
+	adc.init(cfg->adc.hwConnect.cs, cfg->adc.hwConnect.drdy, cfg->adc.hwConnect.reset, SPI3_HOST,
+	         cfg->adc.spiConnect.clock, cfg->adc.spiConnect.miso, cfg->adc.spiConnect.mosi);
 
 	if (adc.resetAdcHw()) {
 		configureAdc();
