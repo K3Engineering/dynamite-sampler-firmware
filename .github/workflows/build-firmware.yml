@@ -1,6 +1,14 @@
 name: Build firmware
 
-on: [pull_request, workflow_dispatch]
+on:
+  pull_request:
+  workflow_dispatch:
+  release:
+    types: [published] # Triggers when you publish a new GitHub Release
+
+# Required to allow the workflow to attach files to the release
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -22,11 +30,25 @@ jobs:
 
     # this is the same way the main/generate_build_metadata.py generates the version.
     - name: Get git description
-      run: echo "TAG=$(echo $(git describe --always --dirty --tags))" >> $GITHUB_ENV
+      run: echo "TAG=$(git describe --always --dirty --tags)" >> $GITHUB_ENV
 
-    - name: Upload bin
+    - name: Create firmware name
+      run: echo "FIRMWARE_NAME=dynamite-sampler-firmware-release-${{ env.TAG }}.bin" >> $GITHUB_ENV
+
+    # Rename the file on disk to include the TAG.
+    - name: Prepare versioned binary
+      run: cp build/release/dynamite-sampler-firmware.bin ${{ env.FIRMWARE_NAME }}
+
+    # Keep the artifact upload for PRs and manual runs
+    - name: Upload bin (Workflow Artifact)
       uses: actions/upload-artifact@v4
       with:
-        name: dynamite-sampler-firmware-release-${{ env.TAG }}.bin
-        # This is hardcoded right now, but I'm not sure how to best not hardcode it
-        path: build/release/dynamite-sampler-firmware.bin
+        name: ${{ env.FIRMWARE_NAME }}
+        path: ${{ env.FIRMWARE_NAME }}
+
+    # Attach the binary to the GitHub Release (only runs on release events)
+    - name: Upload bin (GitHub Release)
+      if: github.event_name == 'release'
+      uses: softprops/action-gh-release@v3
+      with:
+        files: ${{ env.FIRMWARE_NAME }}
