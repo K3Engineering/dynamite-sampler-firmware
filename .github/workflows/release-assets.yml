@@ -1,0 +1,50 @@
+name: Attach firmware assets to release
+
+# Used for building and publishing images for OTA. Triggers on Github releases and pre-releases being published
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  attach-assets:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout the release tag
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.release.tag_name }}
+        fetch-depth: 0
+
+    - name: esp-idf build
+      uses: espressif/esp-idf-ci-action@v1
+      with:
+        esp_idf_version: v6.1
+        target: esp32s3
+        path: '.'
+        command: idf.py $(python ./generate_idf_flags_from_config_json.py release) build
+
+    - name: Verify tag identity
+      run: |
+        DESCRIBE=$(git describe --tags)
+        if [ "$DESCRIBE" != "${{ github.event.release.tag_name }}" ]; then
+          echo "git describe ($DESCRIBE) does not match the release tag (${{ github.event.release.tag_name }})"
+          exit 1
+        fi
+
+    - name: Prepare assets
+      env:
+        TAG: ${{ github.event.release.tag_name }}
+      run: |
+        mv build/release/dynamite-sampler-firmware.bin "dynamite-sampler-firmware_${TAG}.bin"
+        sha256sum "dynamite-sampler-firmware_${TAG}.bin" > "dynamite-sampler-firmware_${TAG}.bin.sha256"
+
+    # --clobber so a re-run after a failed/partial release is idempotent.
+    - name: Upload assets
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        TAG: ${{ github.event.release.tag_name }}
+      run: gh release upload "$TAG" "dynamite-sampler-firmware_${TAG}.bin" "dynamite-sampler-firmware_${TAG}.bin.sha256" --clobber
