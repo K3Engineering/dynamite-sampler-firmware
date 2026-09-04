@@ -27,6 +27,21 @@ static_assert(USER_KVS_MAX_KEY_LEN + 1 + USER_KVS_MAX_VAL_LEN + 1 <= USER_KVS_NE
 
 bool initUserKeyValStorage() { return ESP_OK == nvs_flash_init_partition(DYNA_PERSIST_PARTITION); }
 
+esp_err_t kvsReadFactoryString(const char *key, char *out, size_t *outLen) {
+	if (strlen(key) > USER_KVS_MAX_KEY_LEN) {
+		return ESP_ERR_INVALID_ARG;
+	}
+	nvs_handle_t handle;
+	esp_err_t err =
+	    nvs_open_from_partition(DYNA_PERSIST_PARTITION, FACTORY_NSPACE, NVS_READONLY, &handle);
+	if (ESP_OK != err) {
+		return err;
+	}
+	err = nvs_get_str(handle, key, out, outLen);
+	nvs_close(handle);
+	return err;
+}
+
 constexpr size_t splitKeyVal(const char *cmd) {
 	for (size_t idx = 0; (idx <= USER_KVS_MAX_KEY_LEN) && cmd[idx]; ++idx) {
 		if (cmd[idx] == '=') {

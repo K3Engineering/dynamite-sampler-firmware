@@ -6,6 +6,7 @@
 
 #include "adc_proc.h"
 #include "ble_proc.h"
+#include "board_id.h"
 #include "i2c_proc.h"
 #include "runtime_stats.h"
 
@@ -40,8 +41,13 @@ static void setPower() {
 extern "C" void app_main(void) {
 	printHeader();
 
-	setupAdc(CORE_APP);
-	setupI2C(CORE_APP);
+	ESP_ERROR_CHECK(initBoardIdentity());
+	if (boardCfg()) {
+		setupAdc(CORE_APP);
+		setupI2C(CORE_APP);
+	} else {
+		ESP_LOGW(TAG, "Safe mode, ADC and sensors disabled");
+	}
 	setupBle(CORE_BLE);
 	setupStats(CORE_BLE);
 

@@ -7,7 +7,8 @@
 
 #include <endian.h>
 
-#include "board_cfg.h"
+#include "adc_ble_interface.h"
+#include "board_id.h"
 
 constexpr char TAG[] = "I2C";
 
@@ -150,15 +151,17 @@ void TMP118::readTemperature() {
 
 static void taskSetupI2C(void *setupDone) {
 	ESP_LOGI(TAG, "setting up I2C on core: %u", esp_cpu_get_core_id());
+	const TMP118SensorCfg *sensorCfg = &boardCfg()->temperatureSensor;
 	I2CMasterBus bus;
 	TMP118 sensor;
-	if (bus.setup(I2C_NUM_0, boardConfig.temperatureSensor.i2c.masterSdaIo,
-	              boardConfig.temperatureSensor.i2c.masterSclIo) &&
-	    sensor.config(bus, boardConfig.temperatureSensor.TMP118SubType)) {
+	if (bus.setup(I2C_NUM_0, sensorCfg->i2c.masterSdaIo, sensorCfg->i2c.masterSclIo) &&
+	    sensor.config(bus, sensorCfg->TMP118SubType)) {
 		ESP_LOGI(TAG, "Setup stack HWM %u", uxTaskGetStackHighWaterMark(NULL));
 		*(volatile bool *)setupDone = true;
 	} else {
-		// TODO: improve error handlng
+		ESP_LOGE(TAG, "Temperature sensor setup failed");
+		startupDiagnosticIsOk = false;
+		*(volatile bool *)setupDone = true;
 		vTaskDelete(NULL);
 	}
 
@@ -170,15 +173,18 @@ static void taskSetupI2C(void *setupDone) {
 }
 
 void setupI2C(int core) {
-	static_assert(!(boardConfig.temperatureSensor.i2c.connected() &&
-	                (TMP118::i2cAddr(boardConfig.temperatureSensor.TMP118SubType) ==
-	                 TMP118::INVALID_I2C_ADDR)));
-	if constexpr (boardConfig.temperatureSensor.i2c.connected()) {
-		volatile bool done = false;
-		xTaskCreatePinnedToCore(taskSetupI2C, "task_I2C_setup", 1024 * 2, (void *)&done, 1, NULL,
-		                        core);
-		while (!done) {
-			vTaskDelay(10);
-		}
+	const BoardCfg *cfg = boardCfg();
+	if (!cfg || !cfg->temperatureSensor.i2c.connected()) {
+		return;
+	}
+	if (TMP118::i2cAddr(cfg->temperatureSensor.TMP118SubType) == TMP118::INVALID_I2C_ADDR) {
+		ESP_LOGE(TAG, "Invalid TMP118 subtype in board config");
+		startupDiagnosticIsOk = false;
+		return;
+	}
+	volatile bool done = false;
+	xTaskCreatePinnedToCore(taskSetupI2C, "task_I2C_setup", 1024 * 2, (void *)&done, 1, NULL, core);
+	while (!done) {
+		vTaskDelay(10);
 	}
 }

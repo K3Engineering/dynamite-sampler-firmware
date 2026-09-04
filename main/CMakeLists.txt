@@ -1,12 +1,13 @@
 set(srclist
     "ADS131M0x.cpp"
-    "adc_proc.cpp" 
-    "ble_ota.cpp" 
-    "ble_proc.cpp" 
-    "i2c_proc.cpp" 
+    "adc_proc.cpp"
+    "ble_ota.cpp"
+    "ble_proc.cpp"
+    "board_id.cpp"
+    "i2c_proc.cpp"
     "user_kvs.cpp"
-    "runtime_stats.cpp" 
-    "main.cpp" 
+    "runtime_stats.cpp"
+    "main.cpp"
 )
 
 idf_component_register(

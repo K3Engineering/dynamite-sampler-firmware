@@ -13,8 +13,6 @@
 #include <esp_rom_lldesc.h>
 #include <soc/spi_struct.h>
 
-#include "board_cfg.h"
-
 #if CONFIG_CHECK_ADC_CHECKSUM
 constexpr bool checkAdcRwChecksum = true;
 constexpr bool checkAdcDataChecksum = true;
@@ -36,7 +34,7 @@ struct ADS131M0xIsrData {
 
 class ADS131M0x {
   public:
-	static constexpr size_t NUM_CHANNELS = boardConfig.adc.NCHAN;
+	static constexpr size_t NUM_CHANNELS = 4;
 	static_assert((NUM_CHANNELS <= 8) && (0 == NUM_CHANNELS % 2));
 	static constexpr size_t DATA_WORD_LENGTH = 3; // in bytes
 	static constexpr uint16_t RSP_RESET_OK = 0xFF20 + NUM_CHANNELS;

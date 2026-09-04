@@ -13,7 +13,7 @@
 #include "dynamite_uuid.h"
 #include "user_kvs.h"
 
-#include "board_cfg.h"
+#include "board_id.h"
 #include "build_metadata.h"
 
 constexpr char TAG[] = "BLE";
@@ -144,12 +144,12 @@ static void setupDeviceInfo(NimBLEServer *server) {
 		chr->setValue(DEVICE_MANUFACTURER_NAME);
 		ESP_LOGI(TAG, "Set Device manufacturer name to: '%s'", DEVICE_MANUFACTURER_NAME);
 	}
-	{ // Model number (marketing name)
+	{ // Model number (marketing name, from the flashed board identity)
+		const char *model = boardCfg() ? boardCfg()->marketingName : BOARD_IDENTITY_MARKETING_NONE;
 		NimBLECharacteristic *chr = srvDeviceInfo->createCharacteristic(
-		    DEVICE_MODEL_NUMBER_CHR_UUID16.value, NIMBLE_PROPERTY::READ,
-		    sizeof(boardConfig.marketingName));
-		chr->setValue(boardConfig.marketingName);
-		ESP_LOGI(TAG, "Set Device model number to: '%s'", boardConfig.marketingName);
+		    DEVICE_MODEL_NUMBER_CHR_UUID16.value, NIMBLE_PROPERTY::READ, strlen(model) + 1);
+		chr->setValue(model);
+		ESP_LOGI(TAG, "Set Device model number to: '%s'", model);
 	}
 	{ // Serial number (eFuse MAC)
 		char hwId[HW_ID_LEN + 1]{0};
@@ -159,17 +159,17 @@ static void setupDeviceInfo(NimBLEServer *server) {
 		chr->setValue((uint8_t *)hwId, HW_ID_LEN);
 		ESP_LOGI(TAG, "Set Device serial number to: '%s'", hwId);
 	}
-	{ // Hardware revision (board model)
+	{ // Hardware revision (the Factory `board_model` identity)
+		const char *hwRev = boardCfg() ? boardCfg()->name : BOARD_IDENTITY_NONE;
 		NimBLECharacteristic *chr = srvDeviceInfo->createCharacteristic(
-		    DEVICE_HARDWARE_REV_CHR_UUID16.value, NIMBLE_PROPERTY::READ, sizeof(boardConfig.name));
-		chr->setValue(boardConfig.name);
-		ESP_LOGI(TAG, "Set Device hardware revision to: '%s'", boardConfig.name);
+		    DEVICE_HARDWARE_REV_CHR_UUID16.value, NIMBLE_PROPERTY::READ, strlen(hwRev) + 1);
+		chr->setValue(hwRev);
+		ESP_LOGI(TAG, "Set Device hardware revision to: '%s'", hwRev);
 	}
 	{ // Firmware version
-		char s[sizeof(GIT_DESCRIBE) + sizeof(boardConfig.name) + 1];
-		strcpy(s, boardConfig.name);
-		strcat(s, "|");
-		strcat(s, GIT_DESCRIBE);
+		const char *hwRev = boardCfg() ? boardCfg()->name : BOARD_IDENTITY_NONE;
+		char s[BOARD_IDENTITY_NAME_MAX + sizeof(GIT_DESCRIBE)];
+		snprintf(s, sizeof(s), "%s|%s", hwRev, GIT_DESCRIBE);
 		NimBLECharacteristic *chr = srvDeviceInfo->createCharacteristic(
 		    DEVICE_FIRMWARE_VER_CHR_UUID16.value, NIMBLE_PROPERTY::READ, strlen(s));
 		chr->setValue((uint8_t *)s, strlen(s));
@@ -213,7 +213,9 @@ class AdcFeedCallbacks : public NimBLECharacteristicCallbacks {
 		ESP_LOGI(TAG, "ADC Feed onSubscr sub %u, MTU %u", subValue, connInfo.getMTU());
 		ESP_LOGD(TAG, "The TX octet is %u", dleConnInfo.maxTxOctets);
 		if (subValue & 1) {
-			if (deviceLock == DeviceLock::Open) {
+			if (!boardCfg()) {
+				ESP_LOGW(TAG, "ADC feed subscribe ignored: ADC not operational");
+			} else if (deviceLock == DeviceLock::Open) {
 				deviceLock = DeviceLock::Streaming;
 
 				adcFeedSamplesPerChunk = (dleConnInfo.maxTxOctets - L2CAP_HEADER_SIZE -
@@ -351,10 +353,6 @@ static void taskSetupBle(void *setupDone) {
 	setupDeviceInfo(bleServer);
 	setupPowerManagerInterface(bleServer);
 	setupBleOta(bleServer);
-
-	if (!initUserKeyValStorage()) {
-		ESP_LOGE(TAG, "KVStorage init failed");
-	}
 
 	setupAdvertising(bleName);
 	ESP_LOGI(TAG, "Setup done, advertising started");
