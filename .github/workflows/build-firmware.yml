@@ -37,18 +37,24 @@ jobs:
 
     # Rename the file on disk to include the TAG.
     - name: Prepare versioned binary
-      run: cp build/release/dynamite-sampler-firmware.bin ${{ env.FIRMWARE_NAME }}
+      run: |
+        cp build/release/dynamite-sampler-firmware.bin ${{ env.FIRMWARE_NAME }}
+        sha256sum ${{ env.FIRMWARE_NAME }} > ${{ env.FIRMWARE_NAME }}.sha256
 
     # Keep the artifact upload for PRs and manual runs
     - name: Upload bin (Workflow Artifact)
       uses: actions/upload-artifact@v4
       with:
         name: ${{ env.FIRMWARE_NAME }}
-        path: ${{ env.FIRMWARE_NAME }}
+        path: |
+          ${{ env.FIRMWARE_NAME }}
+          ${{ env.FIRMWARE_NAME }}.sha256
 
     # Attach the binary to the GitHub Release (only runs on release events)
     - name: Upload bin (GitHub Release)
       if: github.event_name == 'release'
       uses: softprops/action-gh-release@v3
       with:
-        files: ${{ env.FIRMWARE_NAME }}
+        files: |
+          ${{ env.FIRMWARE_NAME }}
+          ${{ env.FIRMWARE_NAME }}.sha256
