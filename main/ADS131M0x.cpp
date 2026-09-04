@@ -225,6 +225,7 @@ void ADS131M0x::init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset,
 	    .data7_io_num = -1,
 	    .data_io_default_level = 0,
 	    .max_transfer_sz = SPI_FRAME_SIZE,
+	    .dma_burst_size = 0, // driver default
 	    .flags = SPICOMMON_BUSFLAG_MASTER,
 	    .isr_cpu_id = ESP_INTR_CPU_AFFINITY_AUTO,
 	    .intr_flags = 0,
