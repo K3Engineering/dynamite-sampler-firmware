@@ -55,72 +55,86 @@ constexpr size_t splitKeyVal(const char *cmd) {
 	return 0;
 }
 
-static bool writeKeyVal(const char *partition, const char *nsp, const char *cmd) {
+static KvsResult kvsResultFromEspErr(esp_err_t err) {
+	if (ESP_OK == err) {
+		return KvsResult::Ok;
+	}
+	if (ESP_ERR_NVS_NOT_FOUND == err) {
+		return KvsResult::Rejected;
+	}
+	return KvsResult::Error;
+}
+
+static KvsResult writeKeyVal(const char *partition, const char *nsp, const char *cmd) {
 	// "k...=v..." key=value, null terminated
 	size_t delimiterIdx = splitKeyVal(cmd);
 	if (delimiterIdx == 0) {
-		return false;
+		return KvsResult::Rejected;
 	}
 	char key[USER_KVS_MAX_KEY_LEN + 1]{0};
 	memcpy(key, cmd, delimiterIdx);
 	const char *val = cmd + (delimiterIdx + 1);
 	nvs_handle_t handle;
-	if (ESP_OK != nvs_open_from_partition(partition, nsp, NVS_READWRITE, &handle)) {
-		return false;
+	esp_err_t err = nvs_open_from_partition(partition, nsp, NVS_READWRITE, &handle);
+	if (ESP_OK != err) {
+		return kvsResultFromEspErr(err);
 	}
-	esp_err_t err = nvs_set_str(handle, key, val);
+	err = nvs_set_str(handle, key, val);
 	if (ESP_OK == err) {
 		err = nvs_commit(handle);
 	}
 	nvs_close(handle);
-	return ESP_OK == err;
+	return kvsResultFromEspErr(err);
 }
 
-static bool readKey(const char *partition, const char *nsp, const char *cmd, char *reply,
-                    size_t replySz) {
+static KvsResult readKey(const char *partition, const char *nsp, const char *cmd, char *reply,
+                         size_t replySz) {
 	// "k..." key, null terminated
 	if (strlen(cmd) > USER_KVS_MAX_KEY_LEN) {
-		return false;
+		return KvsResult::Rejected;
 	}
 	nvs_handle_t handle;
-	if (ESP_OK != nvs_open_from_partition(partition, nsp, NVS_READONLY, &handle)) {
-		return false;
+	esp_err_t err = nvs_open_from_partition(partition, nsp, NVS_READONLY, &handle);
+	if (ESP_OK != err) {
+		return kvsResultFromEspErr(err);
 	}
-	esp_err_t err = nvs_get_str(handle, cmd, reply, &replySz);
+	err = nvs_get_str(handle, cmd, reply, &replySz);
 	nvs_close(handle);
-	return ESP_OK == err;
+	return kvsResultFromEspErr(err);
 }
 
-static bool deleteKey(const char *partition, const char *nsp, const char *cmd) {
+static KvsResult deleteKey(const char *partition, const char *nsp, const char *cmd) {
 	// "k..." key, null terminated
 	if (strlen(cmd) > USER_KVS_MAX_KEY_LEN) {
-		return false;
+		return KvsResult::Rejected;
 	}
 	nvs_handle_t handle;
-	if (ESP_OK != nvs_open_from_partition(partition, nsp, NVS_READWRITE, &handle)) {
-		return false;
+	esp_err_t err = nvs_open_from_partition(partition, nsp, NVS_READWRITE, &handle);
+	if (ESP_OK != err) {
+		return kvsResultFromEspErr(err);
 	}
-	esp_err_t err = nvs_erase_key(handle, cmd);
+	err = nvs_erase_key(handle, cmd);
 	if (ESP_OK == err) {
 		err = nvs_commit(handle);
 	}
 	nvs_close(handle);
-	return ESP_OK == err;
+	return kvsResultFromEspErr(err);
 }
 
-static bool readByIdx(const char *partition, const char *nsp, const char *cmd, char *reply,
-                      size_t replySz) {
+static KvsResult readByIdx(const char *partition, const char *nsp, const char *cmd, char *reply,
+                           size_t replySz) {
 	// "N..." number in hex, null terminated
 	if (replySz <= USER_KVS_MAX_KEY_LEN + 10) {
-		return false;
+		return KvsResult::Rejected;
 	}
 	const size_t num = strtoul(cmd, nullptr, 16);
 	nvs_handle_t handle = 0;
-	if (ESP_OK != nvs_open_from_partition(partition, nsp, NVS_READONLY, &handle)) {
-		return false;
+	esp_err_t err = nvs_open_from_partition(partition, nsp, NVS_READONLY, &handle);
+	if (ESP_OK != err) {
+		return kvsResultFromEspErr(err);
 	}
 	nvs_iterator_t it = 0;
-	esp_err_t err = nvs_entry_find_in_handle(handle, NVS_TYPE_ANY, &it);
+	err = nvs_entry_find_in_handle(handle, NVS_TYPE_ANY, &it);
 	for (size_t i = 0; (ESP_OK == err) && (i < num); ++i) {
 		err = nvs_entry_next(&it);
 	}
@@ -136,7 +150,7 @@ static bool readByIdx(const char *partition, const char *nsp, const char *cmd, c
 	}
 	nvs_release_iterator(it);
 	nvs_close(handle);
-	return ESP_OK == err;
+	return kvsResultFromEspErr(err);
 }
 /*
 static bool debugLog() {
@@ -194,15 +208,15 @@ constexpr const char *partitionName(char folderCode) {
 	}
 }
 
-bool processKvsCommand(const char *rq, size_t rqLen, char *reply, size_t replySz) {
+KvsResult processKvsCommand(const char *rq, size_t rqLen, char *reply, size_t replySz) {
 	const size_t dataOffset = KVS_CMD_LEN + 1;
 	if (rqLen < dataOffset) {
-		return false;
+		return KvsResult::Rejected;
 	}
 	const char *part = partitionName(rq[KVS_CMD_LEN]);
 	const char *nsp = nameSpace(rq[KVS_CMD_LEN]);
 	if (!(part && nsp)) {
-		return false;
+		return KvsResult::Rejected;
 	}
 	if (0 == memcmp(rq, CmdKvsSet, KVS_CMD_LEN)) {
 		return writeKeyVal(part, nsp, rq + dataOffset);
@@ -216,5 +230,5 @@ bool processKvsCommand(const char *rq, size_t rqLen, char *reply, size_t replySz
 	if (0 == memcmp(rq, CmdKvsGetByIdx, KVS_CMD_LEN)) {
 		return readByIdx(part, nsp, rq + dataOffset, reply, replySz);
 	}
-	return false;
+	return KvsResult::Rejected;
 }

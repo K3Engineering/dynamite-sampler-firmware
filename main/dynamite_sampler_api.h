@@ -114,10 +114,11 @@ struct AdcConfigNetworkData {
 // preferably less than 244
 // On device storage: key-value persistent store.
 
-// <Cmd><Folder><Cmd_data> response is <Status><Cmd><Folder><Cmd_data>=Response
+// Request:  <Cmd><Folder><Cmd_data>
+// Response: <Status><request, echoed verbatim>[=<Response_data>]
 //  Cmd is 3 Bytes
 //  Folder is 1 Byte
-//  Status is 1 Byte: Character '1' for success, '0 otherwise
+//  Status is 1 Byte (Char '1' success, '0' rejected, 'B' busy, 'E' error)
 //  Cmd_data is command specific
 //  KEY is up to 15 bytes
 //  VALUE is up to 128 bytes
@@ -150,6 +151,11 @@ constexpr char CmdKvsGetByIdx[KVS_CMD_LEN]{'I', 'D', 'X'};
 constexpr char UserKvsFolderFactory = 'F';
 constexpr char UserKvsFolderUser = 'U';
 constexpr char UserKvsFolderSettings = 'S';
+
+constexpr char KvsStatusOk = '1';
+constexpr char KvsStatusRejected = '0';
+constexpr char KvsStatusBusy = 'B';
+constexpr char KvsStatusError = 'E';
 
 constexpr size_t USER_KVS_NETWORK_FRAME_LENGTH = 240;
 static_assert(USER_KVS_NETWORK_FRAME_LENGTH <= 512);
