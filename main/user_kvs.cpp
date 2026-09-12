@@ -65,7 +65,8 @@ static KvsResult kvsResultFromEspErr(esp_err_t err) {
 	return KvsResult::Error;
 }
 
-static KvsResult writeKeyVal(const char *partition, const char *nsp, const char *cmd) {
+static KvsResult writeKeyVal(const char *partition, const char *nsp, const char *cmd,
+                             bool appendOnly) {
 	// "k...=v..." key=value, null terminated
 	size_t delimiterIdx = splitKeyVal(cmd);
 	if (delimiterIdx == 0) {
@@ -78,6 +79,10 @@ static KvsResult writeKeyVal(const char *partition, const char *nsp, const char 
 	esp_err_t err = nvs_open_from_partition(partition, nsp, NVS_READWRITE, &handle);
 	if (ESP_OK != err) {
 		return kvsResultFromEspErr(err);
+	}
+	if (appendOnly && (ESP_OK == nvs_find_key(handle, key, nullptr))) {
+		nvs_close(handle);
+		return KvsResult::Rejected;
 	}
 	err = nvs_set_str(handle, key, val);
 	if (ESP_OK == err) {
@@ -218,13 +223,17 @@ KvsResult processKvsCommand(const char *rq, size_t rqLen, char *reply, size_t re
 	if (!(part && nsp)) {
 		return KvsResult::Rejected;
 	}
+	const bool isFactory = (rq[KVS_CMD_LEN] == UserKvsFolderFactory);
 	if (0 == memcmp(rq, CmdKvsSet, KVS_CMD_LEN)) {
-		return writeKeyVal(part, nsp, rq + dataOffset);
+		return writeKeyVal(part, nsp, rq + dataOffset, isFactory);
 	}
 	if (0 == memcmp(rq, CmdKvsGet, KVS_CMD_LEN)) {
 		return readKey(part, nsp, rq + dataOffset, reply, replySz);
 	}
 	if (0 == memcmp(rq, CmdKvsDelete, KVS_CMD_LEN)) {
+		if (isFactory) {
+			return KvsResult::Rejected;
+		}
 		return deleteKey(part, nsp, rq + dataOffset);
 	}
 	if (0 == memcmp(rq, CmdKvsGetByIdx, KVS_CMD_LEN)) {
