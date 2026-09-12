@@ -1,6 +1,5 @@
 #!/usr/bin/env python
-"""Perform BLE OTA update on a Dynamite Sampler board.
-"""
+"""Perform BLE OTA update on a Dynamite Sampler board."""
 
 import argparse
 import asyncio
@@ -13,7 +12,6 @@ from tqdm import tqdm
 OTA_DATA_UUID = "23408888-1F40-4CD8-9B89-CA8D45F8A5B0"
 OTA_CONTROL_UUID = "7AD671AA-21C0-46A4-B722-270E3AE3D830"
 
-SVR_CHR_OTA_CONTROL_NOP = bytearray.fromhex("00")
 SVR_CHR_OTA_CONTROL_REQUEST = bytearray.fromhex("01")
 SVR_CHR_OTA_CONTROL_REQUEST_ACK = bytearray.fromhex("02")
 SVR_CHR_OTA_CONTROL_REQUEST_NAK = bytearray.fromhex("03")
@@ -78,9 +76,6 @@ async def send_ota(device_name: str, firmware_bin: bytes):
                     await client.stop_notify(OTA_CONTROL_UUID)
                 except:
                     print("I think the connection died?")
-            elif data == SVR_CHR_OTA_CONTROL_NOP:
-                await queue.put("rdy")
-                print("ESP32: OTA standby.")
             else:
                 print(f"Notification received: sender: {sender}, data: {data}")
 
@@ -91,28 +86,17 @@ async def send_ota(device_name: str, firmware_bin: bytes):
         # Even if the MTU is larger, no need to split the data into multiple packets.
         packet_size = min(client.mtu_size - 3, 244)
 
-        # write firmware_bin size to OTA Data
+        # request the update: opcode + image size as u32 LE
         file_size = len(firmware_bin)
-        print(f"Sending file size: {file_size}.")
+        print(datetime.datetime.now(), f"Sending OTA request, size: {file_size}.")
         await client.write_gatt_char(
-            OTA_CONTROL_UUID, file_size.to_bytes(4, "little"), response=True
+            OTA_CONTROL_UUID,
+            SVR_CHR_OTA_CONTROL_REQUEST + file_size.to_bytes(4, "little"),
+            response=True,
         )
 
-        if await queue.get() == "rdy":
-
-            # write the request OP code to OTA Control
-            print(datetime.datetime.now(), "Sending OTA request.")
-            await client.write_gatt_char(
-                OTA_CONTROL_UUID, SVR_CHR_OTA_CONTROL_REQUEST, response=True
-            )
-
-        else:
-            print("ESP32 is not ready.")
-
         # wait for the response
-        # await asyncio.sleep(1)
         if await queue.get() == "ack1":
-
             print("Sending data...")
             # sequentially write all packets to OTA data
             num_packages = 0

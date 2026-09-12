@@ -46,6 +46,8 @@ constexpr char TX_PWR_CHR_UUID[] = "7478c418-35d3-4c3d-99d9-2de090159664";
 // LITTLE_ENDIAN is not mandatory for custom data, though highly recommended
 constexpr size_t DYNAMITE_NET_BYTE_ORDER = __ORDER_LITTLE_ENDIAN__;
 
+#pragma pack(push, 1)
+
 //======================== <OTA Update>
 
 typedef uint8_t OtaRequestType;
@@ -55,15 +57,19 @@ typedef uint32_t OtaFileSizeType;
 constexpr OtaRequestType SVR_CHR_OTA_CONTROL_REQUEST = 1;
 constexpr OtaRequestType SVR_CHR_OTA_CONTROL_DONE = 4;
 
-constexpr OtaReplyType SVR_CHR_OTA_CONTROL_NOP = 0;
 constexpr OtaReplyType SVR_CHR_OTA_CONTROL_REQUEST_ACK = 2;
 constexpr OtaReplyType SVR_CHR_OTA_CONTROL_REQUEST_NAK = 3;
 constexpr OtaReplyType SVR_CHR_OTA_CONTROL_DONE_ACK = 5;
 constexpr OtaReplyType SVR_CHR_OTA_CONTROL_DONE_NAK = 6;
 
-//======================== </OTA Update>
+// Control characteristic write. DONE is a bare OtaRequestType.
+// Replies are a bare OtaReplyType notification.
+struct OtaRequestNetworkData {
+	OtaRequestType op; // SVR_CHR_OTA_CONTROL_REQUEST
+	OtaFileSizeType fileSize;
+};
 
-#pragma pack(push, 1)
+//======================== </OTA Update>
 
 //======================== <ADC Data>
 
