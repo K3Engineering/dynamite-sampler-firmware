@@ -246,10 +246,6 @@ class AdcConfigCallbacks : public NimBLECharacteristicCallbacks {
 
 class UserKvsCallbacks : public NimBLECharacteristicCallbacks {
 	void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
-		if (deviceLock != DeviceLock::Open) {
-			ESP_LOGI(TAG, "KVS command: Device locked(%u)", deviceLock);
-			return;
-		}
 		char buff[USER_KVS_NETWORK_FRAME_LENGTH + 1]{0};
 		size_t rqLength = 0;
 		{
@@ -260,13 +256,25 @@ class UserKvsCallbacks : public NimBLECharacteristicCallbacks {
 			}
 		}
 		ESP_LOGI(TAG, "Rq '%s'", buff + 1);
-		if (processKvsCommand(buff + 1, rqLength, buff + (rqLength + 2),
-		                      sizeof(buff) - (rqLength + 2))) {
-			buff[0] = '1';
-			buff[rqLength + 1] = '=';
+		char status = KvsStatusBusy;
+		if (deviceLock == DeviceLock::Open) {
+			switch (processKvsCommand(buff + 1, rqLength, buff + (rqLength + 2),
+			                          sizeof(buff) - (rqLength + 2))) {
+			case KvsResult::Ok:
+				status = KvsStatusOk;
+				buff[rqLength + 1] = '=';
+				break;
+			case KvsResult::Rejected:
+				status = KvsStatusRejected;
+				break;
+			case KvsResult::Error:
+				status = KvsStatusError;
+				break;
+			}
 		} else {
-			buff[0] = '0';
+			ESP_LOGW(TAG, "KVS command: Device locked(%u)", deviceLock);
 		}
+		buff[0] = status;
 		ESP_LOGI(TAG, "Repl '%s'", buff);
 		pCharacteristic->setValue((const char *)buff);
 		pCharacteristic->notify();
@@ -282,8 +290,7 @@ static void setupAdcFeed(NimBLEServer *server) {
 	}
 	{ // User KeyValStore data
 		NimBLECharacteristic *chr = srvc->createCharacteristic(
-		    &USER_KVS_CHR_UUID128,
-		    NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::NOTIFY);
+		    &USER_KVS_CHR_UUID128, NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::NOTIFY);
 		static UserKvsCallbacks cb;
 		chr->setCallbacks(&cb);
 	}

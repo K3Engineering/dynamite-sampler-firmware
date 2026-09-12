@@ -5,8 +5,10 @@
 
 #include <esp_err.h>
 
+enum class KvsResult { Ok, Rejected, Error };
+
 bool initUserKeyValStorage();
-bool processKvsCommand(const char *rq, size_t rqLen, char *reply, size_t replySz);
+KvsResult processKvsCommand(const char *rq, size_t rqLen, char *reply, size_t replySz);
 esp_err_t kvsReadFactoryString(const char *key, char *out, size_t *outLen);
 
 #endif // _USER_KVS_H
