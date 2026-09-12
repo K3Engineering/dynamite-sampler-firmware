@@ -33,8 +33,6 @@ typedef struct {
 
 	size_t numBytesReceived;
 	size_t fileSize;
-
-	OtaReplyType otaStatus;
 } OtaControlData;
 
 static OtaControlData otaControlData{
@@ -42,35 +40,33 @@ static OtaControlData otaControlData{
     .updateHandle = 0,
     .numBytesReceived = 0,
     .fileSize = 0,
-    .otaStatus = SVR_CHR_OTA_CONTROL_NOP,
 };
 
-static bool processOtaBegin(OtaControlData *control) {
+static bool processOtaBegin(OtaControlData *control, OtaFileSizeType fileSize,
+                            OtaReplyType *reply) {
 	if (deviceLock != DeviceLock::Open) {
 		return false;
 	}
-	if (control->otaStatus != SVR_CHR_OTA_CONTROL_NOP) {
-		return false;
-	}
-	control->otaStatus = SVR_CHR_OTA_CONTROL_REQUEST_NAK;
-	if (!control->fileSize) {
+	*reply = SVR_CHR_OTA_CONTROL_REQUEST_NAK;
+	if (!fileSize) {
 		return true;
 	}
 	control->updatePartition = esp_ota_get_next_update_partition(NULL);
-	if ((!control->updatePartition) || (control->updatePartition->size < control->fileSize)) {
+	if ((!control->updatePartition) || (control->updatePartition->size < fileSize)) {
 		return true;
 	}
 	// Erasing the Partition takes some time. Pass in the image size to erase it now.
 	// If it erased as the parition is written OTA_WITH_SEQUENTIAL_WRITES,
 	// esp_ota_write() can block up to ~70ms, which causes write commands to be dropped.
-	esp_err_t err =
-	    esp_ota_begin(control->updatePartition, control->fileSize, &control->updateHandle);
-	if (err == ESP_OK) {
-		control->otaStatus = SVR_CHR_OTA_CONTROL_REQUEST_ACK;
-		deviceLock = DeviceLock::Ota;
-	} else {
+	esp_err_t err = esp_ota_begin(control->updatePartition, fileSize, &control->updateHandle);
+	if (err != ESP_OK) {
 		ESP_LOGE(TAG, "esp_ota_begin error %d (%s)", err, esp_err_to_name(err));
+		return true;
 	}
+	control->fileSize = fileSize;
+	control->numBytesReceived = 0;
+	*reply = SVR_CHR_OTA_CONTROL_REQUEST_ACK;
+	deviceLock = DeviceLock::Ota;
 	return true;
 }
 
@@ -101,16 +97,16 @@ static bool setBootPartition(const esp_partition_t *updatePartition) {
 	return false;
 }
 
-static bool processOtaDone(OtaControlData *control) {
+static bool processOtaDone(OtaControlData *control, OtaReplyType *reply) {
 	if (deviceLock != DeviceLock::Ota) {
 		return false;
 	}
 	ESP_LOGI(TAG, "processOtaDone");
-	control->otaStatus = SVR_CHR_OTA_CONTROL_DONE_NAK;
+	*reply = SVR_CHR_OTA_CONTROL_DONE_NAK;
 	if (!checkDataSize(control)) {
 		esp_ota_abort(control->updateHandle);
 	} else if (finishUpdate(control->updateHandle) && setBootPartition(control->updatePartition)) {
-		control->otaStatus = SVR_CHR_OTA_CONTROL_DONE_ACK;
+		*reply = SVR_CHR_OTA_CONTROL_DONE_ACK;
 	}
 	control->updateHandle = 0;
 	control->fileSize = 0;
@@ -120,53 +116,49 @@ static bool processOtaDone(OtaControlData *control) {
 	return true;
 }
 
-static void conditionalRestart(const OtaControlData *control) {
+static void conditionalRestart(OtaReplyType reply) {
 	// restart the ESP to finish the OTA
 	static constexpr TickType_t REBOOT_DEEP_SLEEP_TIMEOUT = 500;
-	if (SVR_CHR_OTA_CONTROL_DONE_ACK == control->otaStatus) {
+	if (SVR_CHR_OTA_CONTROL_DONE_ACK == reply) {
 		ESP_LOGI(TAG, "Preparing to restart!");
 		vTaskDelay(pdMS_TO_TICKS(REBOOT_DEEP_SLEEP_TIMEOUT));
 		esp_restart();
 	}
 }
 
-static bool processOtaFileSize(OtaControlData *control, OtaFileSizeType sz) {
-	if (deviceLock != DeviceLock::Open) {
-		return false;
-	}
-	control->fileSize = sz;
-	control->numBytesReceived = 0;
-	control->otaStatus = SVR_CHR_OTA_CONTROL_NOP;
-	ESP_LOGI(TAG, "File size: %u", control->fileSize);
-	return true;
-}
-
 // Implements OTA control flow, while OtaDataChrCallbacks implements binary download.
 class OtaControlChrCallbacks : public NimBLECharacteristicCallbacks {
 	void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
-		bool res = false;
 		const size_t omLen = pCharacteristic->getLength();
-		if (sizeof(OtaRequestType) == omLen) {
-			OtaRequestType code = pCharacteristic->getValue<OtaRequestType>();
-			ESP_LOGI(TAG, "Ctrl recv %u", code);
-			if (SVR_CHR_OTA_CONTROL_REQUEST == code) {
-				res = processOtaBegin(control);
-			} else if (SVR_CHR_OTA_CONTROL_DONE == code) {
-				res = processOtaDone(control);
+		const OtaRequestType code = pCharacteristic->getValue<OtaRequestType>();
+
+		bool res = false;
+		OtaReplyType reply = 0;
+		switch (code) {
+		case SVR_CHR_OTA_CONTROL_REQUEST: {
+			if (omLen != sizeof(OtaRequestNetworkData)) {
+				break;
 			}
-		} else if (sizeof(OtaFileSizeType) == omLen) {
-			static_assert(sizeof(OtaFileSizeType) == sizeof(uint32_t));
-			OtaFileSizeType val = le32toh(pCharacteristic->getValue<OtaFileSizeType>());
-			res = processOtaFileSize(control, val);
+			const OtaRequestNetworkData rq = pCharacteristic->getValue<OtaRequestNetworkData>();
+			const OtaFileSizeType fileSize = le32toh(rq.fileSize);
+			ESP_LOGI(TAG, "OTA request, size %u", fileSize);
+			res = processOtaBegin(control, fileSize, &reply);
+			break;
+		}
+		case SVR_CHR_OTA_CONTROL_DONE:
+			if (omLen == sizeof(OtaRequestType)) {
+				ESP_LOGI(TAG, "OTA done");
+				res = processOtaDone(control, &reply);
+			}
+			break;
 		}
 
 		if (res) {
 			// notify the client that it's request has been acknowledged
-			pCharacteristic->notify(&control->otaStatus, sizeof(control->otaStatus),
-			                        connInfo.getConnHandle());
-			ESP_LOGI(TAG, "(n)ack %u", control->otaStatus);
+			pCharacteristic->notify(&reply, sizeof(reply), connInfo.getConnHandle());
+			ESP_LOGI(TAG, "(n)ack %u", reply);
 
-			conditionalRestart(control);
+			conditionalRestart(reply);
 		}
 	}
 
@@ -183,7 +175,6 @@ class OtaControlChrCallbacks : public NimBLECharacteristicCallbacks {
 		control->updateHandle = 0;
 		control->fileSize = 0;
 		control->numBytesReceived = 0;
-		control->otaStatus = SVR_CHR_OTA_CONTROL_NOP;
 	}
 
 	OtaControlData *const control;
@@ -246,7 +237,6 @@ void otaOnDisconnect() {
 		return;
 	}
 	esp_ota_abort(otaControlData.updateHandle);
-	otaControlData.otaStatus = SVR_CHR_OTA_CONTROL_NOP;
 	otaControlData.updateHandle = 0;
 	otaControlData.fileSize = 0;
 	otaControlData.numBytesReceived = 0;
