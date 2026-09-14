@@ -8,11 +8,11 @@
   "configurePresets": [
     {
       "name": "debug",
-      "binaryDir": "${sourceDir}/build/debug",
+      "binaryDir": "build/debug",
       "cacheVariables": {
         "IDF_TARGET": "esp32s3",
-        "SDKCONFIG_DEFAULTS": "${sourceDir}/sdkconfig.common;${sourceDir}/sdkconfig.debug",
-        "SDKCONFIG": "${sourceDir}/build/sdkconfig.debug"
+        "SDKCONFIG_DEFAULTS": "sdkconfig.common;sdkconfig.debug",
+        "SDKCONFIG": "build/sdkconfig.debug"
       },
       "vendor": {
         "espressif/vscode-esp-idf": {
@@ -36,11 +36,11 @@
     },
     {
       "name": "release",
-      "binaryDir": "${sourceDir}/build/release",
+      "binaryDir": "build/release",
       "cacheVariables": {
         "IDF_TARGET": "esp32s3",
-        "SDKCONFIG_DEFAULTS": "${sourceDir}/sdkconfig.common;${sourceDir}/sdkconfig.release",
-        "SDKCONFIG": "${sourceDir}/build/sdkconfig.release"
+        "SDKCONFIG_DEFAULTS": "sdkconfig.common;sdkconfig.release",
+        "SDKCONFIG": "build/sdkconfig.release"
       },
       "vendor": {
         "espressif/vscode-esp-idf": {
