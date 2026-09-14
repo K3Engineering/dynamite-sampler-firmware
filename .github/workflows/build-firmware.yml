@@ -26,7 +26,7 @@ jobs:
         esp_idf_version: v6.1
         target: esp32s3
         path: '.'
-        command: idf.py $(python ./generate_idf_flags_from_config_json.py release) build
+        command: idf.py --preset release build
 
     # this is the same way the main/generate_build_metadata.py generates the version.
     - name: Get git description
