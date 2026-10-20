@@ -27,7 +27,11 @@
             {
               "type": "openOCD",
               "value": {
-                "debugLevel": 2
+                "debugLevel": 2,
+                "configs": [
+                  "board/esp32s3-builtin.cfg"
+                ],
+                "args": []
               }
             }
           ]
@@ -55,7 +59,11 @@
             {
               "type": "openOCD",
               "value": {
-                "debugLevel": 2
+                "debugLevel": 2,
+                "configs": [
+                  "board/esp32s3-builtin.cfg"
+                ],
+                "args": []
               }
             }
           ]
