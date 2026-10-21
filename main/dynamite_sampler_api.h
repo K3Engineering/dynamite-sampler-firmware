@@ -25,16 +25,14 @@ constexpr uint16_t DEVICE_SERIAL_NUMBER_CHR_UUID = 0x2A25;
 constexpr uint16_t DEVICE_HARDWARE_REV_CHR_UUID = 0x2A27;
 
 // Dynamite sampler specific UUIDs
-// TODO: the ADC_FEED_CHR_UUID & OTA UUIDs were copied from sample code originally.
-// They should be changed to be unique.
 constexpr char DYNAMITE_SAMPLER_SVC_UUID[] = "e331016b-6618-4f8f-8997-1a2c7c9e5fa3";
-constexpr char ADC_FEED_CHR_UUID[] = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+constexpr char ADC_FEED_CHR_UUID[] = "6e08f21a-c056-43ed-890a-d72bb0f7c12f";
 constexpr char USER_KVS_CHR_UUID[] = "10adce11-68a6-450b-9810-ca11b39fd283";
 constexpr char ADC_CONF_CHR_UUID[] = "adcc0f19-2575-4502-9a48-0e99974eb34f";
 
-constexpr char OTA_SVC_UUID[] = "d6f1d96d-594c-4c53-b1c6-144a1dfde6d8";
-constexpr char OTA_CONTROL_CHR_UUID[] = "7ad671aa-21c0-46a4-b722-270e3ae3d830";
-constexpr char OTA_DATA_CHR_UUID[] = "23408888-1f40-4cd8-9b89-ca8d45f8a5b0";
+constexpr char OTA_SVC_UUID[] = "6f2ecf77-fd83-42a8-86de-4be9713bd53c";
+constexpr char OTA_CONTROL_CHR_UUID[] = "66815c6b-2b3f-4142-8a0a-bc34644eae01";
+constexpr char OTA_DATA_CHR_UUID[] = "09999d81-f1f6-4e31-8946-590220cc99af";
 
 // The TX characteristic if for setting only. Use the device info characteristic to
 // read the current power.
