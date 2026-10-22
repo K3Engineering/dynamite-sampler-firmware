@@ -218,6 +218,9 @@ KvsResult processKvsCommand(const char *rq, size_t rqLen, char *reply, size_t re
 	if (rqLen < dataOffset) {
 		return KvsResult::Rejected;
 	}
+	if (memchr(rq, 0, rqLen)) {
+		return KvsResult::Rejected;
+	}
 	const char *part = partitionName(rq[KVS_CMD_LEN]);
 	const char *nsp = nameSpace(rq[KVS_CMD_LEN]);
 	if (!(part && nsp)) {

@@ -16,6 +16,8 @@
 #include "board_id.h"
 #include "build_metadata.h"
 
+#include <string.h>
+
 constexpr char TAG[] = "BLE";
 
 static_assert(CONFIG_BT_NIMBLE_MAX_CONNECTIONS == 1);
@@ -169,7 +171,9 @@ static void setupDeviceInfo(NimBLEServer *server) {
 	{ // Firmware version
 		const char *hwRev = boardCfg() ? boardCfg()->name : BOARD_IDENTITY_NONE;
 		char s[BOARD_IDENTITY_NAME_MAX + sizeof(GIT_DESCRIBE)];
-		snprintf(s, sizeof(s), "%s|%s", hwRev, GIT_DESCRIBE);
+		strcpy(s, hwRev);
+		strcat(s, "|");
+		strcat(s, GIT_DESCRIBE);
 		NimBLECharacteristic *chr = srvDeviceInfo->createCharacteristic(
 		    DEVICE_FIRMWARE_VER_CHR_UUID16.value, NIMBLE_PROPERTY::READ, strlen(s));
 		chr->setValue((uint8_t *)s, strlen(s));
