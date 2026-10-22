@@ -3,6 +3,7 @@ set(srclist
     "adc_proc.cpp"
     "ble_ota.cpp"
     "ble_proc.cpp"
+    "ble_host.cpp"
     "board_id.cpp"
     "i2c_proc.cpp"
     "user_kvs.cpp"
