@@ -86,7 +86,7 @@ constexpr int8_t espPowerLevelToDbm(esp_power_level_t level_) {
 }
 
 static int dleGapListener(ble_gap_event *event, void *arg) {
-	ESP_LOGI(TAG, "listener event %d", event->type);
+	ESP_LOGD(TAG, "listener event %d", event->type);
 	switch (event->type) {
 	case BLE_GAP_EVENT_CONNECT:
 		if (event->connect.status == 0) {
@@ -123,7 +123,27 @@ static void adcOnDisconnect() {
 	}
 	stopAdcAcquisition();
 	deviceLock = DeviceLock::Open;
-	ESP_LOGI(TAG, "adcOnDisconnect");
+}
+
+static void adcOnSubscr(bool subscr) {
+	if (subscr) {
+		if (deviceLock == DeviceLock::Open) {
+			deviceLock = DeviceLock::Streaming;
+
+			adcFeedSamplesPerChunk = (dleConnInfo.maxTxOctets - L2CAP_HEADER_SIZE -
+			                          ATT_HEADER_SIZE - sizeof(AdcFeedNetworkPacket::Header)) /
+			                         sizeof(AdcFeedNetworkData);
+			if (adcFeedSamplesPerChunk > AdcFeedNetworkPacket::MAX_NUM_SAMPLES) {
+				adcFeedSamplesPerChunk = AdcFeedNetworkPacket::MAX_NUM_SAMPLES;
+			}
+			ESP_LOGI(TAG, "Samples per chunk %u", adcFeedSamplesPerChunk);
+			if (!startAdcAcquisition(adcFeedSamplesPerChunk)) {
+				deviceLock = DeviceLock::Open;
+			}
+		}
+	} else {
+		adcOnDisconnect();
+	}
 }
 
 class MyServerCallbacks : public NimBLEServerCallbacks {
@@ -374,11 +394,11 @@ static void _startAdvertising(void *context) {
 }
 
 static int _gapEventHandler(ble_gap_event *event, void *arg) {
-	ESP_LOGI(TAG, "handler event %u", event->type);
+	ESP_LOGD(TAG, "handler event %u", event->type);
 	BleGlobal *appContext = (BleGlobal *)arg;
 	switch (event->type) {
 	case BLE_GAP_EVENT_CONNECT: {
-		ESP_LOGI(TAG, "conn_handle=%u\n", event->connect.conn_handle);
+		ESP_LOGI(TAG, "conn_handle=%u", event->connect.conn_handle);
 		if (event->connect.status) {
 			appContext->connHandle = 0;
 			_startAdvertising(appContext);
@@ -387,26 +407,32 @@ static int _gapEventHandler(ble_gap_event *event, void *arg) {
 		}
 	} break;
 	case BLE_GAP_EVENT_DISCONNECT: {
+		adcOnDisconnect();
+		otaOnDisconnect();
 		appContext->connHandle = 0;
 		_startAdvertising(appContext);
+		ESP_LOGD(TAG, "Server onDisco, core %u", xPortGetCoreID());
 	} break;
 	case BLE_GAP_EVENT_ADV_COMPLETE: {
 		_startAdvertising(appContext);
 	} break;
 	case BLE_GAP_EVENT_SUBSCRIBE: {
-		ESP_LOGI(TAG, "subscr handles: %u %u\n", event->subscribe.conn_handle,
+		ESP_LOGI(TAG, "subscr handles: %u %u", event->subscribe.conn_handle,
 		         event->subscribe.attr_handle);
-		if (appContext->adcValHandle == event->subscribe.attr_handle) {
-			if (event->subscribe.cur_notify) {
-			} else {
-			}
+		if (!boardCfg()) {
+			ESP_LOGW(TAG, "ADC not operational");
+			break;
 		}
+		if (appContext->adcValHandle != event->subscribe.attr_handle) {
+			break;
+		}
+		adcOnSubscr(event->subscribe.cur_notify);
 	} break;
 	case BLE_GAP_EVENT_MTU: {
-		ESP_LOGI(TAG, "mtu=%u\n", event->mtu.value);
+		ESP_LOGI(TAG, "mtu=%u", event->mtu.value);
 	} break;
 	case BLE_GAP_EVENT_DATA_LEN_CHG: {
-		ESP_LOGI(TAG, "rxo=%u txo=%u\n", event->data_len_chg.max_rx_octets,
+		ESP_LOGI(TAG, "rxo=%u txo=%u", event->data_len_chg.max_rx_octets,
 		         event->data_len_chg.max_tx_octets);
 	} break;
 	default:
@@ -425,12 +451,13 @@ static void IRAM_ATTR taskBlePublishAdcBuffer(void *) {
 		size_t bytesRead = xStreamBufferReceive(adcStreamBufferHandle, &packet.adc,
 		                                        sizeof(packet.adc), portMAX_DELAY);
 		if (bytesRead == sizeof(packet.adc)) [[likely]] {
+			packet.hdr.sample_sequence_number = htole16(count);
+			count += adcFeedSamplesPerChunk;
+
 			os_mbuf *om = ble_hs_mbuf_from_flat(
 			    &packet, sizeof(packet.hdr) + adcFeedSamplesPerChunk * sizeof(*packet.adc));
 			if (om) [[likely]] {
-				packet.hdr.sample_sequence_number = htole16(count);
 				ble_gatts_notify_custom(bleGlobal.connHandle, bleGlobal.adcValHandle, om);
-				count += adcFeedSamplesPerChunk;
 			}
 		}
 	}
@@ -473,46 +500,35 @@ consteval ble_gatt_chr_def defineCharacteristic(const ble_uuid_t *uuid_,
 
 static int onMakeName(uint16_t conn_handle, uint16_t attr_handle, ble_gatt_access_ctxt *ctxt,
                       void *arg) {
-	if (os_mbuf_append(ctxt->om, DEVICE_MANUFACTURER_NAME, sizeof(DEVICE_MANUFACTURER_NAME) - 1)) {
-		return BLE_ATT_ERR_INSUFFICIENT_RES;
-	}
-	return 0;
+	return os_mbuf_append(ctxt->om, DEVICE_MANUFACTURER_NAME, sizeof(DEVICE_MANUFACTURER_NAME) - 1)
+	           ? BLE_ATT_ERR_INSUFFICIENT_RES
+			   : 0;
 }
 
 static int onModelNum(uint16_t conn_handle, uint16_t attr_handle, ble_gatt_access_ctxt *ctxt,
                       void *arg) {
 	const char *s = boardCfg() ? boardCfg()->marketingName : BOARD_IDENTITY_MARKETING_NONE;
-	if (os_mbuf_append(ctxt->om, s, strlen(s))) {
-		return BLE_ATT_ERR_INSUFFICIENT_RES;
-	}
-	return 0;
+	return os_mbuf_append(ctxt->om, s, strlen(s)) ? BLE_ATT_ERR_INSUFFICIENT_RES : 0;
 }
 
 static int onSerialNum(uint16_t conn_handle, uint16_t attr_handle, ble_gatt_access_ctxt *ctxt,
                        void *arg) {
 	char hwId[HW_ID_LEN + 1]{0};
 	hwIdStr(hwId);
-	if (os_mbuf_append(ctxt->om, hwId, HW_ID_LEN)) {
-		return BLE_ATT_ERR_INSUFFICIENT_RES;
-	}
-	return 0;
+	return os_mbuf_append(ctxt->om, hwId, HW_ID_LEN) ? BLE_ATT_ERR_INSUFFICIENT_RES : 0;
 }
 
 static int onHwRev(uint16_t conn_handle, uint16_t attr_handle, ble_gatt_access_ctxt *ctxt,
                    void *arg) {
 	const char *s = boardCfg() ? boardCfg()->name : BOARD_IDENTITY_NONE;
-	if (os_mbuf_append(ctxt->om, s, strlen(s))) {
-		return BLE_ATT_ERR_INSUFFICIENT_RES;
-	}
-	return 0;
+	return os_mbuf_append(ctxt->om, s, strlen(s)) ? BLE_ATT_ERR_INSUFFICIENT_RES : 0;
 }
 
 static int onFwVer(uint16_t conn_handle, uint16_t attr_handle, ble_gatt_access_ctxt *ctxt,
                    void *arg) {
-	if (os_mbuf_append(ctxt->om, GIT_DESCRIBE, sizeof(GIT_DESCRIBE) - 1)) {
-		return BLE_ATT_ERR_INSUFFICIENT_RES;
-	}
-	return 0;
+	return os_mbuf_append(ctxt->om, GIT_DESCRIBE, sizeof(GIT_DESCRIBE) - 1)
+	           ? BLE_ATT_ERR_INSUFFICIENT_RES
+			   : 0;
 }
 
 static int onTxPowerRead(uint16_t conn_handle, uint16_t attr_handle,
@@ -520,10 +536,7 @@ static int onTxPowerRead(uint16_t conn_handle, uint16_t attr_handle,
 	TxPowerNetworkData rPwr{
 	    .val = espPowerLevelToDbm(esp_ble_tx_power_get(ESP_BLE_PWR_TYPE_DEFAULT)),
 	};
-	if (os_mbuf_append(ctxt->om, &rPwr, sizeof(rPwr))) {
-		return BLE_ATT_ERR_INSUFFICIENT_RES;
-	}
-	return 0;
+	return os_mbuf_append(ctxt->om, &rPwr, sizeof(rPwr)) ? BLE_ATT_ERR_INSUFFICIENT_RES : 0;
 }
 
 static int onTxPowerWrite(uint16_t conn_handle, uint16_t attr_handle,
@@ -541,7 +554,7 @@ static int onTxPowerWrite(uint16_t conn_handle, uint16_t attr_handle,
 
 static int dummyAccessCb(uint16_t conn_handle, uint16_t attr_handle,
                          struct ble_gatt_access_ctxt *ctxt, void *arg) {
-	return BLE_ATT_ERR_UNLIKELY;
+	return 0;
 }
 
 constexpr ble_gatt_chr_def deviceInfoGattChr[] = {
