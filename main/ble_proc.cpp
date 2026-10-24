@@ -58,12 +58,12 @@ constexpr DleConnInfo dleInfoDefaults{
     .negotiated = false,
 };
 
-static int _bleGapEventHandler(ble_gap_event *event, void *arg);
+static int _gapEventHandler(ble_gap_event *event, void *arg);
 
 static DleConnInfo dleConnInfo{dleInfoDefaults};
 
 static int dleGapListener(ble_gap_event *event, void *arg) {
-	ESP_LOGI(TAG, "dleGapListener et %d", event->type);
+	ESP_LOGI(TAG, "listener event %d", event->type);
 	switch (event->type) {
 	case BLE_GAP_EVENT_CONNECT:
 		if (event->connect.status == 0) {
@@ -354,12 +354,12 @@ static void _startAdvertising(void *context) {
 	    .filter_policy = BLE_HCI_ADV_FILT_NONE,
 	    .high_duty_cycle = 0,
 	};
-	ble_gap_adv_start(BLE_OWN_ADDR_PUBLIC, nullptr, BLE_HS_FOREVER, &adv_params,
-	                  _bleGapEventHandler, context);
+	ble_gap_adv_start(BLE_OWN_ADDR_PUBLIC, nullptr, BLE_HS_FOREVER, &adv_params, _gapEventHandler,
+	                  context);
 }
 
-static int _bleGapEventHandler(ble_gap_event *event, void *arg) {
-	ESP_LOGI(TAG, "event %u", event->type);
+static int _gapEventHandler(ble_gap_event *event, void *arg) {
+	ESP_LOGI(TAG, "handler event %u", event->type);
 	BleGlobal *appContext = (BleGlobal *)arg;
 	switch (event->type) {
 	case BLE_GAP_EVENT_CONNECT: {
@@ -486,18 +486,68 @@ consteval ble_gatt_chr_def defineCharacteristic(const ble_uuid_t *uuid_,
 	};
 }
 
+static int onMakeName(uint16_t conn_handle, uint16_t attr_handle, ble_gatt_access_ctxt *ctxt,
+                      void *arg) {
+	if (os_mbuf_append(ctxt->om, DEVICE_MANUFACTURER_NAME, sizeof(DEVICE_MANUFACTURER_NAME) - 1)) {
+		return BLE_ATT_ERR_INSUFFICIENT_RES;
+	}
+	return 0;
+}
+
+static int onModelNum(uint16_t conn_handle, uint16_t attr_handle, ble_gatt_access_ctxt *ctxt,
+                      void *arg) {
+	const char *s = boardCfg() ? boardCfg()->marketingName : BOARD_IDENTITY_MARKETING_NONE;
+	if (os_mbuf_append(ctxt->om, s, strlen(s))) {
+		return BLE_ATT_ERR_INSUFFICIENT_RES;
+	}
+	return 0;
+}
+
+static int onSerialNum(uint16_t conn_handle, uint16_t attr_handle, ble_gatt_access_ctxt *ctxt,
+                       void *arg) {
+	char hwId[HW_ID_LEN + 1]{0};
+	hwIdStr(hwId);
+	if (os_mbuf_append(ctxt->om, hwId, HW_ID_LEN)) {
+		return BLE_ATT_ERR_INSUFFICIENT_RES;
+	}
+	return 0;
+}
+
+static int onHwRev(uint16_t conn_handle, uint16_t attr_handle, ble_gatt_access_ctxt *ctxt,
+                   void *arg) {
+	const char *s = boardCfg() ? boardCfg()->name : BOARD_IDENTITY_NONE;
+	if (os_mbuf_append(ctxt->om, s, strlen(s))) {
+		return BLE_ATT_ERR_INSUFFICIENT_RES;
+	}
+	return 0;
+}
+
+static int onFwVer(uint16_t conn_handle, uint16_t attr_handle, ble_gatt_access_ctxt *ctxt,
+                   void *arg) {
+	if (os_mbuf_append(ctxt->om, GIT_DESCRIBE, sizeof(GIT_DESCRIBE) - 1)) {
+		return BLE_ATT_ERR_INSUFFICIENT_RES;
+	}
+	return 0;
+}
+
 static int dummyAccessCb(uint16_t conn_handle, uint16_t attr_handle,
                          struct ble_gatt_access_ctxt *ctxt, void *arg) {
 	return BLE_ATT_ERR_UNLIKELY;
 }
 
 constexpr ble_gatt_chr_def deviceInfoGattChr[] = {
-    // defineCharacteristic(&DEVICE_MAKE_NAME_CHR_UUID16.u, chrManufacturer),
-    // defineCharacteristic(&DEVICE_MODEL_NUMBER_CHR_UUID16.u, chrModel),
-    // defineCharacteristic(&DEVICE_SERIAL_NUMBER_CHR_UUID16.u, chrSerial),
-    // defineCharacteristic(&DEVICE_HARDWARE_REV_CHR_UUID16.u, chrHwRevision),
-    // defineCharacteristic(&DEVICE_FIRMWARE_VER_CHR_UUID16.u, chrFirmware),
-    // defineCharacteristic(&DEVICE_TX_POWER_CHR_UUID16.u, chrTxPowerRead),
+    defineCharacteristic(&DEVICE_MAKE_NAME_CHR_UUID16.u, onMakeName, nullptr, BLE_GATT_CHR_F_READ,
+	                     nullptr),
+    defineCharacteristic(&DEVICE_MODEL_NUMBER_CHR_UUID16.u, onModelNum, nullptr,
+	                     BLE_GATT_CHR_F_READ, nullptr),
+    defineCharacteristic(&DEVICE_SERIAL_NUMBER_CHR_UUID16.u, onSerialNum, nullptr,
+	                     BLE_GATT_CHR_F_READ, nullptr),
+    defineCharacteristic(&DEVICE_HARDWARE_REV_CHR_UUID16.u, onHwRev, nullptr, BLE_GATT_CHR_F_READ,
+	                     nullptr),
+    defineCharacteristic(&DEVICE_FIRMWARE_VER_CHR_UUID16.u, onFwVer, nullptr, BLE_GATT_CHR_F_READ,
+	                     nullptr),
+    defineCharacteristic(&DEVICE_TX_POWER_CHR_UUID16.u, onMakeName, nullptr, BLE_GATT_CHR_F_READ,
+	                     nullptr),
     {},
 };
 
