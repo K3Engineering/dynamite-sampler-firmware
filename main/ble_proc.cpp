@@ -6,6 +6,12 @@
 
 #include <NimBLEDevice.h>
 
+#include "nimble/nimble_port.h"
+#include "nimble/nimble_port_freertos.h"
+
+#include "services/gap/ble_svc_gap.h"
+#include "services/gatt/ble_svc_gatt.h"
+
 #include "adc_ble_interface.h"
 #include "adc_proc.h"
 #include "ble_ota_interface.h"
@@ -21,6 +27,13 @@
 constexpr char TAG[] = "BLE";
 
 static_assert(CONFIG_BT_NIMBLE_MAX_CONNECTIONS == 1);
+
+struct BleGlobal {
+	uint16_t adcValHandle;
+	uint16_t connHandle;
+};
+
+static BleGlobal bleGlobal;
 
 struct DleConnInfo {
 	uint16_t maxTxOctets;
@@ -45,9 +58,12 @@ constexpr DleConnInfo dleInfoDefaults{
     .negotiated = false,
 };
 
+static int _bleGapEventHandler(ble_gap_event *event, void *arg);
+
 static DleConnInfo dleConnInfo{dleInfoDefaults};
 
 static int dleGapListener(ble_gap_event *event, void *arg) {
+	ESP_LOGI(TAG, "dleGapListener et %d", event->type);
 	switch (event->type) {
 	case BLE_GAP_EVENT_CONNECT:
 		if (event->connect.status == 0) {
@@ -307,19 +323,81 @@ static void setupAdcFeed(NimBLEServer *server) {
 }
 
 static void setupAdvertising(const char *name) {
-	// Start advertising
 	NimBLEAdvertising *pAdvertising = NimBLEDevice::getAdvertising();
-	//  Standard BLE advertisement packet is only 31 bytes, so long names don't always fit.
-	//  Scan response allows for devices to request more during the scan.
-	//  This will allow for more than the 31 bytes, like longer names.
-	// If your device is battery powered you may consider setting scan response *to false as
-	// it will extend battery life at the expense of less data sent.
 	pAdvertising->enableScanResponse(true);
 	pAdvertising->setName(name);
 	pAdvertising->addServiceUUID(&DYNAMITE_SAMPLER_SVC_UUID128);
-	// pAdvertising->addServiceUUID(srvDeviceInfo->getUUID());
-	// pAdvertising->addServiceUUID(srvOTA->getUUID());
 	NimBLEDevice::startAdvertising();
+}
+
+static void _startAdvertising(void *context) {
+	ble_hs_adv_fields fields{};
+	fields.flags = BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP;
+	fields.uuids128 = &DYNAMITE_SAMPLER_SVC_UUID128;
+	fields.num_uuids128 = 1;
+	fields.uuids128_is_complete = 1;
+	ble_gap_adv_set_fields(&fields);
+
+	const char *name = ble_svc_gap_device_name();
+	ble_hs_adv_fields rsp{};
+	rsp.name = (uint8_t *)name;
+	rsp.name_len = strlen(name);
+	rsp.name_is_complete = 1;
+	ble_gap_adv_rsp_set_fields(&rsp);
+
+	static constexpr ble_gap_adv_params adv_params{
+	    .conn_mode = BLE_GAP_CONN_MODE_UND,
+	    .disc_mode = BLE_GAP_DISC_MODE_GEN,
+	    .itvl_min = 0,
+	    .itvl_max = 0,
+	    .channel_map = 0,
+	    .filter_policy = BLE_HCI_ADV_FILT_NONE,
+	    .high_duty_cycle = 0,
+	};
+	ble_gap_adv_start(BLE_OWN_ADDR_PUBLIC, nullptr, BLE_HS_FOREVER, &adv_params,
+	                  _bleGapEventHandler, context);
+}
+
+static int _bleGapEventHandler(ble_gap_event *event, void *arg) {
+	ESP_LOGI(TAG, "event %u", event->type);
+	BleGlobal *appContext = (BleGlobal *)arg;
+	switch (event->type) {
+	case BLE_GAP_EVENT_CONNECT: {
+		ESP_LOGI(TAG, "conn_handle=%u\n", event->connect.conn_handle);
+		if (event->connect.status) {
+			appContext->connHandle = 0;
+			_startAdvertising(appContext);
+		} else {
+			appContext->connHandle = event->connect.conn_handle;
+		}
+	} break;
+	case BLE_GAP_EVENT_DISCONNECT: {
+		appContext->connHandle = 0;
+		_startAdvertising(appContext);
+	} break;
+	case BLE_GAP_EVENT_ADV_COMPLETE: {
+		_startAdvertising(appContext);
+	} break;
+	case BLE_GAP_EVENT_SUBSCRIBE: {
+		ESP_LOGI(TAG, "subscr handles: %u %u\n", event->subscribe.conn_handle,
+		         event->subscribe.attr_handle);
+		if (appContext->adcValHandle == event->subscribe.attr_handle) {
+			if (event->subscribe.cur_notify) {
+			} else {
+			}
+		}
+	} break;
+	case BLE_GAP_EVENT_MTU: {
+		ESP_LOGI(TAG, "mtu=%u\n", event->mtu.value);
+	} break;
+	case BLE_GAP_EVENT_DATA_LEN_CHG: {
+		ESP_LOGI(TAG, "rxo=%u txo=%u\n", event->data_len_chg.max_rx_octets,
+		         event->data_len_chg.max_tx_octets);
+	} break;
+	default:
+		break;
+	}
+	return 0;
 }
 
 // Task that is notified when the ADC buffer is ready to be sent
@@ -332,15 +410,26 @@ static void IRAM_ATTR taskBlePublishAdcBuffer(void *) {
 		size_t bytesRead = xStreamBufferReceive(adcStreamBufferHandle, &packet.adc,
 		                                        sizeof(packet.adc), portMAX_DELAY);
 		if (bytesRead == sizeof(packet.adc)) [[likely]] {
-			packet.hdr.sample_sequence_number = htole16(count);
-			chrAdcFeed->notify((uint8_t *)&packet,
-			                   sizeof(packet.hdr) + adcFeedSamplesPerChunk * sizeof(*packet.adc));
-			count += adcFeedSamplesPerChunk;
-		} else {
-			assert(0);
+			os_mbuf *om = ble_hs_mbuf_from_flat(
+			    &packet, sizeof(packet.hdr) + adcFeedSamplesPerChunk * sizeof(*packet.adc));
+			if (om) [[likely]] {
+				packet.hdr.sample_sequence_number = htole16(count);
+				ble_gatts_notify_custom(bleGlobal.connHandle, bleGlobal.adcValHandle, om);
+				count += adcFeedSamplesPerChunk;
+			}
 		}
 	}
 	vTaskDelete(NULL);
+}
+
+static void _onSync() {
+	_startAdvertising(&bleGlobal);
+	ESP_LOGI(TAG, "Advertising started");
+}
+
+static void _hostTask(void *) {
+	nimble_port_run(); // This function will return only when nimble_port_stop() is executed
+	                   // nimble_port_deinit();
 }
 
 static void taskSetupBle(void *setupDone) {
@@ -373,13 +462,102 @@ static void taskSetupBle(void *setupDone) {
 	vTaskDelete(NULL);
 }
 
+consteval ble_gatt_svc_def defineService(const ble_uuid_t *uuid_, const ble_gatt_chr_def *chr_) {
+	return ble_gatt_svc_def{
+	    .type = BLE_GATT_SVC_TYPE_PRIMARY,
+	    .uuid = uuid_,
+	    .includes = nullptr,
+	    .characteristics = chr_,
+	};
+}
+
+consteval ble_gatt_chr_def defineCharacteristic(const ble_uuid_t *uuid_,
+                                                ble_gatt_access_fn *access_cb_, void *arg_,
+                                                ble_gatt_chr_flags flags_, uint16_t *val_handle_) {
+	return ble_gatt_chr_def{
+	    .uuid = uuid_,
+	    .access_cb = access_cb_,
+	    .arg = arg_,
+	    .descriptors = nullptr,
+	    .flags = flags_,
+	    .min_key_size = 0,
+	    .val_handle = val_handle_,
+	    .cpfd = nullptr,
+	};
+}
+
+static int dummyAccessCb(uint16_t conn_handle, uint16_t attr_handle,
+                         struct ble_gatt_access_ctxt *ctxt, void *arg) {
+	return BLE_ATT_ERR_UNLIKELY;
+}
+
+constexpr ble_gatt_chr_def deviceInfoGattChr[] = {
+    // defineCharacteristic(&DEVICE_MAKE_NAME_CHR_UUID16.u, chrManufacturer),
+    // defineCharacteristic(&DEVICE_MODEL_NUMBER_CHR_UUID16.u, chrModel),
+    // defineCharacteristic(&DEVICE_SERIAL_NUMBER_CHR_UUID16.u, chrSerial),
+    // defineCharacteristic(&DEVICE_HARDWARE_REV_CHR_UUID16.u, chrHwRevision),
+    // defineCharacteristic(&DEVICE_FIRMWARE_VER_CHR_UUID16.u, chrFirmware),
+    // defineCharacteristic(&DEVICE_TX_POWER_CHR_UUID16.u, chrTxPowerRead),
+    {},
+};
+
+constexpr ble_gatt_chr_def adcNotifyGattChr[] = {
+    defineCharacteristic(&ADC_FEED_CHR_UUID128.u, dummyAccessCb, nullptr, BLE_GATT_CHR_F_NOTIFY,
+	                     &bleGlobal.adcValHandle),
+    // defineCharacteristic(&USER_KVS_CHR_UUID128.u, chrKvs),
+    // defineCharacteristic(&ADC_CONF_CHR_UUID128.u, chrAdcConfig),
+    {},
+};
+
+constexpr ble_gatt_chr_def TX_PWR_CHRS[] = {
+    // defineCharacteristic(&TX_PWR_CHR_UUID128.u, chrTxPowerWrite),
+    {},
+};
+
+constexpr ble_gatt_svc_def _gattSvcsDefinition[] = {
+    defineService(&DEVICE_INFO_SVC_UUID16.u, deviceInfoGattChr),
+    defineService(&DYNAMITE_SAMPLER_SVC_UUID128.u, adcNotifyGattChr),
+    // defineService(&OTA_SVC_UUID, otaGattChr),
+    {},
+};
+
+static void _taskSetupBle(void *setupDone) {
+	ESP_LOGI(TAG, "Setting up BLE");
+	// Create the BLE Device
+	// Name the device with the mac address to make it unique for testing purposes.
+	char bleName[CONFIG_BT_NIMBLE_GAP_DEVICE_NAME_MAX_LEN + 1] = {"DS "};
+	static_assert(sizeof(bleName) >= 3 + HW_ID_LEN + 1);
+	hwIdStr(bleName + 3);
+	nimble_port_init();                   // 3 - Initialize the host stack
+	ble_svc_gap_device_name_set(bleName); // 4 - Initialize NimBLE configuration - server name
+	ble_svc_gap_init();                   // 4 - Initialize NimBLE configuration - gap service
+	ble_svc_gatt_init();                  // 4 - Initialize NimBLE configuration - gatt service
+	ble_gatts_count_cfg(
+	    _gattSvcsDefinition); // 4 - Initialize NimBLE configuration - config gatt services
+	ble_gatts_add_svcs(
+	    _gattSvcsDefinition); // 4 - Initialize NimBLE configuration - queues gatt services.
+	ble_att_set_preferred_mtu(BLE_ATT_MTU_MAX);
+	static ble_gap_event_listener gapListener;
+	ble_gap_event_listener_register(&gapListener, dleGapListener, nullptr);
+
+	ble_hs_cfg.sync_cb = _onSync;         // 5 - Initialize application
+	nimble_port_freertos_init(_hostTask); // 6 - Run the thread
+
+	ESP_LOGI(TAG, "Setup done");
+	ESP_LOGI(TAG, "Setup stack HWM %u", uxTaskGetStackHighWaterMark(NULL));
+
+	*(volatile bool *)setupDone = true;
+	vTaskDelete(NULL);
+}
+
 void setupBle(int core) {
 	// Buffer to pass the ADC values from the ADC task to BLE task
 	adcStreamBufferHandle = xStreamBufferCreate(ADC_FEED_MAX_CHUNK_SZ * 8, ADC_FEED_MAX_CHUNK_SZ);
 	assert(adcStreamBufferHandle != NULL);
 
 	volatile bool done = false;
-	xTaskCreatePinnedToCore(taskSetupBle, "task_BLE_setup", 1024 * 6, (void *)&done, 1, NULL, core);
+	xTaskCreatePinnedToCore(_taskSetupBle, "task_BLE_setup", 1024 * 6, (void *)&done, 1, NULL,
+	                        core);
 	while (!done)
 		vTaskDelay(10);
 
