@@ -28,12 +28,17 @@ constexpr char TAG[] = "BLE";
 
 static_assert(CONFIG_BT_NIMBLE_MAX_CONNECTIONS == 1);
 
-struct BleGlobal {
-	uint16_t adcValHandle;
+struct AppGlobal {
 	uint16_t connHandle;
+	uint16_t valHandle;
 };
 
-static BleGlobal bleGlobal;
+static AppGlobal appGlobalConn;
+
+StreamBufferHandle_t adcStreamBufferHandle = NULL;
+static size_t adcFeedSamplesPerChunk = 0;
+
+DeviceLock deviceLock = DeviceLock::Open;
 
 struct DleConnInfo {
 	uint16_t maxTxOctets;
@@ -43,13 +48,6 @@ struct DleConnInfo {
 	bool negotiated;
 };
 
-static NimBLECharacteristic *chrAdcFeed = nullptr;
-
-StreamBufferHandle_t adcStreamBufferHandle = NULL;
-static size_t adcFeedSamplesPerChunk = 0;
-
-DeviceLock deviceLock = DeviceLock::Open;
-
 constexpr DleConnInfo dleInfoDefaults{
     .maxTxOctets = 0x001B, // BLE defaults: 27 octets
     .maxRxOctets = 0x001B,
@@ -58,9 +56,9 @@ constexpr DleConnInfo dleInfoDefaults{
     .negotiated = false,
 };
 
-static int _gapEventHandler(ble_gap_event *event, void *arg);
-
 static DleConnInfo dleConnInfo{dleInfoDefaults};
+
+static int gapEventHandler(ble_gap_event *event, void *arg);
 
 constexpr esp_power_level_t dbmToEspPowerLevel(int dbm) {
 	// +20 dBm is a special case, not another 3 dB step.
@@ -86,7 +84,6 @@ constexpr int8_t espPowerLevelToDbm(esp_power_level_t level_) {
 }
 
 static int dleGapListener(ble_gap_event *event, void *arg) {
-	ESP_LOGD(TAG, "listener event %d", event->type);
 	switch (event->type) {
 	case BLE_GAP_EVENT_CONNECT:
 		if (event->connect.status == 0) {
@@ -146,42 +143,6 @@ static void adcOnSubscr(bool subscr) {
 	}
 }
 
-class MyServerCallbacks : public NimBLEServerCallbacks {
-	void onConnect(NimBLEServer *server, NimBLEConnInfo &connInfo) override {
-		// TODO: Figure out:
-		// is this needed?
-		// Does this actually affect the packet size for the way we notify
-		// Do we need to notify in a different way?
-		server->setDataLen(connInfo.getConnHandle(), DLE_MAX_SIZE);
-
-		// Best case, devices can handle 7.5ms interval connection (android phone)
-		// older iOS might be 15ms, Windows PC might be 30ms. Connection interval is set in
-		// increments of 1.25ms.
-		// Don't skip any connection intervals, and timout after 10*N ms
-		server->updateConnParams(connInfo.getConnHandle(), 6, 6 * 4, 0, 500);
-		ESP_LOGD(TAG, "Server onConnect, core %u", xPortGetCoreID());
-	};
-
-	void onDisconnect(NimBLEServer *server, NimBLEConnInfo &connInfo, int reason) override {
-		adcOnDisconnect();
-		otaOnDisconnect();
-		NimBLEDevice::startAdvertising();
-		ESP_LOGD(TAG, "Server onDisco, core %u", xPortGetCoreID());
-	}
-};
-
-class TxPowerPublisherCallbacks : public NimBLECharacteristicCallbacks {
-	void onRead(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
-		// Read by a client.
-		int power = NimBLEDevice::getPower();
-		TxPowerNetworkData rPwr{
-		    .val = static_cast<int8_t>(power),
-		};
-		pCharacteristic->setValue(rPwr);
-		assert(rPwr.val == power); // power should fit int8_t
-	}
-};
-
 constexpr size_t HW_ID_LEN = 12; // NOT zero terminated
 
 static void hwIdStr(char out[HW_ID_LEN]) {
@@ -195,177 +156,7 @@ static void hwIdStr(char out[HW_ID_LEN]) {
 	}
 }
 
-// Set the BLE standardized device info
-static void setupDeviceInfo(NimBLEServer *server) {
-	NimBLEService *srvDeviceInfo = server->createService(DEVICE_INFO_SVC_UUID16.value);
-	{ // Manufacturer
-		NimBLECharacteristic *chr = srvDeviceInfo->createCharacteristic(
-		    DEVICE_MAKE_NAME_CHR_UUID16.value, NIMBLE_PROPERTY::READ,
-		    sizeof(DEVICE_MANUFACTURER_NAME));
-		chr->setValue(DEVICE_MANUFACTURER_NAME);
-		ESP_LOGI(TAG, "Set Device manufacturer name to: '%s'", DEVICE_MANUFACTURER_NAME);
-	}
-	{ // Model number (marketing name, from the flashed board identity)
-		const char *model = boardCfg() ? boardCfg()->marketingName : BOARD_IDENTITY_MARKETING_NONE;
-		NimBLECharacteristic *chr = srvDeviceInfo->createCharacteristic(
-		    DEVICE_MODEL_NUMBER_CHR_UUID16.value, NIMBLE_PROPERTY::READ, strlen(model) + 1);
-		chr->setValue(model);
-		ESP_LOGI(TAG, "Set Device model number to: '%s'", model);
-	}
-	{ // Serial number (eFuse MAC)
-		char hwId[HW_ID_LEN + 1]{0};
-		hwIdStr(hwId);
-		NimBLECharacteristic *chr = srvDeviceInfo->createCharacteristic(
-		    DEVICE_SERIAL_NUMBER_CHR_UUID16.value, NIMBLE_PROPERTY::READ, HW_ID_LEN);
-		chr->setValue((uint8_t *)hwId, HW_ID_LEN);
-		ESP_LOGI(TAG, "Set Device serial number to: '%s'", hwId);
-	}
-	{ // Hardware revision (the Factory `board_model` identity)
-		const char *hwRev = boardCfg() ? boardCfg()->name : BOARD_IDENTITY_NONE;
-		NimBLECharacteristic *chr = srvDeviceInfo->createCharacteristic(
-		    DEVICE_HARDWARE_REV_CHR_UUID16.value, NIMBLE_PROPERTY::READ, strlen(hwRev) + 1);
-		chr->setValue(hwRev);
-		ESP_LOGI(TAG, "Set Device hardware revision to: '%s'", hwRev);
-	}
-	{ // Firmware version
-		const char *hwRev = boardCfg() ? boardCfg()->name : BOARD_IDENTITY_NONE;
-		char s[BOARD_IDENTITY_NAME_MAX + sizeof(GIT_DESCRIBE)];
-		strcpy(s, hwRev);
-		strcat(s, "|");
-		strcat(s, GIT_DESCRIBE);
-		NimBLECharacteristic *chr = srvDeviceInfo->createCharacteristic(
-		    DEVICE_FIRMWARE_VER_CHR_UUID16.value, NIMBLE_PROPERTY::READ, strlen(s));
-		chr->setValue((uint8_t *)s, strlen(s));
-		ESP_LOGI(TAG, "Set Device Firmware version to: '%s'", s);
-	}
-	{ // Transmitter power
-		NimBLECharacteristic *chr = srvDeviceInfo->createCharacteristic(
-		    DEVICE_TX_POWER_CHR_UUID16.value, NIMBLE_PROPERTY::READ, sizeof(TxPowerNetworkData));
-		static TxPowerPublisherCallbacks cb;
-		chr->setCallbacks(&cb);
-	}
-}
-
-class TxPowerManagerCallbacks : public NimBLECharacteristicCallbacks {
-	void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
-		// Value written to the characteristic by a client.
-		const NimBLEAttValue val = pCharacteristic->getValue();
-		if (val.length() != sizeof(TxPowerNetworkData)) {
-			ESP_LOGW(TAG, "TX power onWrite, received %u bytes", val.length());
-			return;
-		}
-		TxPowerNetworkData power = *(TxPowerNetworkData *)val.data();
-		if (!NimBLEDevice::setPower(power.val)) {
-			ESP_LOGE(TAG, "Set TX power failed");
-		}
-	}
-};
-
-static void setupPowerManagerInterface(NimBLEServer *server) {
-	NimBLEService *srvc = server->createService(&TX_PWR_SVC_UUID128);
-	// Set transmitter power - write
-	NimBLECharacteristic *chr = srvc->createCharacteristic(
-	    &TX_PWR_CHR_UUID128, NIMBLE_PROPERTY::WRITE, sizeof(TxPowerNetworkData));
-	static TxPowerManagerCallbacks cb;
-	chr->setCallbacks(&cb);
-}
-
-class AdcFeedCallbacks : public NimBLECharacteristicCallbacks {
-	void onSubscribe(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo,
-	                 uint16_t subValue) override {
-		ESP_LOGI(TAG, "ADC Feed onSubscr sub %u, MTU %u", subValue, connInfo.getMTU());
-		ESP_LOGD(TAG, "The TX octet is %u", dleConnInfo.maxTxOctets);
-		if (subValue & 1) {
-			if (!boardCfg()) {
-				ESP_LOGW(TAG, "ADC feed subscribe ignored: ADC not operational");
-			} else if (deviceLock == DeviceLock::Open) {
-				deviceLock = DeviceLock::Streaming;
-
-				adcFeedSamplesPerChunk = (dleConnInfo.maxTxOctets - L2CAP_HEADER_SIZE -
-				                          ATT_HEADER_SIZE - sizeof(AdcFeedNetworkPacket::Header)) /
-				                         sizeof(AdcFeedNetworkData);
-				if (adcFeedSamplesPerChunk > AdcFeedNetworkPacket::MAX_NUM_SAMPLES) {
-					adcFeedSamplesPerChunk = AdcFeedNetworkPacket::MAX_NUM_SAMPLES;
-				}
-				ESP_LOGI(TAG, "Samples per chunk %u", adcFeedSamplesPerChunk);
-				if (!startAdcAcquisition(adcFeedSamplesPerChunk)) {
-					deviceLock = DeviceLock::Open;
-				}
-			}
-		} else {
-			if (deviceLock == DeviceLock::Streaming) {
-				stopAdcAcquisition();
-				deviceLock = DeviceLock::Open;
-			}
-		}
-	}
-};
-
-class AdcConfigCallbacks : public NimBLECharacteristicCallbacks {
-	void onRead(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
-		pCharacteristic->setValue(getAdcConfig());
-	}
-};
-
-class UserKvsCallbacks : public NimBLECharacteristicCallbacks {
-	void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
-		char buff[USER_KVS_NETWORK_FRAME_LENGTH + 1]{0};
-		size_t rqLength = 0;
-		{
-			const NimBLEAttValue val{pCharacteristic->getValue()};
-			if ((val.length() + 2) < sizeof(buff)) {
-				rqLength = val.length();
-				memcpy(buff + 1, val.data(), rqLength);
-			}
-		}
-		ESP_LOGI(TAG, "Rq '%s'", buff + 1);
-		char status = KvsStatusBusy;
-		if (deviceLock == DeviceLock::Open) {
-			switch (processKvsCommand(buff + 1, rqLength, buff + (rqLength + 2),
-			                          sizeof(buff) - (rqLength + 2))) {
-			case KvsResult::Ok:
-				status = KvsStatusOk;
-				buff[rqLength + 1] = '=';
-				break;
-			case KvsResult::Rejected:
-				status = KvsStatusRejected;
-				break;
-			case KvsResult::Error:
-				status = KvsStatusError;
-				break;
-			}
-		} else {
-			ESP_LOGW(TAG, "KVS command: Device locked(%u)", deviceLock);
-		}
-		buff[0] = status;
-		ESP_LOGI(TAG, "Repl '%s'", buff);
-		pCharacteristic->setValue((const char *)buff);
-		pCharacteristic->notify();
-	}
-};
-
-static void setupAdcFeed(NimBLEServer *server) {
-	NimBLEService *srvc = server->createService(&DYNAMITE_SAMPLER_SVC_UUID128);
-	{ // ADC feed
-		chrAdcFeed = srvc->createCharacteristic(&ADC_FEED_CHR_UUID128, NIMBLE_PROPERTY::NOTIFY);
-		static AdcFeedCallbacks cb;
-		chrAdcFeed->setCallbacks(&cb);
-	}
-	{ // User KeyValStore data
-		NimBLECharacteristic *chr = srvc->createCharacteristic(
-		    &USER_KVS_CHR_UUID128, NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::NOTIFY);
-		static UserKvsCallbacks cb;
-		chr->setCallbacks(&cb);
-	}
-	{ // ADC config
-		NimBLECharacteristic *chr =
-		    srvc->createCharacteristic(&ADC_CONF_CHR_UUID128, NIMBLE_PROPERTY::READ);
-		static AdcConfigCallbacks cb;
-		chr->setCallbacks(&cb);
-	}
-}
-
-static void _startAdvertising(void *context) {
+static void startAdvertising(void *context) {
 	ble_hs_adv_fields fields{};
 	fields.flags = BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP;
 	fields.uuids128 = &DYNAMITE_SAMPLER_SVC_UUID128;
@@ -380,7 +171,7 @@ static void _startAdvertising(void *context) {
 	rsp.name_is_complete = 1;
 	ble_gap_adv_rsp_set_fields(&rsp);
 
-	static constexpr ble_gap_adv_params adv_params{
+	static constexpr ble_gap_adv_params advParams{
 	    .conn_mode = BLE_GAP_CONN_MODE_UND,
 	    .disc_mode = BLE_GAP_DISC_MODE_GEN,
 	    .itvl_min = 0,
@@ -389,32 +180,50 @@ static void _startAdvertising(void *context) {
 	    .filter_policy = BLE_HCI_ADV_FILT_NONE,
 	    .high_duty_cycle = 0,
 	};
-	ble_gap_adv_start(BLE_OWN_ADDR_PUBLIC, nullptr, BLE_HS_FOREVER, &adv_params, _gapEventHandler,
+	ble_gap_adv_start(BLE_OWN_ADDR_PUBLIC, nullptr, BLE_HS_FOREVER, &advParams, gapEventHandler,
 	                  context);
 }
 
-static int _gapEventHandler(ble_gap_event *event, void *arg) {
-	ESP_LOGD(TAG, "handler event %u", event->type);
-	BleGlobal *appContext = (BleGlobal *)arg;
+static int gapEventHandler(ble_gap_event *event, void *arg) {
+	AppGlobal *appContext = (AppGlobal *)arg;
 	switch (event->type) {
 	case BLE_GAP_EVENT_CONNECT: {
-		ESP_LOGI(TAG, "conn_handle=%u", event->connect.conn_handle);
+		ESP_LOGI(TAG, "connHandle=%u", event->connect.conn_handle);
 		if (event->connect.status) {
 			appContext->connHandle = 0;
-			_startAdvertising(appContext);
+			startAdvertising(appContext);
 		} else {
 			appContext->connHandle = event->connect.conn_handle;
+			// TODO: Figure out:
+			// is this needed?
+			// Does this actually affect the packet size for the way we notify
+			// Do we need to notify in a different way?
+			ble_gap_set_data_len(event->connect.conn_handle, DLE_MAX_SIZE, (DLE_MAX_SIZE + 14) * 8);
+
+			// Best case, devices can handle 7.5ms interval connection (android phone)
+			// older iOS might be 15ms, Windows PC might be 30ms. Connection interval is set in
+			// increments of 1.25ms.
+			// Don't skip any connection intervals, and timout after 10*N ms
+			static constexpr ble_gap_upd_params params = {
+			    .itvl_min = 6,
+			    .itvl_max = 6 * 4,
+			    .latency = 0,
+			    .supervision_timeout = 500,
+			    .min_ce_len = BLE_GAP_INITIAL_CONN_MIN_CE_LEN,
+			    .max_ce_len = BLE_GAP_INITIAL_CONN_MAX_CE_LEN,
+			};
+			ble_gap_update_params(event->connect.conn_handle, &params);
 		}
 	} break;
 	case BLE_GAP_EVENT_DISCONNECT: {
 		adcOnDisconnect();
 		otaOnDisconnect();
 		appContext->connHandle = 0;
-		_startAdvertising(appContext);
+		startAdvertising(appContext);
 		ESP_LOGD(TAG, "Server onDisco, core %u", xPortGetCoreID());
 	} break;
 	case BLE_GAP_EVENT_ADV_COMPLETE: {
-		_startAdvertising(appContext);
+		startAdvertising(appContext);
 	} break;
 	case BLE_GAP_EVENT_SUBSCRIBE: {
 		ESP_LOGI(TAG, "subscr handles: %u %u", event->subscribe.conn_handle,
@@ -423,7 +232,7 @@ static int _gapEventHandler(ble_gap_event *event, void *arg) {
 			ESP_LOGW(TAG, "ADC not operational");
 			break;
 		}
-		if (appContext->adcValHandle != event->subscribe.attr_handle) {
+		if (appContext->valHandle != event->subscribe.attr_handle) {
 			break;
 		}
 		adcOnSubscr(event->subscribe.cur_notify);
@@ -457,19 +266,19 @@ static void IRAM_ATTR taskBlePublishAdcBuffer(void *) {
 			os_mbuf *om = ble_hs_mbuf_from_flat(
 			    &packet, sizeof(packet.hdr) + adcFeedSamplesPerChunk * sizeof(*packet.adc));
 			if (om) [[likely]] {
-				ble_gatts_notify_custom(bleGlobal.connHandle, bleGlobal.adcValHandle, om);
+				ble_gatts_notify_custom(appGlobalConn.connHandle, appGlobalConn.valHandle, om);
 			}
 		}
 	}
 	vTaskDelete(NULL);
 }
 
-static void _onSync() {
-	_startAdvertising(&bleGlobal);
+static void onSync() {
+	startAdvertising(&appGlobalConn);
 	ESP_LOGI(TAG, "Advertising started");
 }
 
-static void _hostTask(void *) {
+static void bleHostTask(void *) {
 	nimble_port_run(); // This function will return only when nimble_port_stop() is executed
 	                   // nimble_port_deinit();
 }
@@ -498,40 +307,40 @@ consteval ble_gatt_chr_def defineCharacteristic(const ble_uuid_t *uuid_,
 	};
 }
 
-static int onMakeName(uint16_t conn_handle, uint16_t attr_handle, ble_gatt_access_ctxt *ctxt,
+static int onMakeName(uint16_t connHandle, uint16_t attrHandle, ble_gatt_access_ctxt *ctxt,
                       void *arg) {
 	return os_mbuf_append(ctxt->om, DEVICE_MANUFACTURER_NAME, sizeof(DEVICE_MANUFACTURER_NAME) - 1)
 	           ? BLE_ATT_ERR_INSUFFICIENT_RES
 			   : 0;
 }
 
-static int onModelNum(uint16_t conn_handle, uint16_t attr_handle, ble_gatt_access_ctxt *ctxt,
+static int onModelNum(uint16_t connHandle, uint16_t attrHandle, ble_gatt_access_ctxt *ctxt,
                       void *arg) {
 	const char *s = boardCfg() ? boardCfg()->marketingName : BOARD_IDENTITY_MARKETING_NONE;
 	return os_mbuf_append(ctxt->om, s, strlen(s)) ? BLE_ATT_ERR_INSUFFICIENT_RES : 0;
 }
 
-static int onSerialNum(uint16_t conn_handle, uint16_t attr_handle, ble_gatt_access_ctxt *ctxt,
+static int onSerialNum(uint16_t connHandle, uint16_t attrHandle, ble_gatt_access_ctxt *ctxt,
                        void *arg) {
 	char hwId[HW_ID_LEN + 1]{0};
 	hwIdStr(hwId);
 	return os_mbuf_append(ctxt->om, hwId, HW_ID_LEN) ? BLE_ATT_ERR_INSUFFICIENT_RES : 0;
 }
 
-static int onHwRev(uint16_t conn_handle, uint16_t attr_handle, ble_gatt_access_ctxt *ctxt,
+static int onHwRev(uint16_t connHandle, uint16_t attrHandle, ble_gatt_access_ctxt *ctxt,
                    void *arg) {
 	const char *s = boardCfg() ? boardCfg()->name : BOARD_IDENTITY_NONE;
 	return os_mbuf_append(ctxt->om, s, strlen(s)) ? BLE_ATT_ERR_INSUFFICIENT_RES : 0;
 }
 
-static int onFwVer(uint16_t conn_handle, uint16_t attr_handle, ble_gatt_access_ctxt *ctxt,
+static int onFwVer(uint16_t connHandle, uint16_t attrHandle, ble_gatt_access_ctxt *ctxt,
                    void *arg) {
 	return os_mbuf_append(ctxt->om, GIT_DESCRIBE, sizeof(GIT_DESCRIBE) - 1)
 	           ? BLE_ATT_ERR_INSUFFICIENT_RES
 			   : 0;
 }
 
-static int onTxPowerRead(uint16_t conn_handle, uint16_t attr_handle,
+static int onTxPowerRead(uint16_t connHandle, uint16_t attrHandle,
                          struct ble_gatt_access_ctxt *ctxt, void *arg) {
 	TxPowerNetworkData rPwr{
 	    .val = espPowerLevelToDbm(esp_ble_tx_power_get(ESP_BLE_PWR_TYPE_DEFAULT)),
@@ -539,7 +348,7 @@ static int onTxPowerRead(uint16_t conn_handle, uint16_t attr_handle,
 	return os_mbuf_append(ctxt->om, &rPwr, sizeof(rPwr)) ? BLE_ATT_ERR_INSUFFICIENT_RES : 0;
 }
 
-static int onTxPowerWrite(uint16_t conn_handle, uint16_t attr_handle,
+static int onTxPowerWrite(uint16_t connHandle, uint16_t attrHandle,
                           struct ble_gatt_access_ctxt *ctxt, void *arg) {
 	TxPowerNetworkData rPwr;
 	if (OS_MBUF_PKTLEN(ctxt->om) == sizeof(rPwr)) {
@@ -552,12 +361,54 @@ static int onTxPowerWrite(uint16_t conn_handle, uint16_t attr_handle,
 	return 0;
 }
 
-static int dummyAccessCb(uint16_t conn_handle, uint16_t attr_handle,
+static int onKvs(uint16_t connHandle, uint16_t attrHandle, struct ble_gatt_access_ctxt *ctxt,
+                 void *arg) {
+	char buff[USER_KVS_NETWORK_FRAME_LENGTH + 1]{0};
+	const size_t rqLength = OS_MBUF_PKTLEN(ctxt->om);
+	if (rqLength + 2 < sizeof(buff)) {
+		os_mbuf_copydata(ctxt->om, 0, rqLength, buff + 1);
+	}
+	ESP_LOGI(TAG, "Rq '%s'", buff + 1);
+	char status = KvsStatusBusy;
+	if (deviceLock == DeviceLock::Open) {
+		switch (processKvsCommand(buff + 1, rqLength, buff + (rqLength + 2),
+		                          sizeof(buff) - (rqLength + 2))) {
+		case KvsResult::Ok:
+			status = KvsStatusOk;
+			buff[rqLength + 1] = '=';
+			break;
+		case KvsResult::Rejected:
+			status = KvsStatusRejected;
+			break;
+		case KvsResult::Error:
+			status = KvsStatusError;
+			break;
+		}
+	} else {
+		ESP_LOGW(TAG, "KVS command: Device locked(%u)", deviceLock);
+	}
+	buff[0] = status;
+	ESP_LOGI(TAG, "Repl '%s'", buff);
+
+	os_mbuf *om = ble_hs_mbuf_from_flat(buff, strlen(buff));
+	if (om) {
+		ble_gatts_notify_custom(connHandle, attrHandle, om);
+	}
+	return 0;
+}
+
+static int onAdcConfig(uint16_t connHandle, uint16_t attrHandle, struct ble_gatt_access_ctxt *ctxt,
+                       void *arg) {
+	AdcConfigNetworkData data{getAdcConfig()};
+	return os_mbuf_append(ctxt->om, &data, sizeof(data)) ? BLE_ATT_ERR_INSUFFICIENT_RES : 0;
+}
+
+static int dummyAccessCb(uint16_t connHandle, uint16_t attrHandle,
                          struct ble_gatt_access_ctxt *ctxt, void *arg) {
 	return 0;
 }
 
-constexpr ble_gatt_chr_def deviceInfoGattChr[] = {
+constexpr ble_gatt_chr_def deviceInfoChr[] = {
     defineCharacteristic(&DEVICE_MAKE_NAME_CHR_UUID16.u, onMakeName, nullptr, BLE_GATT_CHR_F_READ,
 	                     nullptr),
     defineCharacteristic(&DEVICE_MODEL_NUMBER_CHR_UUID16.u, onModelNum, nullptr,
@@ -573,11 +424,13 @@ constexpr ble_gatt_chr_def deviceInfoGattChr[] = {
     {},
 };
 
-constexpr ble_gatt_chr_def adcNotifyGattChr[] = {
+constexpr ble_gatt_chr_def adcNotifyChr[] = {
     defineCharacteristic(&ADC_FEED_CHR_UUID128.u, dummyAccessCb, nullptr, BLE_GATT_CHR_F_NOTIFY,
-	                     &bleGlobal.adcValHandle),
-    // defineCharacteristic(&USER_KVS_CHR_UUID128.u, chrKvs),
-    // defineCharacteristic(&ADC_CONF_CHR_UUID128.u, chrAdcConfig),
+	                     &appGlobalConn.valHandle),
+    defineCharacteristic(&USER_KVS_CHR_UUID128.u, onKvs, nullptr,
+	                     BLE_GATT_CHR_F_NOTIFY | BLE_GATT_CHR_F_WRITE, nullptr),
+    defineCharacteristic(&ADC_CONF_CHR_UUID128.u, onAdcConfig, nullptr, BLE_GATT_CHR_F_READ,
+	                     nullptr),
     {},
 };
 
@@ -587,9 +440,9 @@ constexpr ble_gatt_chr_def txPowerChr[] = {
     {},
 };
 
-constexpr ble_gatt_svc_def _gattSvcsDefinition[] = {
-    defineService(&DEVICE_INFO_SVC_UUID16.u, deviceInfoGattChr),
-    defineService(&DYNAMITE_SAMPLER_SVC_UUID128.u, adcNotifyGattChr),
+constexpr ble_gatt_svc_def gattSvcsDefinition[] = {
+    defineService(&DEVICE_INFO_SVC_UUID16.u, deviceInfoChr),
+    defineService(&DYNAMITE_SAMPLER_SVC_UUID128.u, adcNotifyChr),
     defineService(&TX_PWR_SVC_UUID128.u, txPowerChr),
     // defineService(&OTA_SVC_UUID, otaGattChr),
     {},
@@ -607,15 +460,15 @@ static void _taskSetupBle(void *setupDone) {
 	ble_svc_gap_init();                   // 4 - Initialize NimBLE configuration - gap service
 	ble_svc_gatt_init();                  // 4 - Initialize NimBLE configuration - gatt service
 	ble_gatts_count_cfg(
-	    _gattSvcsDefinition); // 4 - Initialize NimBLE configuration - config gatt services
+	    gattSvcsDefinition); // 4 - Initialize NimBLE configuration - config gatt services
 	ble_gatts_add_svcs(
-	    _gattSvcsDefinition); // 4 - Initialize NimBLE configuration - queues gatt services.
+	    gattSvcsDefinition); // 4 - Initialize NimBLE configuration - queues gatt services.
 	ble_att_set_preferred_mtu(BLE_ATT_MTU_MAX);
 	static ble_gap_event_listener gapListener;
 	ble_gap_event_listener_register(&gapListener, dleGapListener, nullptr);
 
-	ble_hs_cfg.sync_cb = _onSync;         // 5 - Initialize application
-	nimble_port_freertos_init(_hostTask); // 6 - Run the thread
+	ble_hs_cfg.sync_cb = onSync;            // 5 - Initialize application
+	nimble_port_freertos_init(bleHostTask); // 6 - Run the thread
 
 	ESP_LOGI(TAG, "Setup done");
 	ESP_LOGI(TAG, "Setup stack HWM %u", uxTaskGetStackHighWaterMark(NULL));

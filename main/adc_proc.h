@@ -7,6 +7,6 @@ void setupAdc(int core);
 bool startAdcAcquisition(size_t interval);
 void stopAdcAcquisition();
 
-const AdcConfigNetworkData getAdcConfig();
+AdcConfigNetworkData getAdcConfig();
 
 #endif // _ADC_PROC_H

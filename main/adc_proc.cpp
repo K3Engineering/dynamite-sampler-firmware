@@ -31,7 +31,7 @@ bool startAdcAcquisition(size_t interval) { return adc.startAcquisition(interval
 
 void stopAdcAcquisition() { adc.stopAcquisition(); }
 
-const AdcConfigNetworkData getAdcConfig() {
+AdcConfigNetworkData getAdcConfig() {
 	const ADS131HwConfigData *p = &savedConfig;
 	return AdcConfigNetworkData{
 	    .version = 1,
