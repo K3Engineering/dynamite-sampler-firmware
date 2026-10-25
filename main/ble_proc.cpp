@@ -32,7 +32,10 @@ struct AppGlobal {
 	uint16_t valHandle;
 };
 
-static AppGlobal appGlobalConn;
+static AppGlobal appGlobalConn{
+    .connHandle = BLE_HS_CONN_HANDLE_NONE,
+    .valHandle = 0,
+};
 
 StreamBufferHandle_t adcStreamBufferHandle = NULL;
 static size_t adcFeedSamplesPerChunk = 0;
@@ -189,7 +192,7 @@ static int gapEventHandler(ble_gap_event *event, void *arg) {
 	case BLE_GAP_EVENT_CONNECT: {
 		ESP_LOGI(TAG, "connHandle=%u", event->connect.conn_handle);
 		if (event->connect.status) {
-			appContext->connHandle = 0;
+			appContext->connHandle = BLE_HS_CONN_HANDLE_NONE;
 			startAdvertising(appContext);
 		} else {
 			appContext->connHandle = event->connect.conn_handle;
@@ -217,7 +220,7 @@ static int gapEventHandler(ble_gap_event *event, void *arg) {
 	case BLE_GAP_EVENT_DISCONNECT: {
 		adcOnDisconnect();
 		otaOnDisconnect();
-		appContext->connHandle = 0;
+		appContext->connHandle = BLE_HS_CONN_HANDLE_NONE;
 		startAdvertising(appContext);
 		ESP_LOGD(TAG, "Server onDisco, core %u", xPortGetCoreID());
 	} break;
