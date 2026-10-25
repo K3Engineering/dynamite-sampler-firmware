@@ -365,10 +365,11 @@ static int onTxPowerWrite(uint16_t connHandle, uint16_t attrHandle,
 static int onKvs(uint16_t connHandle, uint16_t attrHandle, struct ble_gatt_access_ctxt *ctxt,
                  void *arg) {
 	char buff[USER_KVS_NETWORK_FRAME_LENGTH + 1]{0};
-	const size_t rqLength = OS_MBUF_PKTLEN(ctxt->om);
-	if (rqLength + 2 < sizeof(buff)) {
-		os_mbuf_copydata(ctxt->om, 0, rqLength, buff + 1);
+	size_t rqLength = OS_MBUF_PKTLEN(ctxt->om);
+	if (rqLength + 2 >= sizeof(buff)) {
+		rqLength = 0;
 	}
+	os_mbuf_copydata(ctxt->om, 0, rqLength, buff + 1);
 	ESP_LOGI(TAG, "Rq '%s'", buff + 1);
 	char status = KvsStatusBusy;
 	if (deviceLock == DeviceLock::Open) {
