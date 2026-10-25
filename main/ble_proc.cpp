@@ -1,10 +1,9 @@
+#include <esp_bt.h>
 #include <esp_log.h>
 #include <esp_mac.h>
 
 #include <freertos/FreeRTOS.h>
 #include <freertos/stream_buffer.h>
-
-#include <NimBLEDevice.h>
 
 #include "nimble/nimble_port.h"
 #include "nimble/nimble_port_freertos.h"
