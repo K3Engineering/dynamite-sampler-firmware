@@ -407,6 +407,12 @@ static int dummyAccessCb(uint16_t connHandle, uint16_t attrHandle,
 	return 0;
 }
 
+constexpr ble_gatt_chr_def deviceTxLvlChr[] = {
+    defineCharacteristic(&DEVICE_TX_POWER_LVL_CHR_UUID16.u, onTxPowerRead, nullptr,
+	                     BLE_GATT_CHR_F_READ, nullptr),
+    {},
+};
+
 constexpr ble_gatt_chr_def deviceInfoChr[] = {
     defineCharacteristic(&DEVICE_MAKE_NAME_CHR_UUID16.u, onMakeName, nullptr, BLE_GATT_CHR_F_READ,
 	                     nullptr),
@@ -417,8 +423,6 @@ constexpr ble_gatt_chr_def deviceInfoChr[] = {
     defineCharacteristic(&DEVICE_HARDWARE_REV_CHR_UUID16.u, onHwRev, nullptr, BLE_GATT_CHR_F_READ,
 	                     nullptr),
     defineCharacteristic(&DEVICE_FIRMWARE_VER_CHR_UUID16.u, onFwVer, nullptr, BLE_GATT_CHR_F_READ,
-	                     nullptr),
-    defineCharacteristic(&DEVICE_TX_POWER_CHR_UUID16.u, onTxPowerRead, nullptr, BLE_GATT_CHR_F_READ,
 	                     nullptr),
     {},
 };
@@ -440,6 +444,7 @@ constexpr ble_gatt_chr_def txPowerChr[] = {
 };
 
 constexpr ble_gatt_svc_def gattSvcsDefinition[] = {
+    defineService(&DEVICE_TX_POWER_SVC_UUID16.u, deviceTxLvlChr),
     defineService(&DEVICE_INFO_SVC_UUID16.u, deviceInfoChr),
     defineService(&DYNAMITE_SAMPLER_SVC_UUID128.u, adcNotifyChr),
     defineService(&TX_PWR_SVC_UUID128.u, txPowerChr),
