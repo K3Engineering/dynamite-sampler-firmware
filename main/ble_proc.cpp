@@ -230,14 +230,13 @@ static int gapEventHandler(ble_gap_event *event, void *arg) {
 	case BLE_GAP_EVENT_SUBSCRIBE: {
 		ESP_LOGI(TAG, "subscr handles: %u %u", event->subscribe.conn_handle,
 		         event->subscribe.attr_handle);
-		if (!boardCfg()) {
-			ESP_LOGW(TAG, "ADC not operational");
-			break;
+		if (appContext->valHandle == event->subscribe.attr_handle) {
+			if (boardCfg()) {
+				adcOnSubscr(event->subscribe.cur_notify);
+			} else {
+				ESP_LOGW(TAG, "ADC not operational");
+			}
 		}
-		if (appContext->valHandle != event->subscribe.attr_handle) {
-			break;
-		}
-		adcOnSubscr(event->subscribe.cur_notify);
 	} break;
 	case BLE_GAP_EVENT_MTU: {
 		ESP_LOGI(TAG, "mtu=%u", event->mtu.value);
