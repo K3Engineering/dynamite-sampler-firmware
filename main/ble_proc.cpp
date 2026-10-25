@@ -27,27 +27,18 @@ constexpr char TAG[] = "BLE";
 
 static_assert(CONFIG_BT_NIMBLE_MAX_CONNECTIONS == 1);
 
-struct AppGlobal {
-	uint16_t connHandle;
-	uint16_t valHandle;
-};
-
-static AppGlobal appGlobalConn{
-    .connHandle = BLE_HS_CONN_HANDLE_NONE,
-    .valHandle = 0,
-};
-
-StreamBufferHandle_t adcStreamBufferHandle = NULL;
-static size_t adcFeedSamplesPerChunk = 0;
-
-DeviceLock deviceLock = DeviceLock::Open;
-
 struct DleConnInfo {
 	uint16_t maxTxOctets;
 	uint16_t maxRxOctets;
 	uint16_t maxTxTime;
 	uint16_t maxRxTime;
 	bool negotiated;
+};
+
+struct AppGlobal {
+	uint16_t connHandle;
+	uint16_t valHandle;
+	DleConnInfo dleInfo;
 };
 
 constexpr DleConnInfo dleInfoDefaults{
@@ -58,7 +49,16 @@ constexpr DleConnInfo dleInfoDefaults{
     .negotiated = false,
 };
 
-static DleConnInfo dleConnInfo{dleInfoDefaults};
+static AppGlobal appGlobalConn{
+    .connHandle = BLE_HS_CONN_HANDLE_NONE,
+    .valHandle = 0,
+    .dleInfo = dleInfoDefaults,
+};
+
+StreamBufferHandle_t adcStreamBufferHandle = NULL;
+static size_t adcFeedSamplesPerChunk = 0;
+
+DeviceLock deviceLock = DeviceLock::Open;
 
 static int gapEventHandler(ble_gap_event *event, void *arg);
 
@@ -85,37 +85,6 @@ constexpr int8_t espPowerLevelToDbm(esp_power_level_t level_) {
 	return 0;
 }
 
-static int dleGapListener(ble_gap_event *event, void *arg) {
-	switch (event->type) {
-	case BLE_GAP_EVENT_CONNECT:
-		if (event->connect.status == 0) {
-			// New connection: forget the previous peer's negotiated DLE.
-			// If this peer supports DLE, DATA_LEN_CHG will overwrite these shortly.
-			dleConnInfo = dleInfoDefaults;
-		}
-		break;
-
-	case BLE_GAP_EVENT_DISCONNECT:
-		dleConnInfo = dleInfoDefaults; // no stale values while disconnected
-		break;
-
-	case BLE_GAP_EVENT_DATA_LEN_CHG:
-		dleConnInfo.maxTxOctets = event->data_len_chg.max_tx_octets;
-		dleConnInfo.maxRxOctets = event->data_len_chg.max_rx_octets;
-		dleConnInfo.maxTxTime = event->data_len_chg.max_tx_time;
-		dleConnInfo.maxRxTime = event->data_len_chg.max_rx_time;
-		dleConnInfo.negotiated = true;
-		ESP_LOGD(TAG, "Gap event data len chg octets Tx,Rx (%u, %u), time Tx,Rx (%u,%u)",
-		         dleConnInfo.maxTxOctets, dleConnInfo.maxRxOctets, dleConnInfo.maxTxTime,
-		         dleConnInfo.maxRxTime);
-		break;
-
-	default:
-		break;
-	}
-	return 0;
-}
-
 static void adcOnDisconnect() {
 	if (deviceLock != DeviceLock::Streaming) {
 		return;
@@ -124,13 +93,13 @@ static void adcOnDisconnect() {
 	deviceLock = DeviceLock::Open;
 }
 
-static void adcOnSubscr(bool subscr) {
+static void adcOnSubscr(bool subscr, uint16_t maxTxOctets) {
 	if (subscr) {
 		if (deviceLock == DeviceLock::Open) {
 			deviceLock = DeviceLock::Streaming;
 
-			adcFeedSamplesPerChunk = (dleConnInfo.maxTxOctets - L2CAP_HEADER_SIZE -
-			                          ATT_HEADER_SIZE - sizeof(AdcFeedNetworkPacket::Header)) /
+			adcFeedSamplesPerChunk = (maxTxOctets - L2CAP_HEADER_SIZE - ATT_HEADER_SIZE -
+			                          sizeof(AdcFeedNetworkPacket::Header)) /
 			                         sizeof(AdcFeedNetworkData);
 			if (adcFeedSamplesPerChunk > AdcFeedNetworkPacket::MAX_NUM_SAMPLES) {
 				adcFeedSamplesPerChunk = AdcFeedNetworkPacket::MAX_NUM_SAMPLES;
@@ -191,13 +160,11 @@ static int gapEventHandler(ble_gap_event *event, void *arg) {
 	switch (event->type) {
 	case BLE_GAP_EVENT_CONNECT: {
 		ESP_LOGI(TAG, "connHandle=%u", event->connect.conn_handle);
-		if (event->connect.status) {
-			appContext->connHandle = BLE_HS_CONN_HANDLE_NONE;
-			startAdvertising(appContext);
-		} else {
+		if (0 == event->connect.status) {
 			appContext->connHandle = event->connect.conn_handle;
-			// TODO: Figure out:
-			// is this needed?
+			// If this peer supports DLE, DATA_LEN_CHG will overwrite these shortly.
+			appContext->dleInfo = dleInfoDefaults;
+			// TODO: Figure out: is this needed?
 			// Does this actually affect the packet size for the way we notify
 			// Do we need to notify in a different way?
 			ble_gap_set_data_len(event->connect.conn_handle, DLE_MAX_SIZE, (DLE_MAX_SIZE + 14) * 8);
@@ -215,36 +182,52 @@ static int gapEventHandler(ble_gap_event *event, void *arg) {
 			    .max_ce_len = BLE_GAP_INITIAL_CONN_MAX_CE_LEN,
 			};
 			ble_gap_update_params(event->connect.conn_handle, &params);
+		} else {
+			appContext->connHandle = BLE_HS_CONN_HANDLE_NONE;
+			startAdvertising(appContext);
 		}
 	} break;
+
 	case BLE_GAP_EVENT_DISCONNECT: {
 		adcOnDisconnect();
 		otaOnDisconnect();
 		appContext->connHandle = BLE_HS_CONN_HANDLE_NONE;
+		appContext->dleInfo = dleInfoDefaults; // no stale values while disconnected
 		startAdvertising(appContext);
 		ESP_LOGD(TAG, "Server onDisco, core %u", xPortGetCoreID());
 	} break;
+
 	case BLE_GAP_EVENT_ADV_COMPLETE: {
 		startAdvertising(appContext);
 	} break;
+
 	case BLE_GAP_EVENT_SUBSCRIBE: {
 		ESP_LOGI(TAG, "subscr handles: %u %u", event->subscribe.conn_handle,
 		         event->subscribe.attr_handle);
 		if (appContext->valHandle == event->subscribe.attr_handle) {
 			if (boardCfg()) {
-				adcOnSubscr(event->subscribe.cur_notify);
+				adcOnSubscr(event->subscribe.cur_notify, appContext->dleInfo.maxTxOctets);
 			} else {
 				ESP_LOGW(TAG, "ADC not operational");
 			}
 		}
 	} break;
+
 	case BLE_GAP_EVENT_MTU: {
 		ESP_LOGI(TAG, "mtu=%u", event->mtu.value);
 	} break;
+
 	case BLE_GAP_EVENT_DATA_LEN_CHG: {
-		ESP_LOGI(TAG, "rxo=%u txo=%u", event->data_len_chg.max_rx_octets,
-		         event->data_len_chg.max_tx_octets);
+		DleConnInfo &r = appContext->dleInfo;
+		r.maxTxOctets = event->data_len_chg.max_tx_octets;
+		r.maxRxOctets = event->data_len_chg.max_rx_octets;
+		r.maxTxTime = event->data_len_chg.max_tx_time;
+		r.maxRxTime = event->data_len_chg.max_rx_time;
+		r.negotiated = true;
+		ESP_LOGD(TAG, "Gap event data len chg octets Tx,Rx (%u, %u), time Tx,Rx (%u,%u)",
+		         r.maxTxOctets, r.maxRxOctets, r.maxTxTime, r.maxRxTime);
 	} break;
+
 	default:
 		break;
 	}
@@ -455,7 +438,7 @@ constexpr ble_gatt_svc_def gattSvcsDefinition[] = {
     {},
 };
 
-static void _taskSetupBle(void *setupDone) {
+static void taskSetupBle(void *setupDone) {
 	ESP_LOGI(TAG, "Setting up BLE");
 	// Create the BLE Device
 	// Name the device with the mac address to make it unique for testing purposes.
@@ -471,9 +454,6 @@ static void _taskSetupBle(void *setupDone) {
 	ble_gatts_add_svcs(
 	    gattSvcsDefinition); // 4 - Initialize NimBLE configuration - queues gatt services.
 	ble_att_set_preferred_mtu(BLE_ATT_MTU_MAX);
-	static ble_gap_event_listener gapListener;
-	ble_gap_event_listener_register(&gapListener, dleGapListener, nullptr);
-
 	ble_hs_cfg.sync_cb = onSync;            // 5 - Initialize application
 	nimble_port_freertos_init(bleHostTask); // 6 - Run the thread
 
@@ -490,8 +470,7 @@ void setupBle(int core) {
 	assert(adcStreamBufferHandle != NULL);
 
 	volatile bool done = false;
-	xTaskCreatePinnedToCore(_taskSetupBle, "task_BLE_setup", 1024 * 6, (void *)&done, 1, NULL,
-	                        core);
+	xTaskCreatePinnedToCore(taskSetupBle, "task_BLE_setup", 1024 * 6, (void *)&done, 1, NULL, core);
 	while (!done)
 		vTaskDelay(10);
 
