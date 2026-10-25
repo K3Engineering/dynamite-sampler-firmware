@@ -437,8 +437,8 @@ constexpr ble_gatt_chr_def adcNotifyChr[] = {
     {},
 };
 
-constexpr ble_gatt_chr_def txPowerChr[] = {
-    defineCharacteristic(&TX_PWR_CHR_UUID128.u, onTxPowerWrite, nullptr, BLE_GATT_CHR_F_WRITE,
+constexpr ble_gatt_chr_def txSetPowerChr[] = {
+    defineCharacteristic(&TX_PWR_SET_CHR_UUID128.u, onTxPowerWrite, nullptr, BLE_GATT_CHR_F_WRITE,
 	                     nullptr),
     {},
 };
@@ -447,7 +447,7 @@ constexpr ble_gatt_svc_def gattSvcsDefinition[] = {
     defineService(&DEVICE_TX_POWER_SVC_UUID16.u, deviceTxLvlChr),
     defineService(&DEVICE_INFO_SVC_UUID16.u, deviceInfoChr),
     defineService(&DYNAMITE_SAMPLER_SVC_UUID128.u, adcNotifyChr),
-    defineService(&TX_PWR_SVC_UUID128.u, txPowerChr),
+    defineService(&TX_PWR_SET_SVC_UUID128.u, txSetPowerChr),
     // defineService(&OTA_SVC_UUID, otaGattChr),
     {},
 };

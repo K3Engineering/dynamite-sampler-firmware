@@ -38,8 +38,8 @@ constexpr char OTA_DATA_CHR_UUID[] = "09999d81-f1f6-4e31-8946-590220cc99af";
 
 // The TX characteristic if for setting only. Use the device info characteristic to
 // read the current power.
-constexpr char TX_PWR_SVC_UUID[] = "74788a4c-72aa-4180-a478-59e969b959c9";
-constexpr char TX_PWR_CHR_UUID[] = "7478c418-35d3-4c3d-99d9-2de090159664";
+constexpr char TX_PWR_SET_SVC_UUID[] = "74788a4c-72aa-4180-a478-59e969b959c9";
+constexpr char TX_PWR_SET_CHR_UUID[] = "7478c418-35d3-4c3d-99d9-2de090159664";
 
 //======================== </UUIDs>
 
