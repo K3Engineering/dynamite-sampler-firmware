@@ -160,7 +160,7 @@ static int gapEventHandler(ble_gap_event *event, void *arg) {
 	switch (event->type) {
 	case BLE_GAP_EVENT_CONNECT: {
 		ESP_LOGI(TAG, "connHandle=%u", event->connect.conn_handle);
-		if (0 == event->connect.status) {
+		if ((0 == event->connect.status) || (BLE_ERR_UNSUPP_REM_FEATURE == event->connect.status)) {
 			appContext->connHandle = event->connect.conn_handle;
 			// If this peer supports DLE, DATA_LEN_CHG will overwrite these shortly.
 			appContext->dleInfo = dleInfoDefaults;
