@@ -62,27 +62,26 @@ DeviceLock deviceLock = DeviceLock::Open;
 
 static int gapEventHandler(ble_gap_event *event, void *arg);
 
-constexpr esp_power_level_t dbmToEspPowerLevel(int dbm) {
-	// +20 dBm is a special case, not another 3 dB step.
-	if (dbm == 20) {
-		return ESP_PWR_LVL_P20;
-	}
-	// Valid regular settings: -12 through +18 dBm, in 3 dB steps.
-	if (dbm < -12 || dbm > 18 || ((dbm + 12) % 3) != 0) {
-		return ESP_PWR_LVL_INVALID;
-	}
-	return (esp_power_level_t)((int)ESP_PWR_LVL_N12 + (dbm + 12) / 3);
+constexpr bool isValidLvl(esp_power_level_t level) {
+	return (level >= ESP_PWR_LVL_N24) && (level <= ESP_PWR_LVL_P20);
 }
 
-constexpr int8_t espPowerLevelToDbm(esp_power_level_t level_) {
-	const int level = (int)level_;
-	if (level == (int)ESP_PWR_LVL_P20) {
+constexpr esp_power_level_t dbmToEspPowerLevel(int dbm) {
+	if (dbm % 3 == 2) {
+		dbm++;
+	}
+	esp_power_level_t level = esp_power_level_t(dbm / 3 + (int)ESP_PWR_LVL_N0);
+	if (!isValidLvl(level)) {
+		return ESP_PWR_LVL_INVALID;
+	}
+	return level;
+}
+
+constexpr int8_t espPowerLevelToDbm(esp_power_level_t level) {
+	if (level == ESP_PWR_LVL_P20) {
 		return 20;
 	}
-	if (level >= (int)ESP_PWR_LVL_N12 && level <= (int)ESP_PWR_LVL_P18) {
-		return -12 + 3 * (level - (int)ESP_PWR_LVL_N12);
-	}
-	return 0;
+	return -24 + 3 * (level - ESP_PWR_LVL_N24);
 }
 
 static void adcOnDisconnect() {
@@ -341,8 +340,12 @@ static int onFwVer(uint16_t connHandle, uint16_t attrHandle, ble_gatt_access_ctx
 
 static int onTxPowerRead(uint16_t connHandle, uint16_t attrHandle,
                          struct ble_gatt_access_ctxt *ctxt, void *arg) {
+	esp_power_level_t level = esp_ble_tx_power_get(ESP_BLE_PWR_TYPE_DEFAULT);
+	if (!isValidLvl(level)) {
+		return BLE_ATT_ERR_UNLIKELY;
+	}
 	TxPowerNetworkData rPwr{
-	    .val = espPowerLevelToDbm(esp_ble_tx_power_get(ESP_BLE_PWR_TYPE_DEFAULT)),
+	    .val = espPowerLevelToDbm(level),
 	};
 	return os_mbuf_append(ctxt->om, &rPwr, sizeof(rPwr)) ? BLE_ATT_ERR_INSUFFICIENT_RES : 0;
 }
