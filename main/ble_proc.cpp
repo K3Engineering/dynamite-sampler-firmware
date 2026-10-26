@@ -93,18 +93,29 @@ static void adcOnDisconnect() {
 	deviceLock = DeviceLock::Open;
 }
 
-static void adcOnSubscr(bool subscr, uint16_t maxTxOctets) {
+constexpr size_t calculateAdcSamples(size_t octets, size_t mtu) {
+	if (octets > mtu) {
+		octets = mtu;
+	}
+	const size_t hSz = L2CAP_HEADER_SIZE + ATT_HEADER_SIZE + sizeof(AdcFeedNetworkPacket::Header);
+	if (octets < hSz) {
+		return 0;
+	}
+	size_t n = (octets - hSz) / sizeof(AdcFeedNetworkData);
+	if (n > AdcFeedNetworkPacket::MAX_NUM_SAMPLES) {
+		n = AdcFeedNetworkPacket::MAX_NUM_SAMPLES;
+	}
+	return n;
+}
+
+static void adcOnSubscr(bool subscr, uint16_t maxTxOctets, uint16_t mtu) {
 	if (subscr) {
 		if (deviceLock == DeviceLock::Open) {
 			deviceLock = DeviceLock::Streaming;
 
-			adcFeedSamplesPerChunk = (maxTxOctets - L2CAP_HEADER_SIZE - ATT_HEADER_SIZE -
-			                          sizeof(AdcFeedNetworkPacket::Header)) /
-			                         sizeof(AdcFeedNetworkData);
-			if (adcFeedSamplesPerChunk > AdcFeedNetworkPacket::MAX_NUM_SAMPLES) {
-				adcFeedSamplesPerChunk = AdcFeedNetworkPacket::MAX_NUM_SAMPLES;
-			}
-			ESP_LOGI(TAG, "Samples per chunk %u", adcFeedSamplesPerChunk);
+			adcFeedSamplesPerChunk = calculateAdcSamples(maxTxOctets, mtu);
+			ESP_LOGI(TAG, "Samples per chunk %u octets %u mtu %u", adcFeedSamplesPerChunk,
+			         maxTxOctets, mtu);
 			if (!startAdcAcquisition(adcFeedSamplesPerChunk)) {
 				deviceLock = DeviceLock::Open;
 			}
@@ -207,7 +218,8 @@ static int gapEventHandler(ble_gap_event *event, void *arg) {
 		         event->subscribe.attr_handle);
 		if (appContext->valHandle == event->subscribe.attr_handle) {
 			if (boardCfg()) {
-				adcOnSubscr(event->subscribe.cur_notify, appContext->dleInfo.maxTxOctets);
+				adcOnSubscr(event->subscribe.cur_notify, appContext->dleInfo.maxTxOctets,
+				            ble_att_mtu(event->subscribe.conn_handle));
 			} else {
 				ESP_LOGW(TAG, "ADC not operational");
 			}
