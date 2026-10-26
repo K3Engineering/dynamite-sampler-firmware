@@ -160,15 +160,16 @@ static int gapEventHandler(ble_gap_event *event, void *arg) {
 	switch (event->type) {
 	case BLE_GAP_EVENT_CONNECT: {
 		ESP_LOGI(TAG, "connHandle=%u", event->connect.conn_handle);
-		if ((0 == event->connect.status) || (BLE_ERR_UNSUPP_REM_FEATURE == event->connect.status)) {
+		int status = event->connect.status;
+		if (BLE_ERR_UNSUPP_REM_FEATURE == status) {
+			ESP_LOGW(TAG, "Connect: BLE_ERR_UNSUPP_REM_FEATURE");
+			ble_gap_set_data_len(event->connect.conn_handle, DLE_MAX_SIZE, (DLE_MAX_SIZE + 14) * 8);
+			status = BLE_ERR_SUCCESS;
+		}
+		if (BLE_ERR_SUCCESS == status) {
 			appContext->connHandle = event->connect.conn_handle;
 			// If this peer supports DLE, DATA_LEN_CHG will overwrite these shortly.
 			appContext->dleInfo = dleInfoDefaults;
-			// TODO: Figure out: is this needed?
-			// Does this actually affect the packet size for the way we notify
-			// Do we need to notify in a different way?
-			ble_gap_set_data_len(event->connect.conn_handle, DLE_MAX_SIZE, (DLE_MAX_SIZE + 14) * 8);
-
 			// Best case, devices can handle 7.5ms interval connection (android phone)
 			// older iOS might be 15ms, Windows PC might be 30ms. Connection interval is set in
 			// increments of 1.25ms.
@@ -218,14 +219,15 @@ static int gapEventHandler(ble_gap_event *event, void *arg) {
 	} break;
 
 	case BLE_GAP_EVENT_DATA_LEN_CHG: {
-		DleConnInfo &r = appContext->dleInfo;
-		r.maxTxOctets = event->data_len_chg.max_tx_octets;
-		r.maxRxOctets = event->data_len_chg.max_rx_octets;
-		r.maxTxTime = event->data_len_chg.max_tx_time;
-		r.maxRxTime = event->data_len_chg.max_rx_time;
-		r.negotiated = true;
+		DleConnInfo &l = appContext->dleInfo;
+		const auto &r = event->data_len_chg;
+		l.maxTxOctets = r.max_tx_octets;
+		l.maxRxOctets = r.max_rx_octets;
+		l.maxTxTime = r.max_tx_time;
+		l.maxRxTime = r.max_rx_time;
+		l.negotiated = true;
 		ESP_LOGD(TAG, "Gap event data len chg octets Tx,Rx (%u, %u), time Tx,Rx (%u,%u)",
-		         r.maxTxOctets, r.maxRxOctets, r.maxTxTime, r.maxRxTime);
+		         l.maxTxOctets, l.maxRxOctets, l.maxTxTime, l.maxRxTime);
 	} break;
 
 	default:
@@ -258,6 +260,7 @@ static void IRAM_ATTR taskBlePublishAdcBuffer(void *) {
 }
 
 static void onSync() {
+	// ble_hs_util_ensure_addr(0); // Optional in case we strictly using a public address
 	startAdvertising(&appGlobalConn);
 	ESP_LOGI(TAG, "Advertising started");
 }
@@ -390,7 +393,7 @@ static int onAdcConfig(uint16_t connHandle, uint16_t attrHandle, struct ble_gatt
 
 static int dummyAccessCb(uint16_t connHandle, uint16_t attrHandle,
                          struct ble_gatt_access_ctxt *ctxt, void *arg) {
-	return 0;
+	return BLE_ATT_ERR_UNLIKELY;
 }
 
 constexpr ble_gatt_chr_def deviceTxLvlChr[] = {
@@ -446,8 +449,8 @@ static void taskSetupBle(void *setupDone) {
 	static_assert(sizeof(bleName) >= 3 + HW_ID_LEN + 1);
 	hwIdStr(bleName + 3);
 	nimble_port_init();                   // 3 - Initialize the host stack
-	ble_svc_gap_device_name_set(bleName); // 4 - Initialize NimBLE configuration - server name
 	ble_svc_gap_init();                   // 4 - Initialize NimBLE configuration - gap service
+	ble_svc_gap_device_name_set(bleName); // 4 - Initialize NimBLE configuration - server name
 	ble_svc_gatt_init();                  // 4 - Initialize NimBLE configuration - gatt service
 	ble_gatts_count_cfg(
 	    gattSvcsDefinition); // 4 - Initialize NimBLE configuration - config gatt services
