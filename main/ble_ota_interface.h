@@ -3,7 +3,8 @@
 
 #include <NimBLEServer.h>
 
-void setupBleOta(NimBLEServer *server);
+void *otaControlPtr();
 void otaOnDisconnect(void);
+void otaOnControlSubscribe(void *control_);
 
 #endif // _BLE_OTA_INTERFACE_H

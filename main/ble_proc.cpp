@@ -35,10 +35,12 @@ struct DleConnInfo {
 	bool negotiated;
 };
 
-struct AppGlobal {
+struct BleGlobal {
 	uint16_t connHandle;
-	uint16_t valHandle;
 	DleConnInfo dleInfo;
+	uint16_t adcStreamChrAttr;
+	uint16_t otaControlChrAttr;
+	void *otaControlData;
 };
 
 constexpr DleConnInfo dleInfoDefaults{
@@ -49,10 +51,12 @@ constexpr DleConnInfo dleInfoDefaults{
     .negotiated = false,
 };
 
-static AppGlobal appGlobalConn{
+static BleGlobal bleGlobal{
     .connHandle = BLE_HS_CONN_HANDLE_NONE,
-    .valHandle = 0,
     .dleInfo = dleInfoDefaults,
+    .adcStreamChrAttr = 0,
+    .otaControlChrAttr = 0,
+    .otaControlData = otaControlPtr(),
 };
 
 StreamBufferHandle_t adcStreamBufferHandle = NULL;
@@ -166,7 +170,7 @@ static void startAdvertising(void *context) {
 }
 
 static int gapEventHandler(ble_gap_event *event, void *arg) {
-	AppGlobal *appContext = (AppGlobal *)arg;
+	BleGlobal *appContext = (BleGlobal *)arg;
 	switch (event->type) {
 	case BLE_GAP_EVENT_CONNECT: {
 		ESP_LOGI(TAG, "connHandle=%u", event->connect.conn_handle);
@@ -215,13 +219,15 @@ static int gapEventHandler(ble_gap_event *event, void *arg) {
 	case BLE_GAP_EVENT_SUBSCRIBE: {
 		ESP_LOGI(TAG, "subscr handles: %u %u", event->subscribe.conn_handle,
 		         event->subscribe.attr_handle);
-		if (appContext->valHandle == event->subscribe.attr_handle) {
+		if (appContext->adcStreamChrAttr == event->subscribe.attr_handle) {
 			if (boardCfg()) {
 				adcOnSubscr(event->subscribe.cur_notify, appContext->dleInfo.maxTxOctets,
 				            ble_att_mtu(event->subscribe.conn_handle));
 			} else {
 				ESP_LOGW(TAG, "ADC not operational");
 			}
+		} else if (appContext->otaControlChrAttr == event->subscribe.attr_handle) {
+			otaOnControlSubscribe(appContext->otaControlData);
 		}
 	} break;
 
@@ -263,7 +269,7 @@ static void IRAM_ATTR taskBlePublishAdcBuffer(void *) {
 			os_mbuf *om = ble_hs_mbuf_from_flat(
 			    &packet, sizeof(packet.hdr) + adcFeedSamplesPerChunk * sizeof(*packet.adc));
 			if (om) [[likely]] {
-				ble_gatts_notify_custom(appGlobalConn.connHandle, appGlobalConn.valHandle, om);
+				ble_gatts_notify_custom(bleGlobal.connHandle, bleGlobal.adcStreamChrAttr, om);
 			}
 		}
 	}
@@ -272,7 +278,7 @@ static void IRAM_ATTR taskBlePublishAdcBuffer(void *) {
 
 static void onSync() {
 	// ble_hs_util_ensure_addr(0); // Optional in case we strictly using a public address
-	startAdvertising(&appGlobalConn);
+	startAdvertising(&bleGlobal);
 	ESP_LOGI(TAG, "Advertising started");
 }
 
@@ -281,20 +287,20 @@ static void bleHostTask(void *) {
 	                   // nimble_port_deinit();
 }
 
-consteval ble_gatt_svc_def defineService(const ble_uuid_t *uuid_, const ble_gatt_chr_def *chr_) {
+constexpr ble_gatt_svc_def defineService(const auto &uuid_, const ble_gatt_chr_def *chr_) {
 	return ble_gatt_svc_def{
 	    .type = BLE_GATT_SVC_TYPE_PRIMARY,
-	    .uuid = uuid_,
+	    .uuid = &uuid_.u,
 	    .includes = nullptr,
 	    .characteristics = chr_,
 	};
 }
 
-consteval ble_gatt_chr_def defineCharacteristic(const ble_uuid_t *uuid_,
-                                                ble_gatt_access_fn *access_cb_, void *arg_,
-                                                ble_gatt_chr_flags flags_, uint16_t *val_handle_) {
+constexpr ble_gatt_chr_def defineCharacteristic(const auto &uuid_, ble_gatt_access_fn *access_cb_,
+                                                void *arg_, ble_gatt_chr_flags flags_,
+                                                uint16_t *val_handle_) {
 	return ble_gatt_chr_def{
-	    .uuid = uuid_,
+	    .uuid = &uuid_.u,
 	    .access_cb = access_cb_,
 	    .arg = arg_,
 	    .descriptors = nullptr,
@@ -412,47 +418,64 @@ static int dummyAccessCb(uint16_t connHandle, uint16_t attrHandle,
 }
 
 constexpr ble_gatt_chr_def deviceTxLvlChr[] = {
-    defineCharacteristic(&DEVICE_TX_POWER_LVL_CHR_UUID16.u, onTxPowerRead, nullptr,
+    defineCharacteristic(DEVICE_TX_POWER_LVL_CHR_UUID16, onTxPowerRead, nullptr,
 	                     BLE_GATT_CHR_F_READ, nullptr),
     {},
 };
 
 constexpr ble_gatt_chr_def deviceInfoChr[] = {
-    defineCharacteristic(&DEVICE_MAKE_NAME_CHR_UUID16.u, onMakeName, nullptr, BLE_GATT_CHR_F_READ,
+    defineCharacteristic(DEVICE_MAKE_NAME_CHR_UUID16, onMakeName, nullptr, BLE_GATT_CHR_F_READ,
 	                     nullptr),
-    defineCharacteristic(&DEVICE_MODEL_NUMBER_CHR_UUID16.u, onModelNum, nullptr,
-	                     BLE_GATT_CHR_F_READ, nullptr),
-    defineCharacteristic(&DEVICE_SERIAL_NUMBER_CHR_UUID16.u, onSerialNum, nullptr,
-	                     BLE_GATT_CHR_F_READ, nullptr),
-    defineCharacteristic(&DEVICE_HARDWARE_REV_CHR_UUID16.u, onHwRev, nullptr, BLE_GATT_CHR_F_READ,
+    defineCharacteristic(DEVICE_MODEL_NUMBER_CHR_UUID16, onModelNum, nullptr, BLE_GATT_CHR_F_READ,
 	                     nullptr),
-    defineCharacteristic(&DEVICE_FIRMWARE_VER_CHR_UUID16.u, onFwVer, nullptr, BLE_GATT_CHR_F_READ,
+    defineCharacteristic(DEVICE_SERIAL_NUMBER_CHR_UUID16, onSerialNum, nullptr, BLE_GATT_CHR_F_READ,
+	                     nullptr),
+    defineCharacteristic(DEVICE_HARDWARE_REV_CHR_UUID16, onHwRev, nullptr, BLE_GATT_CHR_F_READ,
+	                     nullptr),
+    defineCharacteristic(DEVICE_FIRMWARE_VER_CHR_UUID16, onFwVer, nullptr, BLE_GATT_CHR_F_READ,
 	                     nullptr),
     {},
 };
 
 constexpr ble_gatt_chr_def adcNotifyChr[] = {
-    defineCharacteristic(&ADC_FEED_CHR_UUID128.u, dummyAccessCb, nullptr, BLE_GATT_CHR_F_NOTIFY,
-	                     &appGlobalConn.valHandle),
-    defineCharacteristic(&USER_KVS_CHR_UUID128.u, onKvs, nullptr,
+    defineCharacteristic(ADC_FEED_CHR_UUID128, dummyAccessCb, nullptr, BLE_GATT_CHR_F_NOTIFY,
+	                     &bleGlobal.adcStreamChrAttr),
+    defineCharacteristic(USER_KVS_CHR_UUID128, onKvs, nullptr,
 	                     BLE_GATT_CHR_F_NOTIFY | BLE_GATT_CHR_F_WRITE, nullptr),
-    defineCharacteristic(&ADC_CONF_CHR_UUID128.u, onAdcConfig, nullptr, BLE_GATT_CHR_F_READ,
-	                     nullptr),
+    defineCharacteristic(ADC_CONF_CHR_UUID128, onAdcConfig, nullptr, BLE_GATT_CHR_F_READ, nullptr),
     {},
 };
 
 constexpr ble_gatt_chr_def txSetPowerChr[] = {
-    defineCharacteristic(&TX_PWR_SET_CHR_UUID128.u, onTxPowerWrite, nullptr, BLE_GATT_CHR_F_WRITE,
+    defineCharacteristic(TX_PWR_SET_CHR_UUID128, onTxPowerWrite, nullptr, BLE_GATT_CHR_F_WRITE,
 	                     nullptr),
     {},
 };
 
+extern int onOtaControlWrite(uint16_t connHandle, uint16_t attrHandle,
+                             struct ble_gatt_access_ctxt *ctxt, void *arg);
+extern int onOtaDatalWrite(uint16_t connHandle, uint16_t attrHandle,
+                           struct ble_gatt_access_ctxt *ctxt, void *arg);
+
 constexpr ble_gatt_svc_def gattSvcsDefinition[] = {
-    defineService(&DEVICE_TX_POWER_SVC_UUID16.u, deviceTxLvlChr),
-    defineService(&DEVICE_INFO_SVC_UUID16.u, deviceInfoChr),
-    defineService(&DYNAMITE_SAMPLER_SVC_UUID128.u, adcNotifyChr),
-    defineService(&TX_PWR_SET_SVC_UUID128.u, txSetPowerChr),
-    // defineService(&OTA_SVC_UUID, otaGattChr),
+    defineService(DEVICE_TX_POWER_SVC_UUID16, deviceTxLvlChr),
+    defineService(DEVICE_INFO_SVC_UUID16, deviceInfoChr),
+    defineService(DYNAMITE_SAMPLER_SVC_UUID128, adcNotifyChr),
+    defineService(TX_PWR_SET_SVC_UUID128, txSetPowerChr),
+    {},
+};
+
+static const ble_gatt_chr_def otaGattChr[] = {
+    defineCharacteristic(OTA_CONTROL_CHR_UUID128, onOtaControlWrite, bleGlobal.otaControlData,
+	                     BLE_GATT_CHR_F_NOTIFY | BLE_GATT_CHR_F_WRITE,
+	                     &bleGlobal.otaControlChrAttr),
+    defineCharacteristic(OTA_DATA_CHR_UUID128, onOtaDatalWrite, bleGlobal.otaControlData,
+	                     BLE_GATT_CHR_F_WRITE, nullptr),
+    {},
+};
+
+static const ble_gatt_svc_def gattOtaSvcsDefinition[] = {
+    defineService(OTA_SVC_UUID128, otaGattChr),
     {},
 };
 
@@ -471,6 +494,10 @@ static void taskSetupBle(void *setupDone) {
 	    gattSvcsDefinition); // 4 - Initialize NimBLE configuration - config gatt services
 	ble_gatts_add_svcs(
 	    gattSvcsDefinition); // 4 - Initialize NimBLE configuration - queues gatt services.
+	ble_gatts_count_cfg(
+	    gattOtaSvcsDefinition); // 4 - Initialize NimBLE configuration - config gatt services
+	ble_gatts_add_svcs(
+	    gattOtaSvcsDefinition); // 4 - Initialize NimBLE configuration - queues gatt services.
 	ble_att_set_preferred_mtu(BLE_ATT_MTU_MAX);
 	ble_hs_cfg.sync_cb = onSync;            // 5 - Initialize application
 	nimble_port_freertos_init(bleHostTask); // 6 - Run the thread
