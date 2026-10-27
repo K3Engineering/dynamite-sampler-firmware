@@ -159,8 +159,8 @@ int onOtaControlWrite(uint16_t connHandle, uint16_t attrHandle, struct ble_gatt_
 			const OtaFileSizeType fileSize = le32toh(rq.fileSize);
 			ESP_LOGI(TAG, "OTA request, size %u", fileSize);
 			res = processOtaBegin(control, fileSize, &reply);
-			break;
 		}
+		break;
 	case SVR_CHR_OTA_CONTROL_DONE:
 		if (omLen == sizeof(OtaRequestType)) {
 			ESP_LOGI(TAG, "OTA done");
