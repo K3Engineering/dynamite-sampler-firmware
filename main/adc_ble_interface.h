@@ -1,6 +1,8 @@
 #ifndef _ADC_BLE_INTERFACE_H
 #define _ADC_BLE_INTERFACE_H
 
+#include <freertos/FreeRTOS.h>
+
 #include <freertos/stream_buffer.h>
 
 #include "dynamite_sampler_api.h"
