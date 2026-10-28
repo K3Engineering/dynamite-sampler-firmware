@@ -64,4 +64,28 @@ constexpr ble_uuid128_t OTA_DATA_CHR_UUID128 = UUID128_FROM_STRING(OTA_DATA_CHR_
 constexpr ble_uuid128_t TX_PWR_SET_SVC_UUID128 = UUID128_FROM_STRING(TX_PWR_SET_SVC_UUID);
 constexpr ble_uuid128_t TX_PWR_SET_CHR_UUID128 = UUID128_FROM_STRING(TX_PWR_SET_CHR_UUID);
 
+consteval ble_gatt_svc_def defineService(const auto &uuid_, const ble_gatt_chr_def *chr_) {
+	return ble_gatt_svc_def{
+	    .type = BLE_GATT_SVC_TYPE_PRIMARY,
+	    .uuid = &uuid_.u,
+	    .includes = nullptr,
+	    .characteristics = chr_,
+	};
+}
+
+consteval ble_gatt_chr_def defineCharacteristic(const auto &uuid_, ble_gatt_access_fn *access_cb_,
+                                                void *arg_, ble_gatt_chr_flags flags_,
+                                                uint16_t *val_handle_) {
+	return ble_gatt_chr_def{
+	    .uuid = &uuid_.u,
+	    .access_cb = access_cb_,
+	    .arg = arg_,
+	    .descriptors = nullptr,
+	    .flags = flags_,
+	    .min_key_size = 0,
+	    .val_handle = val_handle_,
+	    .cpfd = nullptr,
+	};
+}
+
 #endif

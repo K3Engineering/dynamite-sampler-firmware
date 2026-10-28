@@ -11,6 +11,8 @@
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
 
+#include "host/ble_hs.h"
+
 #include "adc_ble_interface.h"
 #include "adc_proc.h"
 #include "ble_ota_interface.h"
@@ -39,7 +41,6 @@ struct BleGlobal {
 	uint16_t connHandle;
 	DleConnInfo dleInfo;
 	uint16_t adcStreamChrAttr;
-	uint16_t otaControlChrAttr;
 };
 
 constexpr DleConnInfo dleInfoDefaults{
@@ -54,7 +55,6 @@ static BleGlobal bleGlobal{
     .connHandle = BLE_HS_CONN_HANDLE_NONE,
     .dleInfo = dleInfoDefaults,
     .adcStreamChrAttr = 0,
-    .otaControlChrAttr = 0,
 };
 
 StreamBufferHandle_t adcStreamBufferHandle = NULL;
@@ -224,9 +224,8 @@ static int gapEventHandler(ble_gap_event *event, void *arg) {
 			} else {
 				ESP_LOGW(TAG, "ADC not operational");
 			}
-		} else if (appContext->otaControlChrAttr == event->subscribe.attr_handle) {
-			otaOnControlSubscribe();
 		}
+		otaOnSubscribe(event->subscribe.cur_notify, event->subscribe.attr_handle);
 	} break;
 
 	case BLE_GAP_EVENT_MTU: {
@@ -281,32 +280,8 @@ static void onSync() {
 }
 
 static void bleHostTask(void *) {
-	nimble_port_run(); // This function will return only when nimble_port_stop() is executed
-	                   // nimble_port_deinit();
-}
-
-constexpr ble_gatt_svc_def defineService(const auto &uuid_, const ble_gatt_chr_def *chr_) {
-	return ble_gatt_svc_def{
-	    .type = BLE_GATT_SVC_TYPE_PRIMARY,
-	    .uuid = &uuid_.u,
-	    .includes = nullptr,
-	    .characteristics = chr_,
-	};
-}
-
-constexpr ble_gatt_chr_def defineCharacteristic(const auto &uuid_, ble_gatt_access_fn *access_cb_,
-                                                void *arg_, ble_gatt_chr_flags flags_,
-                                                uint16_t *val_handle_) {
-	return ble_gatt_chr_def{
-	    .uuid = &uuid_.u,
-	    .access_cb = access_cb_,
-	    .arg = arg_,
-	    .descriptors = nullptr,
-	    .flags = flags_,
-	    .min_key_size = 0,
-	    .val_handle = val_handle_,
-	    .cpfd = nullptr,
-	};
+	nimble_port_run(); // Returns only when nimble_port_stop() is executed
+	assert(0);         // nimble_port_deinit() ???
 }
 
 static int onMakeName(uint16_t connHandle, uint16_t attrHandle, ble_gatt_access_ctxt *ctxt,
@@ -450,30 +425,11 @@ constexpr ble_gatt_chr_def txSetPowerChr[] = {
     {},
 };
 
-extern int onOtaControlWrite(uint16_t connHandle, uint16_t attrHandle,
-                             struct ble_gatt_access_ctxt *ctxt, void *arg);
-extern int onOtaDatalWrite(uint16_t connHandle, uint16_t attrHandle,
-                           struct ble_gatt_access_ctxt *ctxt, void *arg);
-
 constexpr ble_gatt_svc_def gattSvcsDefinition[] = {
     defineService(DEVICE_TX_POWER_SVC_UUID16, deviceTxLvlChr),
     defineService(DEVICE_INFO_SVC_UUID16, deviceInfoChr),
     defineService(DYNAMITE_SAMPLER_SVC_UUID128, adcNotifyChr),
     defineService(TX_PWR_SET_SVC_UUID128, txSetPowerChr),
-    {},
-};
-
-static const ble_gatt_chr_def otaGattChr[] = {
-    defineCharacteristic(OTA_CONTROL_CHR_UUID128, onOtaControlWrite, otaControlPtr(),
-	                     BLE_GATT_CHR_F_NOTIFY | BLE_GATT_CHR_F_WRITE,
-	                     &bleGlobal.otaControlChrAttr),
-    defineCharacteristic(OTA_DATA_CHR_UUID128, onOtaDatalWrite, otaControlPtr(),
-	                     BLE_GATT_CHR_F_WRITE, nullptr),
-    {},
-};
-
-static const ble_gatt_svc_def gattOtaSvcsDefinition[] = {
-    defineService(OTA_SVC_UUID128, otaGattChr),
     {},
 };
 
@@ -493,9 +449,9 @@ static void taskSetupBle(void *setupDone) {
 	ble_gatts_add_svcs(
 	    gattSvcsDefinition); // 4 - Initialize NimBLE configuration - queues gatt services.
 	ble_gatts_count_cfg(
-	    gattOtaSvcsDefinition); // 4 - Initialize NimBLE configuration - config gatt services
+	    otaServiceDef()); // 4 - Initialize NimBLE configuration - config gatt services
 	ble_gatts_add_svcs(
-	    gattOtaSvcsDefinition); // 4 - Initialize NimBLE configuration - queues gatt services.
+	    otaServiceDef()); // 4 - Initialize NimBLE configuration - queues gatt services.
 	ble_att_set_preferred_mtu(BLE_ATT_MTU_MAX);
 	ble_hs_cfg.sync_cb = onSync;            // 5 - Initialize application
 	nimble_port_freertos_init(bleHostTask); // 6 - Run the thread

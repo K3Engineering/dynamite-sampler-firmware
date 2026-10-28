@@ -1,6 +1,8 @@
 #include <esp_log.h>
 #include <esp_ota_ops.h>
 
+#include "host/ble_hs.h"
+
 #include "adc_ble_interface.h"
 #include "ble_ota_interface.h"
 #include "ble_proc.h"
@@ -28,6 +30,7 @@ bool startupDiagnosticIsOk = true;
 typedef struct {
 	const esp_partition_t *updatePartition;
 	esp_ota_handle_t updateHandle;
+	uint16_t otaControlChrAttr;
 
 	size_t numBytesReceived;
 	size_t fileSize;
@@ -36,11 +39,10 @@ typedef struct {
 static OtaControlData otaControlData{
     .updatePartition = nullptr,
     .updateHandle = 0,
+    .otaControlChrAttr = 0,
     .numBytesReceived = 0,
     .fileSize = 0,
 };
-
-void *otaControlPtr() { return &otaControlData; }
 
 static bool processOtaBegin(OtaControlData *control, OtaFileSizeType fileSize,
                             OtaReplyType *reply) {
@@ -126,8 +128,11 @@ static void conditionalRestart(OtaReplyType reply) {
 	}
 }
 
-void otaOnControlSubscribe() {
+void otaOnSubscribe(bool subscr, uint16_t attrHandle) {
 	OtaControlData *control = &otaControlData;
+	if (control->otaControlChrAttr == attrHandle) {
+		return;
+	}
 	if (deviceLock == DeviceLock::Ota) {
 		esp_ota_abort(control->updateHandle);
 		deviceLock = DeviceLock::Open;
@@ -230,3 +235,19 @@ void otaOnDisconnect() {
 	deviceLock = DeviceLock::Open;
 	ESP_LOGI(TAG, "otaOnDisconnect");
 }
+
+constexpr ble_gatt_chr_def otaGattChr[] = {
+    defineCharacteristic(OTA_CONTROL_CHR_UUID128, onOtaControlWrite, &otaControlData,
+	                     BLE_GATT_CHR_F_NOTIFY | BLE_GATT_CHR_F_WRITE,
+	                     &otaControlData.otaControlChrAttr),
+    defineCharacteristic(OTA_DATA_CHR_UUID128, onOtaDatalWrite, &otaControlData,
+	                     BLE_GATT_CHR_F_WRITE, nullptr),
+    {},
+};
+
+constexpr ble_gatt_svc_def gattOtaSvcsDefinition[] = {
+    defineService(OTA_SVC_UUID128, otaGattChr),
+    {},
+};
+
+const ble_gatt_svc_def *otaServiceDef() { return gattOtaSvcsDefinition; }
