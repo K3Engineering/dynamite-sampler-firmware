@@ -189,7 +189,9 @@ int onOtaDatalWrite(uint16_t connHandle, uint16_t attrHandle, struct ble_gatt_ac
 	OtaControlData *control = (OtaControlData *)arg;
 	const size_t omLen = OS_MBUF_PKTLEN(ctxt->om);
 	control->numBytesReceived += omLen;
-
+	if (control->numBytesReceived > control->fileSize) {
+		return 0;
+	}
 	for (os_mbuf *m = ctxt->om; m; m = SLIST_NEXT(m, om_next)) {
 		esp_err_t err = esp_ota_write(control->updateHandle, m->om_data, m->om_len);
 		if (err != ESP_OK) {
