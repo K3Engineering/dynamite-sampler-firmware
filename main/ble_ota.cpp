@@ -130,7 +130,7 @@ static void conditionalRestart(OtaReplyType reply) {
 
 void otaOnSubscribe(bool subscr, uint16_t attrHandle) {
 	OtaControlData *control = &otaControlData;
-	if (control->otaControlChrAttr == attrHandle) {
+	if (control->otaControlChrAttr != attrHandle) {
 		return;
 	}
 	if (deviceLock == DeviceLock::Ota) {
