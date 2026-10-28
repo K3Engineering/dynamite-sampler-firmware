@@ -126,8 +126,8 @@ static void conditionalRestart(OtaReplyType reply) {
 	}
 }
 
-void otaOnControlSubscribe(void *control_) {
-	OtaControlData *control = (OtaControlData *)control_;
+void otaOnControlSubscribe() {
+	OtaControlData *control = &otaControlData;
 	if (deviceLock == DeviceLock::Ota) {
 		esp_ota_abort(control->updateHandle);
 		deviceLock = DeviceLock::Open;

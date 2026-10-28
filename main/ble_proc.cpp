@@ -40,7 +40,6 @@ struct BleGlobal {
 	DleConnInfo dleInfo;
 	uint16_t adcStreamChrAttr;
 	uint16_t otaControlChrAttr;
-	void *otaControlData;
 };
 
 constexpr DleConnInfo dleInfoDefaults{
@@ -56,7 +55,6 @@ static BleGlobal bleGlobal{
     .dleInfo = dleInfoDefaults,
     .adcStreamChrAttr = 0,
     .otaControlChrAttr = 0,
-    .otaControlData = otaControlPtr(),
 };
 
 StreamBufferHandle_t adcStreamBufferHandle = NULL;
@@ -227,7 +225,7 @@ static int gapEventHandler(ble_gap_event *event, void *arg) {
 				ESP_LOGW(TAG, "ADC not operational");
 			}
 		} else if (appContext->otaControlChrAttr == event->subscribe.attr_handle) {
-			otaOnControlSubscribe(appContext->otaControlData);
+			otaOnControlSubscribe();
 		}
 	} break;
 
@@ -466,10 +464,10 @@ constexpr ble_gatt_svc_def gattSvcsDefinition[] = {
 };
 
 static const ble_gatt_chr_def otaGattChr[] = {
-    defineCharacteristic(OTA_CONTROL_CHR_UUID128, onOtaControlWrite, bleGlobal.otaControlData,
+    defineCharacteristic(OTA_CONTROL_CHR_UUID128, onOtaControlWrite, otaControlPtr(),
 	                     BLE_GATT_CHR_F_NOTIFY | BLE_GATT_CHR_F_WRITE,
 	                     &bleGlobal.otaControlChrAttr),
-    defineCharacteristic(OTA_DATA_CHR_UUID128, onOtaDatalWrite, bleGlobal.otaControlData,
+    defineCharacteristic(OTA_DATA_CHR_UUID128, onOtaDatalWrite, otaControlPtr(),
 	                     BLE_GATT_CHR_F_WRITE, nullptr),
     {},
 };
