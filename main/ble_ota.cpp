@@ -197,11 +197,11 @@ int onOtaDataWrite(uint16_t connHandle, uint16_t attrHandle, struct ble_gatt_acc
 	if (control->numBytesReceived > control->fileSize) {
 		return 0;
 	}
-	for (os_mbuf *m = ctxt->om; m; m = SLIST_NEXT(m, om_next)) {
-		esp_err_t err = esp_ota_write(control->updateHandle, m->om_data, m->om_len);
-		if (err != ESP_OK) {
-			ESP_LOGE(TAG, "esp_ota_write failed (%s)!", esp_err_to_name(err));
-		}
+	uint8_t buff[BLE_ATT_MTU_MAX];
+	os_mbuf_copydata(ctxt->om, 0, omLen, buff); // minimize ota writes
+	esp_err_t err = esp_ota_write(control->updateHandle, buff, omLen);
+	if (err != ESP_OK) {
+		ESP_LOGE(TAG, "esp_ota_write failed (%s)!", esp_err_to_name(err));
 	}
 	ESP_LOGD(TAG, ".");
 	return 0;
