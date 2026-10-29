@@ -95,14 +95,15 @@ static void adcOnDisconnect() {
 }
 
 constexpr size_t calculateAdcSamples(size_t octets, size_t mtu) {
+	octets -= L2CAP_HEADER_SIZE + ATT_HEADER_SIZE + sizeof(AdcFeedNetworkPacket::Header);
+	mtu -= ATT_HEADER_SIZE + sizeof(AdcFeedNetworkPacket::Header);
 	if (octets > mtu) {
 		octets = mtu;
 	}
-	const size_t hSz = L2CAP_HEADER_SIZE + ATT_HEADER_SIZE + sizeof(AdcFeedNetworkPacket::Header);
-	if (octets < hSz) {
-		return 0;
+	if (octets > BLE_ATT_MTU_MAX) {
+		return 0; // size_t wrap around
 	}
-	size_t n = (octets - hSz) / sizeof(AdcFeedNetworkData);
+	size_t n = octets / sizeof(AdcFeedNetworkData);
 	if (n > AdcFeedNetworkPacket::MAX_NUM_SAMPLES) {
 		n = AdcFeedNetworkPacket::MAX_NUM_SAMPLES;
 	}
@@ -225,7 +226,7 @@ static int gapEventHandler(ble_gap_event *event, void *arg) {
 				ESP_LOGW(TAG, "ADC not operational");
 			}
 		}
-		otaOnSubscribe(event->subscribe.cur_notify, event->subscribe.attr_handle);
+		otaOnSubscribe(event->subscribe.attr_handle);
 	} break;
 
 	case BLE_GAP_EVENT_MTU: {

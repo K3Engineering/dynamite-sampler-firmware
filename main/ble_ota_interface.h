@@ -5,6 +5,6 @@
 
 const ble_gatt_svc_def *otaServiceDef();
 void otaOnDisconnect();
-void otaOnSubscribe(bool subscr, uint16_t attrHandle);
+void otaOnSubscribe(uint16_t attrHandle);
 
 #endif // _BLE_OTA_INTERFACE_H

@@ -128,7 +128,7 @@ static void conditionalRestart(OtaReplyType reply) {
 	}
 }
 
-void otaOnSubscribe(bool subscr, uint16_t attrHandle) {
+void otaOnSubscribe(uint16_t attrHandle) {
 	OtaControlData *control = &otaControlData;
 	if (control->otaControlChrAttr != attrHandle) {
 		return;
@@ -145,8 +145,8 @@ void otaOnSubscribe(bool subscr, uint16_t attrHandle) {
 	control->numBytesReceived = 0;
 }
 
-int onOtaControlWrite(uint16_t connHandle, uint16_t attrHandle, struct ble_gatt_access_ctxt *ctxt,
-                      void *arg) {
+static int onOtaControlWrite(uint16_t connHandle, uint16_t attrHandle,
+                             struct ble_gatt_access_ctxt *ctxt, void *arg) {
 	OtaControlData *control = (OtaControlData *)arg;
 	const size_t omLen = OS_MBUF_PKTLEN(ctxt->om);
 	OtaRequestType code = 0;
