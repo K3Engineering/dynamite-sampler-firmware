@@ -186,8 +186,8 @@ int onOtaControlWrite(uint16_t connHandle, uint16_t attrHandle, struct ble_gatt_
 	return 0;
 }
 
-int onOtaDatalWrite(uint16_t connHandle, uint16_t attrHandle, struct ble_gatt_access_ctxt *ctxt,
-                    void *arg) {
+int onOtaDataWrite(uint16_t connHandle, uint16_t attrHandle, struct ble_gatt_access_ctxt *ctxt,
+                   void *arg) {
 	if (deviceLock != DeviceLock::Ota) {
 		return 0;
 	}
@@ -240,7 +240,7 @@ constexpr ble_gatt_chr_def otaGattChr[] = {
     defineCharacteristic(OTA_CONTROL_CHR_UUID128, onOtaControlWrite, &otaControlData,
 	                     BLE_GATT_CHR_F_NOTIFY | BLE_GATT_CHR_F_WRITE,
 	                     &otaControlData.otaControlChrAttr),
-    defineCharacteristic(OTA_DATA_CHR_UUID128, onOtaDatalWrite, &otaControlData,
+    defineCharacteristic(OTA_DATA_CHR_UUID128, onOtaDataWrite, &otaControlData,
 	                     BLE_GATT_CHR_F_WRITE, nullptr),
     {},
 };
