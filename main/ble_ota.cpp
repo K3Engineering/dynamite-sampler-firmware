@@ -221,13 +221,13 @@ void otaConditionalRollback() {
 	esp_ota_img_states_t otaState;
 	if (esp_ota_get_state_partition(running, &otaState) == ESP_OK) {
 		if (otaState == ESP_OTA_IMG_PENDING_VERIFY) {
-			if (startupDiagnosticIsOk) {
-				ESP_LOGI(TAG, "Diagnostics OK! OTA rollforward...");
-				esp_ota_mark_app_valid_cancel_rollback();
-			} else {
-				ESP_LOGE(TAG, "Diagnostics failed! OTA rollback...");
-				esp_ota_mark_app_invalid_rollback_and_reboot();
-			}
+			//			if (startupDiagnosticIsOk) {
+			ESP_LOGI(TAG, "Diagnostics OK! OTA rollforward...");
+			esp_ota_mark_app_valid_cancel_rollback();
+			//			} else {
+			//				ESP_LOGE(TAG, "Diagnostics failed! OTA rollback...");
+			//				esp_ota_mark_app_invalid_rollback_and_reboot();
+			//			}
 		}
 	}
 }
