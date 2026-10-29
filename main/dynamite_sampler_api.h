@@ -36,7 +36,7 @@ constexpr char OTA_SVC_UUID[] = "6f2ecf77-fd83-42a8-86de-4be9713bd53c";
 constexpr char OTA_CONTROL_CHR_UUID[] = "66815c6b-2b3f-4142-8a0a-bc34644eae01";
 constexpr char OTA_DATA_CHR_UUID[] = "09999d81-f1f6-4e31-8946-590220cc99af";
 
-// The TX characteristic if for setting only. Use DEVICE_TX_POWER_LVL_CHR_UUID to
+// The TX characteristic is for setting only. Use DEVICE_TX_POWER_LVL_CHR_UUID to
 // read the current power.
 constexpr char TX_PWR_SET_SVC_UUID[] = "74788a4c-72aa-4180-a478-59e969b959c9";
 constexpr char TX_PWR_SET_CHR_UUID[] = "7478c418-35d3-4c3d-99d9-2de090159664";
