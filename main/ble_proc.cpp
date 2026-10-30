@@ -94,16 +94,14 @@ static void adcOnDisconnect() {
 	deviceLock = DeviceLock::Open;
 }
 
-constexpr size_t calculateAdcSamples(size_t octets, size_t mtu) {
-	octets -= L2CAP_HEADER_SIZE + ATT_HEADER_SIZE + sizeof(AdcFeedNetworkPacket::Header);
-	mtu -= ATT_HEADER_SIZE + sizeof(AdcFeedNetworkPacket::Header);
-	if (octets > mtu) {
-		octets = mtu;
+constexpr size_t calculateAdcSamples(size_t dle, size_t mtu) {
+	size_t sz = blePayloadSize(dle, mtu);
+	if (sz > sizeof(AdcFeedNetworkPacket::hdr)) {
+		sz -= sizeof(AdcFeedNetworkPacket::hdr);
+	} else {
+		sz = 0;
 	}
-	if (octets > BLE_ATT_MTU_MAX) {
-		return 0; // size_t wrap around
-	}
-	size_t n = octets / sizeof(AdcFeedNetworkData);
+	size_t n = sz / sizeof(*AdcFeedNetworkPacket::adc);
 	if (n > AdcFeedNetworkPacket::MAX_NUM_SAMPLES) {
 		n = AdcFeedNetworkPacket::MAX_NUM_SAMPLES;
 	}
@@ -256,11 +254,11 @@ static void IRAM_ATTR taskBlePublishAdcBuffer(void *) {
 	uint16_t count = 0;
 	while (true) {
 		AdcFeedNetworkPacket packet;
-		static_assert(sizeof(packet) <= ATT_PAYLOAD_MAX_SIZE);
+		static_assert(sizeof(packet) <= blePayloadSize(DLE_MAX_SIZE, BLE_ATT_MTU_MAX));
 		// Read the ADC buffer and update the BLE characteristic
-		size_t bytesRead = xStreamBufferReceive(adcStreamBufferHandle, &packet.adc,
-		                                        sizeof(packet.adc), portMAX_DELAY);
-		if (bytesRead == sizeof(packet.adc)) [[likely]] {
+		size_t bytesRead =
+		    xStreamBufferReceive(adcStreamBufferHandle, &packet, sizeof(packet), portMAX_DELAY);
+		if (bytesRead == sizeof(packet)) [[likely]] {
 			packet.hdr.sample_sequence_number = htole16(count);
 			count += adcFeedSamplesPerChunk;
 
@@ -464,7 +462,8 @@ static void taskSetupBle(void *setupDone) {
 
 void setupBle(int core) {
 	// Buffer to pass the ADC values from the ADC task to BLE task
-	adcStreamBufferHandle = xStreamBufferCreate(ADC_FEED_MAX_CHUNK_SZ * 8, ADC_FEED_MAX_CHUNK_SZ);
+	adcStreamBufferHandle =
+	    xStreamBufferCreate(sizeof(AdcFeedNetworkPacket) * 8, sizeof(AdcFeedNetworkPacket));
 	assert(adcStreamBufferHandle != NULL);
 
 	volatile bool done = false;

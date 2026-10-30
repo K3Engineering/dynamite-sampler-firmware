@@ -104,8 +104,8 @@ static void IRAM_ATTR taskAdcReadAndBuffer(void *) {
 			}
 			toSend.adc[n] = adcToNetwork(ptr);
 		}
-		if (sizeof(toSend.adc) != xStreamBufferSend(adcStreamBufferHandle, toSend.adc,
-		                                            sizeof(toSend.adc), 0)) [[unlikely]] {
+		if (sizeof(toSend) != xStreamBufferSend(adcStreamBufferHandle, &toSend, sizeof(toSend), 0))
+		    [[unlikely]] {
 			ESP_LOGE(TAG, "xStreamBufferSend failed");
 		}
 	}
