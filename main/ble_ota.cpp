@@ -7,6 +7,8 @@
 #include "ble_ota_interface.h"
 #include "ble_proc.h"
 
+#include <endian.h>
+
 #include "dynamite_uuid.h"
 
 #include "board_cfg.h"
@@ -186,8 +188,8 @@ static int onOtaControlWrite(uint16_t connHandle, uint16_t attrHandle,
 	return 0;
 }
 
-int onOtaDataWrite(uint16_t connHandle, uint16_t attrHandle, struct ble_gatt_access_ctxt *ctxt,
-                   void *arg) {
+static int onOtaDataWrite(uint16_t connHandle, uint16_t attrHandle,
+                          struct ble_gatt_access_ctxt *ctxt, void *arg) {
 	if (deviceLock != DeviceLock::Ota) {
 		return 0;
 	}
@@ -198,7 +200,7 @@ int onOtaDataWrite(uint16_t connHandle, uint16_t attrHandle, struct ble_gatt_acc
 		return 0;
 	}
 	uint8_t buff[BLE_ATT_MTU_MAX];
-	os_mbuf_copydata(ctxt->om, 0, omLen, buff); // minimize ota writes
+	os_mbuf_copydata(ctxt->om, 0, omLen, buff); // copy to flat buff to minimize writes
 	esp_err_t err = esp_ota_write(control->updateHandle, buff, omLen);
 	if (err != ESP_OK) {
 		ESP_LOGE(TAG, "esp_ota_write failed (%s)!", esp_err_to_name(err));

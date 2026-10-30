@@ -1,7 +1,9 @@
 #ifndef __dynamite_uuid_h__
 #define __dynamite_uuid_h__
 
+#include <host/ble_gatt.h>
 #include <host/ble_uuid.h>
+
 #include <stdint.h>
 
 #include "dynamite_sampler_api.h"
