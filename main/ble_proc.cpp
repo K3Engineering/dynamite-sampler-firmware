@@ -211,13 +211,9 @@ static int gapEventHandler(ble_gap_event *event, void *arg) {
 		ESP_LOGD(TAG, "Server onDisco, core %u", xPortGetCoreID());
 	} break;
 
-	case BLE_GAP_EVENT_ADV_COMPLETE: {
-		startAdvertising(appContext);
-	} break;
-
 	case BLE_GAP_EVENT_SUBSCRIBE: {
-		ESP_LOGI(TAG, "subscr handles: %u %u", event->subscribe.conn_handle,
-		         event->subscribe.attr_handle);
+		ESP_LOGI(TAG, "subscr(%u) handles: %u %u", event->subscribe.cur_notify,
+		         event->subscribe.conn_handle, event->subscribe.attr_handle);
 		if (appContext->adcStreamChrAttr == event->subscribe.attr_handle) {
 			if (boardCfg()) {
 				adcOnSubscr(event->subscribe.cur_notify, appContext->dleInfo.maxTxOctets,
@@ -441,19 +437,23 @@ static void taskSetupBle(void *setupDone) {
 	char bleName[CONFIG_BT_NIMBLE_GAP_DEVICE_NAME_MAX_LEN + 1] = {"DS "};
 	static_assert(sizeof(bleName) >= 3 + HW_ID_LEN + 1);
 	hwIdStr(bleName + 3);
-	nimble_port_init();                   // Initialize the host stack
-	ble_svc_gap_init();                   // Initialize NimBLE configuration - gap service
-	ble_svc_gap_device_name_set(bleName); // Initialize NimBLE configuration - server name
-	ble_svc_gatt_init();                  // Initialize NimBLE configuration - gatt service
-	ble_gatts_count_cfg(
-	    gattSvcsDefinition); // Initialize NimBLE configuration - config gatt services
-	ble_gatts_add_svcs(
-	    gattSvcsDefinition);              // Initialize NimBLE configuration - queues gatt services.
-	ble_gatts_count_cfg(otaServiceDef()); // Initialize NimBLE configuration - config gatt services
-	ble_gatts_add_svcs(otaServiceDef());  // Initialize NimBLE configuration - queues gatt services.
+	if (ESP_OK != nimble_port_init())
+		return;
+	ble_svc_gap_init();
+	if (ESP_OK != ble_svc_gap_device_name_set(bleName))
+		return;
+	ble_svc_gatt_init();
+	if (ESP_OK != ble_gatts_count_cfg(gattSvcsDefinition))
+		return;
+	if (ESP_OK != ble_gatts_add_svcs(gattSvcsDefinition))
+		return;
+	if (ESP_OK != ble_gatts_count_cfg(otaServiceDef()))
+		return;
+	if (ESP_OK != ble_gatts_add_svcs(otaServiceDef()))
+		return;
 	ble_att_set_preferred_mtu(BLE_ATT_MTU_MAX);
-	ble_hs_cfg.sync_cb = onSync;            // Initialize application
-	nimble_port_freertos_init(bleHostTask); // Run the thread
+	ble_hs_cfg.sync_cb = onSync;
+	nimble_port_freertos_init(bleHostTask);
 
 	ESP_LOGI(TAG, "Setup done");
 	ESP_LOGI(TAG, "Setup stack HWM %u", uxTaskGetStackHighWaterMark(NULL));
