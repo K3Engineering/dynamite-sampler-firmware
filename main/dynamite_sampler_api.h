@@ -89,7 +89,7 @@ struct AdcFeedNetworkPacket {
 	struct Header {
 		uint16_t sample_sequence_number;
 	};
-	Header hdr;
+	Header header;
 	static constexpr size_t MAX_NUM_SAMPLES = 20;
 	AdcFeedNetworkData adc[MAX_NUM_SAMPLES];
 };

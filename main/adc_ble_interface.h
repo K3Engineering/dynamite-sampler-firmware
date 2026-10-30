@@ -21,12 +21,13 @@ extern bool startupDiagnosticIsOk;
 // bytes. We want the largest possible size to send as much data in a single transmission.
 constexpr uint16_t DLE_MAX_SIZE = 251;
 
-constexpr size_t blePayloadSize(size_t dlePacketSize, size_t attPacketSize) {
+constexpr size_t maxBlePayloadSize(size_t dlePacketSize, size_t attPacketSize) {
 	const uint16_t L2CAP_HEADER_SIZE = 4;
 	const uint16_t ATT_HEADER_SIZE = 3;
-	const size_t hSzDle = L2CAP_HEADER_SIZE + ATT_HEADER_SIZE;
-	size_t dleDataSize = (dlePacketSize < hSzDle) ? 0 : (dlePacketSize - hSzDle);
-	size_t attDataSize = (attPacketSize < ATT_HEADER_SIZE) ? 0 : (attPacketSize - ATT_HEADER_SIZE);
+	const size_t dleHeader = L2CAP_HEADER_SIZE + ATT_HEADER_SIZE;
+	const size_t attHeader = ATT_HEADER_SIZE;
+	size_t dleDataSize = (dlePacketSize < dleHeader) ? 0 : (dlePacketSize - dleHeader);
+	size_t attDataSize = (attPacketSize < attHeader) ? 0 : (attPacketSize - attHeader);
 	return (dleDataSize < attDataSize) ? dleDataSize : attDataSize;
 }
 #endif // _ADC_BLE_INTERFACE_H

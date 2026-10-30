@@ -94,18 +94,14 @@ static void adcOnDisconnect() {
 	deviceLock = DeviceLock::Open;
 }
 
-constexpr size_t calculateAdcSamples(size_t dle, size_t mtu) {
-	size_t sz = blePayloadSize(dle, mtu);
-	if (sz > sizeof(AdcFeedNetworkPacket::hdr)) {
-		sz -= sizeof(AdcFeedNetworkPacket::hdr);
+constexpr size_t maxAdcSamplesPerChunk(size_t dle, size_t mtu) {
+	size_t sz = maxBlePayloadSize(dle, mtu);
+	if (sz > sizeof(AdcFeedNetworkPacket::header)) {
+		sz -= sizeof(AdcFeedNetworkPacket::header);
 	} else {
 		sz = 0;
 	}
-	size_t n = sz / sizeof(*AdcFeedNetworkPacket::adc);
-	if (n > AdcFeedNetworkPacket::MAX_NUM_SAMPLES) {
-		n = AdcFeedNetworkPacket::MAX_NUM_SAMPLES;
-	}
-	return n;
+	return sz / sizeof(*AdcFeedNetworkPacket::adc);
 }
 
 static void adcOnSubscr(bool subscr, uint16_t maxTxOctets, uint16_t mtu) {
@@ -113,7 +109,13 @@ static void adcOnSubscr(bool subscr, uint16_t maxTxOctets, uint16_t mtu) {
 		if (deviceLock == DeviceLock::Open) {
 			deviceLock = DeviceLock::Streaming;
 
-			adcFeedSamplesPerChunk = calculateAdcSamples(maxTxOctets, mtu);
+			static_assert(AdcFeedNetworkPacket::MAX_NUM_SAMPLES ==
+			              maxAdcSamplesPerChunk(DLE_MAX_SIZE, BLE_ATT_MTU_MAX));
+
+			adcFeedSamplesPerChunk = maxAdcSamplesPerChunk(maxTxOctets, mtu);
+			if (adcFeedSamplesPerChunk > AdcFeedNetworkPacket::MAX_NUM_SAMPLES) {
+				adcFeedSamplesPerChunk = AdcFeedNetworkPacket::MAX_NUM_SAMPLES;
+			}
 			ESP_LOGI(TAG, "Samples per chunk %u octets %u mtu %u", adcFeedSamplesPerChunk,
 			         maxTxOctets, mtu);
 			if (!startAdcAcquisition(adcFeedSamplesPerChunk)) {
@@ -254,16 +256,16 @@ static void IRAM_ATTR taskBlePublishAdcBuffer(void *) {
 	uint16_t count = 0;
 	while (true) {
 		AdcFeedNetworkPacket packet;
-		static_assert(sizeof(packet) <= blePayloadSize(DLE_MAX_SIZE, BLE_ATT_MTU_MAX));
+		static_assert(sizeof(packet) <= maxBlePayloadSize(DLE_MAX_SIZE, BLE_ATT_MTU_MAX));
 		// Read the ADC buffer and update the BLE characteristic
 		size_t bytesRead =
 		    xStreamBufferReceive(adcStreamBufferHandle, &packet, sizeof(packet), portMAX_DELAY);
 		if (bytesRead == sizeof(packet)) [[likely]] {
-			packet.hdr.sample_sequence_number = htole16(count);
+			packet.header.sample_sequence_number = htole16(count);
 			count += adcFeedSamplesPerChunk;
 
 			os_mbuf *om = ble_hs_mbuf_from_flat(
-			    &packet, sizeof(packet.hdr) + adcFeedSamplesPerChunk * sizeof(*packet.adc));
+			    &packet, sizeof(packet.header) + adcFeedSamplesPerChunk * sizeof(*packet.adc));
 			if (om) [[likely]] {
 				ble_gatts_notify_custom(bleGlobal.connHandle, bleGlobal.adcStreamChrAttr, om);
 			}
