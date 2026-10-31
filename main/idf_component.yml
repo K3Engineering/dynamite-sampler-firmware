@@ -1,6 +1,1 @@
 ## IDF Component Manager Manifest File
-dependencies:
-  esp-nimble-cpp:
-    git: https://github.com/h2zero/esp-nimble-cpp
-    version: "2.5.0"
-    

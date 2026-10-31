@@ -16,10 +16,12 @@ constexpr char DEVICE_MANUFACTURER_NAME[] = "K3 Engineering";
 
 // Bluetooth assigned UUIDs
 // https://www.bluetooth.com/wp-content/uploads/Files/Specification/Assigned_Numbers.html
+constexpr uint16_t DEVICE_TX_POWER_SVC_UUID = 0x1804;
+constexpr uint16_t DEVICE_TX_POWER_LVL_CHR_UUID = 0x2A07;
+
 constexpr uint16_t DEVICE_INFO_SVC_UUID = 0x180A;
 constexpr uint16_t DEVICE_MAKE_NAME_CHR_UUID = 0x2A29;
 constexpr uint16_t DEVICE_FIRMWARE_VER_CHR_UUID = 0x2A26;
-constexpr uint16_t DEVICE_TX_POWER_CHR_UUID = 0x2A07;
 constexpr uint16_t DEVICE_MODEL_NUMBER_CHR_UUID = 0x2A24;
 constexpr uint16_t DEVICE_SERIAL_NUMBER_CHR_UUID = 0x2A25;
 constexpr uint16_t DEVICE_HARDWARE_REV_CHR_UUID = 0x2A27;
@@ -34,10 +36,10 @@ constexpr char OTA_SVC_UUID[] = "6f2ecf77-fd83-42a8-86de-4be9713bd53c";
 constexpr char OTA_CONTROL_CHR_UUID[] = "66815c6b-2b3f-4142-8a0a-bc34644eae01";
 constexpr char OTA_DATA_CHR_UUID[] = "09999d81-f1f6-4e31-8946-590220cc99af";
 
-// The TX characteristic if for setting only. Use the device info characteristic to
+// The TX characteristic is for setting only. Use DEVICE_TX_POWER_LVL_CHR_UUID to
 // read the current power.
-constexpr char TX_PWR_SVC_UUID[] = "74788a4c-72aa-4180-a478-59e969b959c9";
-constexpr char TX_PWR_CHR_UUID[] = "7478c418-35d3-4c3d-99d9-2de090159664";
+constexpr char TX_PWR_SET_SVC_UUID[] = "74788a4c-72aa-4180-a478-59e969b959c9";
+constexpr char TX_PWR_SET_CHR_UUID[] = "7478c418-35d3-4c3d-99d9-2de090159664";
 
 //======================== </UUIDs>
 
@@ -84,14 +86,11 @@ struct AdcFeedNetworkData {
 };
 
 struct AdcFeedNetworkPacket {
-	static constexpr size_t BLE_MAX_PAYLOAD_SZ = 244;
-
 	struct Header {
 		uint16_t sample_sequence_number;
 	};
-	Header hdr;
-	static constexpr size_t MAX_NUM_SAMPLES =
-	    (BLE_MAX_PAYLOAD_SZ - sizeof(Header)) / sizeof(AdcFeedNetworkData);
+	Header header;
+	static constexpr size_t MAX_NUM_SAMPLES = 20;
 	AdcFeedNetworkData adc[MAX_NUM_SAMPLES];
 };
 
