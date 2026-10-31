@@ -285,7 +285,7 @@ static int onMakeName(uint16_t connHandle, uint16_t attrHandle, ble_gatt_access_
                       void *arg) {
 	return os_mbuf_append(ctxt->om, DEVICE_MANUFACTURER_NAME, sizeof(DEVICE_MANUFACTURER_NAME) - 1)
 	           ? BLE_ATT_ERR_INSUFFICIENT_RES
-			   : 0;
+	           : 0;
 }
 
 static int onModelNum(uint16_t connHandle, uint16_t attrHandle, ble_gatt_access_ctxt *ctxt,
@@ -311,7 +311,7 @@ static int onFwVer(uint16_t connHandle, uint16_t attrHandle, ble_gatt_access_ctx
                    void *arg) {
 	return os_mbuf_append(ctxt->om, GIT_DESCRIBE, sizeof(GIT_DESCRIBE) - 1)
 	           ? BLE_ATT_ERR_INSUFFICIENT_RES
-			   : 0;
+	           : 0;
 }
 
 static int onTxPowerRead(uint16_t connHandle, uint16_t attrHandle,
@@ -389,36 +389,36 @@ static int dummyAccessCb(uint16_t connHandle, uint16_t attrHandle,
 
 constexpr ble_gatt_chr_def deviceTxLvlChr[] = {
     defineCharacteristic(DEVICE_TX_POWER_LVL_CHR_UUID16, onTxPowerRead, nullptr,
-	                     BLE_GATT_CHR_F_READ, nullptr),
+                         BLE_GATT_CHR_F_READ, nullptr),
     {},
 };
 
 constexpr ble_gatt_chr_def deviceInfoChr[] = {
     defineCharacteristic(DEVICE_MAKE_NAME_CHR_UUID16, onMakeName, nullptr, BLE_GATT_CHR_F_READ,
-	                     nullptr),
+                         nullptr),
     defineCharacteristic(DEVICE_MODEL_NUMBER_CHR_UUID16, onModelNum, nullptr, BLE_GATT_CHR_F_READ,
-	                     nullptr),
+                         nullptr),
     defineCharacteristic(DEVICE_SERIAL_NUMBER_CHR_UUID16, onSerialNum, nullptr, BLE_GATT_CHR_F_READ,
-	                     nullptr),
+                         nullptr),
     defineCharacteristic(DEVICE_HARDWARE_REV_CHR_UUID16, onHwRev, nullptr, BLE_GATT_CHR_F_READ,
-	                     nullptr),
+                         nullptr),
     defineCharacteristic(DEVICE_FIRMWARE_VER_CHR_UUID16, onFwVer, nullptr, BLE_GATT_CHR_F_READ,
-	                     nullptr),
+                         nullptr),
     {},
 };
 
 constexpr ble_gatt_chr_def adcNotifyChr[] = {
     defineCharacteristic(ADC_FEED_CHR_UUID128, dummyAccessCb, nullptr, BLE_GATT_CHR_F_NOTIFY,
-	                     &bleGlobal.adcStreamChrAttr),
+                         &bleGlobal.adcStreamChrAttr),
     defineCharacteristic(USER_KVS_CHR_UUID128, onKvs, nullptr,
-	                     BLE_GATT_CHR_F_NOTIFY | BLE_GATT_CHR_F_WRITE, nullptr),
+                         BLE_GATT_CHR_F_NOTIFY | BLE_GATT_CHR_F_WRITE, nullptr),
     defineCharacteristic(ADC_CONF_CHR_UUID128, onAdcConfig, nullptr, BLE_GATT_CHR_F_READ, nullptr),
     {},
 };
 
 constexpr ble_gatt_chr_def txSetPowerChr[] = {
     defineCharacteristic(TX_PWR_SET_CHR_UUID128, onTxPowerWrite, nullptr, BLE_GATT_CHR_F_WRITE,
-	                     nullptr),
+                         nullptr),
     {},
 };
 

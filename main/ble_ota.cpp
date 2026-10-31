@@ -240,10 +240,10 @@ void otaOnDisconnect() {
 
 constexpr ble_gatt_chr_def otaGattChr[] = {
     defineCharacteristic(OTA_CONTROL_CHR_UUID128, onOtaControlWrite, &otaControlData,
-	                     BLE_GATT_CHR_F_NOTIFY | BLE_GATT_CHR_F_WRITE,
-	                     &otaControlData.otaControlChrAttr),
+                         BLE_GATT_CHR_F_NOTIFY | BLE_GATT_CHR_F_WRITE,
+                         &otaControlData.otaControlChrAttr),
     defineCharacteristic(OTA_DATA_CHR_UUID128, onOtaDataWrite, &otaControlData,
-	                     BLE_GATT_CHR_F_WRITE, nullptr),
+                         BLE_GATT_CHR_F_WRITE, nullptr),
     {},
 };
 
