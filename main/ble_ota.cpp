@@ -200,6 +200,7 @@ static int onOtaDataWrite(uint16_t connHandle, uint16_t attrHandle,
 		return 0;
 	}
 	uint8_t buff[BLE_ATT_MTU_MAX];
+	static_assert(BLE_ATT_ATTR_MAX_LEN <= sizeof(buff));
 	os_mbuf_copydata(ctxt->om, 0, omLen, buff); // copy to flat buff to minimize writes
 	esp_err_t err = esp_ota_write(control->updateHandle, buff, omLen);
 	if (err != ESP_OK) {
