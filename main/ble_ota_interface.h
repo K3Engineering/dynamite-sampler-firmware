@@ -1,9 +1,10 @@
 #ifndef _BLE_OTA_INTERFACE_H
 #define _BLE_OTA_INTERFACE_H
 
-#include <NimBLEServer.h>
+#include "host/ble_gatt.h"
 
-void setupBleOta(NimBLEServer *server);
-void otaOnDisconnect(void);
+const ble_gatt_svc_def *otaServiceDef();
+void otaOnDisconnect();
+void otaOnSubscribe(uint16_t attrHandle);
 
 #endif // _BLE_OTA_INTERFACE_H

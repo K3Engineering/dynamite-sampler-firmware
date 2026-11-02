@@ -1,6 +1,8 @@
 #ifndef _ADC_BLE_INTERFACE_H
 #define _ADC_BLE_INTERFACE_H
 
+#include <freertos/FreeRTOS.h>
+
 #include <freertos/stream_buffer.h>
 
 #include "dynamite_sampler_api.h"
@@ -19,17 +21,13 @@ extern bool startupDiagnosticIsOk;
 // bytes. We want the largest possible size to send as much data in a single transmission.
 constexpr uint16_t DLE_MAX_SIZE = 251;
 
-constexpr uint16_t L2CAP_HEADER_SIZE = 4;
-constexpr uint16_t ATT_HEADER_SIZE = 3;
-
-// The size of the max ATT payload is the data channel payload minus the headers.
-// We set the maximum payload size using DLE (251 bytes).
-// L2CAP header (4 bytes) and ATT header (3 bytes).
-// ATT size is 251-4. ATT payload is 251-4-3.
-constexpr uint16_t ATT_PAYLOAD_MAX_SIZE = DLE_MAX_SIZE - L2CAP_HEADER_SIZE - ATT_HEADER_SIZE;
-
-constexpr size_t ADC_FEED_MAX_CHUNK_SZ =
-    (ATT_PAYLOAD_MAX_SIZE / sizeof(AdcFeedNetworkData)) * sizeof(AdcFeedNetworkData);
-static_assert(ADC_FEED_MAX_CHUNK_SZ <= ATT_PAYLOAD_MAX_SIZE);
-
+constexpr size_t maxBlePayloadSize(size_t dlePacketSize, size_t attPacketSize) {
+	const uint16_t L2CAP_HEADER_SIZE = 4;
+	const uint16_t ATT_HEADER_SIZE = 3;
+	const size_t dleHeader = L2CAP_HEADER_SIZE + ATT_HEADER_SIZE;
+	const size_t attHeader = ATT_HEADER_SIZE;
+	size_t dleDataSize = (dlePacketSize < dleHeader) ? 0 : (dlePacketSize - dleHeader);
+	size_t attDataSize = (attPacketSize < attHeader) ? 0 : (attPacketSize - attHeader);
+	return (dleDataSize < attDataSize) ? dleDataSize : attDataSize;
+}
 #endif // _ADC_BLE_INTERFACE_H

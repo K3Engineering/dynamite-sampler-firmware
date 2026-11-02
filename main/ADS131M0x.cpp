@@ -375,6 +375,9 @@ static void hijackDmaSpi(ADS131M0xIsrData *ctrl) {
 
 bool ADS131M0x::startAcquisition(size_t interval) {
 	assert(interval < RING_BUFF_SZ / 2);
+	if ((interval < 1) || (interval >= RING_BUFF_SZ / 2)) {
+		return false;
+	}
 	isrData.wakeInterval = interval;
 
 	txSmallBuff->status = 0;
