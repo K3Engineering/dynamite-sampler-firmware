@@ -20,11 +20,12 @@ constexpr uint16_t DEVICE_TX_POWER_SVC_UUID = 0x1804;
 constexpr uint16_t DEVICE_TX_POWER_LVL_CHR_UUID = 0x2A07;
 
 constexpr uint16_t DEVICE_INFO_SVC_UUID = 0x180A;
-constexpr uint16_t DEVICE_MAKE_NAME_CHR_UUID = 0x2A29;
-constexpr uint16_t DEVICE_FIRMWARE_VER_CHR_UUID = 0x2A26;
 constexpr uint16_t DEVICE_MODEL_NUMBER_CHR_UUID = 0x2A24;
 constexpr uint16_t DEVICE_SERIAL_NUMBER_CHR_UUID = 0x2A25;
+constexpr uint16_t DEVICE_FIRMWARE_REV_CHR_UUID = 0x2A26;
 constexpr uint16_t DEVICE_HARDWARE_REV_CHR_UUID = 0x2A27;
+constexpr uint16_t DEVICE_SOFTWARE_REV_CHR_UUID = 0x2A28;
+constexpr uint16_t DEVICE_MAKE_NAME_CHR_UUID = 0x2A29;
 
 // Dynamite sampler specific UUIDs
 constexpr char DYNAMITE_SAMPLER_SVC_UUID[] = "e331016b-6618-4f8f-8997-1a2c7c9e5fa3";

@@ -296,7 +296,7 @@ static int onModelNum(uint16_t connHandle, uint16_t attrHandle, ble_gatt_access_
 
 static int onSerialNum(uint16_t connHandle, uint16_t attrHandle, ble_gatt_access_ctxt *ctxt,
                        void *arg) {
-	char hwId[HW_ID_LEN + 1]{0};
+	char hwId[HW_ID_LEN];
 	hwIdStr(hwId);
 	return os_mbuf_append(ctxt->om, hwId, HW_ID_LEN) ? BLE_ATT_ERR_INSUFFICIENT_RES : 0;
 }
@@ -307,11 +307,16 @@ static int onHwRev(uint16_t connHandle, uint16_t attrHandle, ble_gatt_access_ctx
 	return os_mbuf_append(ctxt->om, s, strlen(s)) ? BLE_ATT_ERR_INSUFFICIENT_RES : 0;
 }
 
-static int onFwVer(uint16_t connHandle, uint16_t attrHandle, ble_gatt_access_ctxt *ctxt,
+static int onFwRev(uint16_t connHandle, uint16_t attrHandle, ble_gatt_access_ctxt *ctxt,
                    void *arg) {
 	return os_mbuf_append(ctxt->om, GIT_DESCRIBE, sizeof(GIT_DESCRIBE) - 1)
 	           ? BLE_ATT_ERR_INSUFFICIENT_RES
 	           : 0;
+}
+
+static int onSwRev(uint16_t connHandle, uint16_t attrHandle, ble_gatt_access_ctxt *ctxt,
+                   void *arg) {
+	return os_mbuf_append(ctxt->om, IDF_VER, strlen(IDF_VER)) ? BLE_ATT_ERR_INSUFFICIENT_RES : 0;
 }
 
 static int onTxPowerRead(uint16_t connHandle, uint16_t attrHandle,
@@ -394,15 +399,17 @@ constexpr ble_gatt_chr_def deviceTxLvlChr[] = {
 };
 
 constexpr ble_gatt_chr_def deviceInfoChr[] = {
-    defineCharacteristic(DEVICE_MAKE_NAME_CHR_UUID16, onMakeName, nullptr, BLE_GATT_CHR_F_READ,
-                         nullptr),
     defineCharacteristic(DEVICE_MODEL_NUMBER_CHR_UUID16, onModelNum, nullptr, BLE_GATT_CHR_F_READ,
                          nullptr),
     defineCharacteristic(DEVICE_SERIAL_NUMBER_CHR_UUID16, onSerialNum, nullptr, BLE_GATT_CHR_F_READ,
                          nullptr),
+    defineCharacteristic(DEVICE_FIRMWARE_REV_CHR_UUID16, onFwRev, nullptr, BLE_GATT_CHR_F_READ,
+                         nullptr),
     defineCharacteristic(DEVICE_HARDWARE_REV_CHR_UUID16, onHwRev, nullptr, BLE_GATT_CHR_F_READ,
                          nullptr),
-    defineCharacteristic(DEVICE_FIRMWARE_VER_CHR_UUID16, onFwVer, nullptr, BLE_GATT_CHR_F_READ,
+    defineCharacteristic(DEVICE_SOFTWARE_REV_CHR_UUID16, onSwRev, nullptr, BLE_GATT_CHR_F_READ,
+                         nullptr),
+    defineCharacteristic(DEVICE_MAKE_NAME_CHR_UUID16, onMakeName, nullptr, BLE_GATT_CHR_F_READ,
                          nullptr),
     {},
 };
