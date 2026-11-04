@@ -437,6 +437,17 @@ constexpr ble_gatt_svc_def gattSvcsDefinition[] = {
     {},
 };
 
+static void defaultDeviceName(char *out, size_t sz) {
+	memset(out, 0, sz);
+	static const char namePrefix[] = {"DS "};
+	if (sz < sizeof(namePrefix) + HW_ID_LEN) {
+		return;
+	}
+	strcpy(out, namePrefix);
+	// Name the device with the mac address to make it unique for testing purposes.
+	hwIdStr(out + sizeof(namePrefix) - 1);
+}
+
 static void taskSetupBle(void *setupDone) {
 	ESP_LOGI(TAG, "Setting up BLE");
 	// Create the BLE Device
@@ -445,12 +456,7 @@ static void taskSetupBle(void *setupDone) {
 	char bleName[CONFIG_BT_NIMBLE_GAP_DEVICE_NAME_MAX_LEN + 1];
 	size_t nameLen = sizeof(bleName) - 1;
 	if ((ESP_OK != kvsReadDeviceName(bleName, &nameLen)) || (0 == *bleName)) {
-		memset(bleName, 0, sizeof(bleName));
-		static const char namePrefix[] = {"DS "};
-		static_assert(sizeof(bleName) >= sizeof(namePrefix) + HW_ID_LEN);
-		strcpy(bleName, namePrefix);
-		// Name the device with the mac address to make it unique for testing purposes.
-		hwIdStr(bleName + sizeof(namePrefix) - 1);
+		defaultDeviceName(bleName, sizeof(bleName));
 	}
 	ble_svc_gap_init();
 	if (ESP_OK != ble_svc_gap_device_name_set(bleName))
