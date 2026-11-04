@@ -9,8 +9,6 @@
 
 constexpr char TAG[] = "BOARD";
 
-constexpr char BOARD_MODEL_KEY[] = "board_model";
-
 static const BoardCfg *gBoardCfg = nullptr;
 
 const BoardCfg *boardCfg() { return gBoardCfg; }
@@ -26,7 +24,7 @@ esp_err_t initBoardIdentity() {
 
 	char model[BOARD_IDENTITY_NAME_MAX] = {0};
 	size_t modelLen = sizeof(model) - 1;
-	err = kvsReadFactoryString(BOARD_MODEL_KEY, model, &modelLen);
+	err = kvsReadBoardModel(model, &modelLen);
 	if (ESP_ERR_NVS_NOT_FOUND == err) {
 		ESP_LOGW(TAG, "Safe mode: no board identity in flash");
 		return ESP_OK;

@@ -25,21 +25,31 @@ static_assert(USER_KVS_MAX_KEY_LEN < NVS_KEY_NAME_MAX_SIZE);
 constexpr size_t USER_KVS_MAX_VAL_LEN = 128; // does not incude terminating 0
 static_assert(USER_KVS_MAX_KEY_LEN + 1 + USER_KVS_MAX_VAL_LEN + 1 <= USER_KVS_NETWORK_FRAME_LENGTH);
 
+constexpr char BOARD_MODEL_KEY[] = "board_model";
+constexpr char DEVICE_NAME_KEY[] = "device_name";
+
 bool initUserKeyValStorage() { return ESP_OK == nvs_flash_init_partition(DYNA_PERSIST_PARTITION); }
 
-esp_err_t kvsReadFactoryString(const char *key, char *out, size_t *outLen) {
+static esp_err_t kvsReadPersistString(const char *nsp, const char *key, char *out, size_t *outLen) {
 	if (strlen(key) > USER_KVS_MAX_KEY_LEN) {
 		return ESP_ERR_INVALID_ARG;
 	}
 	nvs_handle_t handle;
-	esp_err_t err =
-	    nvs_open_from_partition(DYNA_PERSIST_PARTITION, FACTORY_NSPACE, NVS_READONLY, &handle);
+	esp_err_t err = nvs_open_from_partition(DYNA_PERSIST_PARTITION, nsp, NVS_READONLY, &handle);
 	if (ESP_OK != err) {
 		return err;
 	}
 	err = nvs_get_str(handle, key, out, outLen);
 	nvs_close(handle);
 	return err;
+}
+
+esp_err_t kvsReadBoardModel(char *out, size_t *outLen) {
+	return kvsReadPersistString(FACTORY_NSPACE, BOARD_MODEL_KEY, out, outLen);
+}
+
+esp_err_t kvsReadDeviceName(char *out, size_t *outLen) {
+	return kvsReadPersistString(SETTINGS_NSPACE, DEVICE_NAME_KEY, out, outLen);
 }
 
 constexpr size_t splitKeyVal(const char *cmd) {
