@@ -454,8 +454,7 @@ static void taskSetupBle(void *setupDone) {
 	if (ESP_OK != nimble_port_init())
 		return;
 	char bleName[CONFIG_BT_NIMBLE_GAP_DEVICE_NAME_MAX_LEN + 1];
-	size_t nameLen = sizeof(bleName);
-	if ((ESP_OK != kvsReadDeviceName(bleName, &nameLen)) || (0 == *bleName)) {
+	if ((ESP_OK != kvsReadDeviceName(bleName, sizeof(bleName))) || (0 == *bleName)) {
 		defaultDeviceName(bleName, sizeof(bleName));
 	}
 	ble_svc_gap_init();
