@@ -26,9 +26,7 @@ def get_git_describe():
     return r.stdout.strip().decode("utf-8")
 
 
-def generate_build_metadata(is_debug: bool, idf_version: str):
-
-    git_describe = get_git_describe()
+def generate_build_metadata(git_describe: str, is_debug: bool, idf_version: str):
 
     # Construct Firmware Revision String (0x2A26)
     fw_revision = git_describe
@@ -68,5 +66,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     is_debug = args.sdkconfig_debug.lower() in ("y", "1", "true")
-    meta = generate_build_metadata(is_debug=is_debug, idf_version=args.idf_version)
+    git_describe = get_git_describe()
+    meta = generate_build_metadata(
+        git_describe=git_describe, is_debug=is_debug, idf_version=args.idf_version
+    )
     print(meta)
