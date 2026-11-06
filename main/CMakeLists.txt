@@ -16,15 +16,19 @@ idf_component_register(
     REQUIRES app_update esp_driver_spi esp_driver_gpio esp_driver_gptimer esp_driver_i2c bt nvs_flash
 )
 
+# Ensure the binary dir is in the component's include path so #include "build_metadata.h" works
+target_include_directories(${COMPONENT_TARGET} PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
+
 # A custom target is always out of date. This forces cmake to run the COMMAND on every build.
-set(build_metadata_filepath ${CMAKE_CURRENT_BINARY_DIR}/build_metadata.h)
+set(build_metadata_filepath "${CMAKE_CURRENT_BINARY_DIR}/build_metadata.h")
 add_custom_target(
     build_metadata_target
-    COMMAND ${python} ${CMAKE_CURRENT_SOURCE_DIR}/generate_build_metadata.py
-        --sdkconfig-debug "${CONFIG_COMPILER_OPTIMIZATION_DEBUG}"
-        --idf-version "${IDF_VER}"
-        > ${build_metadata_filepath}
+    COMMAND ${python} "${CMAKE_CURRENT_SOURCE_DIR}/generate_build_metadata.py"
+        "--sdkconfig-debug=${CONFIG_COMPILER_OPTIMIZATION_DEBUG}"
+        "--idf-version=${IDF_VER}"
+        > "${build_metadata_filepath}"
+# A custom target is always out of date. This forces cmake to run the COMMAND on every build.    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     COMMENT "Generating build metadata header file."
-    BYPRODUCTS ${build_metadata_filepath}
+    BYPRODUCTS "${build_metadata_filepath}"
 )
 add_dependencies(${COMPONENT_TARGET} build_metadata_target)
