@@ -313,14 +313,16 @@ static int onHwRev(uint16_t connHandle, uint16_t attrHandle, ble_gatt_access_ctx
 
 static int onFwRev(uint16_t connHandle, uint16_t attrHandle, ble_gatt_access_ctxt *ctxt,
                    void *arg) {
-	return os_mbuf_append(ctxt->om, GIT_DESCRIBE, sizeof(GIT_DESCRIBE) - 1)
+	return os_mbuf_append(ctxt->om, FW_REVISION_STR, sizeof(FW_REVISION_STR) - 1)
 	           ? BLE_ATT_ERR_INSUFFICIENT_RES
 	           : 0;
 }
 
 static int onSwRev(uint16_t connHandle, uint16_t attrHandle, ble_gatt_access_ctxt *ctxt,
                    void *arg) {
-	return os_mbuf_append(ctxt->om, IDF_VER, strlen(IDF_VER)) ? BLE_ATT_ERR_INSUFFICIENT_RES : 0;
+	return os_mbuf_append(ctxt->om, SW_REVISION_STR, sizeof(SW_REVISION_STR) - 1)
+	           ? BLE_ATT_ERR_INSUFFICIENT_RES
+	           : 0;
 }
 
 static int onTxPowerRead(uint16_t connHandle, uint16_t attrHandle,

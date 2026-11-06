@@ -20,7 +20,10 @@ idf_component_register(
 set(build_metadata_filepath ${CMAKE_CURRENT_BINARY_DIR}/build_metadata.h)
 add_custom_target(
     build_metadata_target
-    COMMAND python ${CMAKE_CURRENT_SOURCE_DIR}/generate_build_metadata.py > ${build_metadata_filepath}
+    COMMAND ${python} ${CMAKE_CURRENT_SOURCE_DIR}/generate_build_metadata.py
+        --sdkconfig-debug "${CONFIG_COMPILER_OPTIMIZATION_DEBUG}"
+        --idf-version "${IDF_VER}"
+        > ${build_metadata_filepath}
     COMMENT "Generating build metadata header file."
     BYPRODUCTS ${build_metadata_filepath}
 )
