@@ -21,6 +21,8 @@ def get_git_describe():
     # commited, the next best thing is to make it apparent that the firmware has been changed.
     # --tags: use the non-annotated tags too, since github releases uses that.
     git_cmd = ["git", "describe", "--always", "--dirty", "--tags"]
+    # Raise exception if the git description isn't available.
+    # This is so automated builds don't release a firmware with an unknown version to users.
     r = subprocess.run(git_cmd, capture_output=True, check=True)
 
     return r.stdout.strip().decode("utf-8")
