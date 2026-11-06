@@ -37,8 +37,6 @@ Invoked with: {sys.argv[1:]}
 #ifndef _BUILD_METADATA_H
 #define _BUILD_METADATA_H
 
-#pragma once
-
 #include <cstdint>
 
 constexpr char FW_REVISION_STR[] = "{fw_revision}";
