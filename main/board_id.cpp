@@ -9,8 +9,6 @@
 
 constexpr char TAG[] = "BOARD";
 
-constexpr char BOARD_MODEL_KEY[] = "board_model";
-
 static const BoardCfg *gBoardCfg = nullptr;
 
 const BoardCfg *boardCfg() { return gBoardCfg; }
@@ -23,26 +21,24 @@ esp_err_t initBoardIdentity() {
 	if (!initUserKeyValStorage()) {
 		return ESP_FAIL;
 	}
-
 	char model[BOARD_IDENTITY_NAME_MAX] = {0};
-	size_t modelLen = sizeof(model) - 1;
-	err = kvsReadFactoryString(BOARD_MODEL_KEY, model, &modelLen);
-	if (ESP_ERR_NVS_NOT_FOUND == err) {
-		ESP_LOGW(TAG, "Safe mode: no board identity in flash");
-		return ESP_OK;
-	}
-	if (ESP_ERR_NVS_INVALID_LENGTH == err) {
-		ESP_LOGE(TAG, "Safe mode: board identity does not fit %u chars", modelLen);
-		return ESP_OK;
-	}
+	err = kvsReadBoardModel(model, sizeof(model));
 	if (ESP_OK != err) {
+		if (ESP_ERR_NVS_NOT_FOUND == err) {
+			ESP_LOGW(TAG, "Safe mode: no board identity in flash");
+			return ESP_OK;
+		}
+		if (ESP_ERR_NVS_INVALID_LENGTH == err) {
+			ESP_LOGE(TAG, "Safe mode: board identity does not fit %u chars", sizeof(model));
+			return ESP_OK;
+		}
 		return err;
 	}
 	gBoardCfg = findBoardCfg(model);
-	if (!gBoardCfg) {
+	if (gBoardCfg) {
+		ESP_LOGI(TAG, "Board: %s", gBoardCfg->name);
+	} else {
 		ESP_LOGE(TAG, "Safe mode: unknown board identity '%s'", model);
-		return ESP_OK;
 	}
-	ESP_LOGI(TAG, "Board: %s", gBoardCfg->name);
 	return ESP_OK;
 }

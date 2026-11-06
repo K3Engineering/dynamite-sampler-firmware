@@ -146,15 +146,17 @@ static void startAdvertising(void *context) {
 	fields.uuids128 = &DYNAMITE_SAMPLER_SVC_UUID128;
 	fields.num_uuids128 = 1;
 	fields.uuids128_is_complete = 1;
-	ble_gap_adv_set_fields(&fields);
-
+	if (ble_gap_adv_set_fields(&fields)) {
+		return;
+	}
 	const char *name = ble_svc_gap_device_name();
 	ble_hs_adv_fields rsp{};
 	rsp.name = (uint8_t *)name;
 	rsp.name_len = strlen(name);
 	rsp.name_is_complete = 1;
-	ble_gap_adv_rsp_set_fields(&rsp);
-
+	if (ble_gap_adv_rsp_set_fields(&rsp)) {
+		return;
+	}
 	static constexpr ble_gap_adv_params advParams{
 	    .conn_mode = BLE_GAP_CONN_MODE_UND,
 	    .disc_mode = BLE_GAP_DISC_MODE_GEN,
@@ -164,8 +166,11 @@ static void startAdvertising(void *context) {
 	    .filter_policy = BLE_HCI_ADV_FILT_NONE,
 	    .high_duty_cycle = 0,
 	};
-	ble_gap_adv_start(BLE_OWN_ADDR_PUBLIC, nullptr, BLE_HS_FOREVER, &advParams, gapEventHandler,
-	                  context);
+	if (ble_gap_adv_start(BLE_OWN_ADDR_PUBLIC, nullptr, BLE_HS_FOREVER, &advParams, gapEventHandler,
+	                      context)) {
+		return;
+	}
+	ESP_LOGI(TAG, "Advertising started");
 }
 
 static int gapEventHandler(ble_gap_event *event, void *arg) {
@@ -273,7 +278,6 @@ static void IRAM_ATTR taskBlePublishAdcBuffer(void *) {
 static void onSync() {
 	// ble_hs_util_ensure_addr(0); // Optional in case we strictly using a public address
 	startAdvertising(&bleGlobal);
-	ESP_LOGI(TAG, "Advertising started");
 }
 
 static void bleHostTask(void *) {
@@ -437,15 +441,26 @@ constexpr ble_gatt_svc_def gattSvcsDefinition[] = {
     {},
 };
 
+static void defaultDeviceName(char *out, size_t sz) {
+	memset(out, 0, sz);
+	static const char namePrefix[] = {"DS "};
+	if (sz < sizeof(namePrefix) + HW_ID_LEN) {
+		return;
+	}
+	strcpy(out, namePrefix);
+	// Name the device with the mac address to make it unique for testing purposes.
+	hwIdStr(out + sizeof(namePrefix) - 1);
+}
+
 static void taskSetupBle(void *setupDone) {
 	ESP_LOGI(TAG, "Setting up BLE");
 	// Create the BLE Device
-	// Name the device with the mac address to make it unique for testing purposes.
-	char bleName[CONFIG_BT_NIMBLE_GAP_DEVICE_NAME_MAX_LEN + 1] = {"DS "};
-	static_assert(sizeof(bleName) >= 3 + HW_ID_LEN + 1);
-	hwIdStr(bleName + 3);
 	if (ESP_OK != nimble_port_init())
 		return;
+	char bleName[BLE_HCI_MAX_SCAN_RSP_DATA_LEN + 1 - 2];
+	if ((ESP_OK != kvsReadDeviceName(bleName, sizeof(bleName))) || (0 == *bleName)) {
+		defaultDeviceName(bleName, sizeof(bleName));
+	}
 	ble_svc_gap_init();
 	if (ESP_OK != ble_svc_gap_device_name_set(bleName))
 		return;

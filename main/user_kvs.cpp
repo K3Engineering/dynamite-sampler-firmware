@@ -25,21 +25,32 @@ static_assert(USER_KVS_MAX_KEY_LEN < NVS_KEY_NAME_MAX_SIZE);
 constexpr size_t USER_KVS_MAX_VAL_LEN = 128; // does not incude terminating 0
 static_assert(USER_KVS_MAX_KEY_LEN + 1 + USER_KVS_MAX_VAL_LEN + 1 <= USER_KVS_NETWORK_FRAME_LENGTH);
 
+constexpr char BOARD_MODEL_KEY[] = "board_model";
+constexpr char DEVICE_NAME_KEY[] = "device_name";
+
 bool initUserKeyValStorage() { return ESP_OK == nvs_flash_init_partition(DYNA_PERSIST_PARTITION); }
 
-esp_err_t kvsReadFactoryString(const char *key, char *out, size_t *outLen) {
+static esp_err_t kvsReadString(const char *partition, const char *nsp, const char *key, char *out,
+                               size_t outLen) {
 	if (strlen(key) > USER_KVS_MAX_KEY_LEN) {
-		return ESP_ERR_INVALID_ARG;
+		return ESP_ERR_NVS_NOT_FOUND;
 	}
 	nvs_handle_t handle;
-	esp_err_t err =
-	    nvs_open_from_partition(DYNA_PERSIST_PARTITION, FACTORY_NSPACE, NVS_READONLY, &handle);
+	esp_err_t err = nvs_open_from_partition(partition, nsp, NVS_READONLY, &handle);
 	if (ESP_OK != err) {
 		return err;
 	}
-	err = nvs_get_str(handle, key, out, outLen);
+	err = nvs_get_str(handle, key, out, &outLen);
 	nvs_close(handle);
 	return err;
+}
+
+esp_err_t kvsReadBoardModel(char *out, size_t outLen) {
+	return kvsReadString(DYNA_PERSIST_PARTITION, FACTORY_NSPACE, BOARD_MODEL_KEY, out, outLen);
+}
+
+esp_err_t kvsReadDeviceName(char *out, size_t outLen) {
+	return kvsReadString(NVS_DEFAULT_PART_NAME, SETTINGS_NSPACE, DEVICE_NAME_KEY, out, outLen);
 }
 
 constexpr size_t splitKeyVal(const char *cmd) {
@@ -92,25 +103,13 @@ static KvsResult writeKeyVal(const char *partition, const char *nsp, const char 
 	return kvsResultFromEspErr(err);
 }
 
-static KvsResult readKey(const char *partition, const char *nsp, const char *cmd, char *reply,
+static KvsResult readKey(const char *partition, const char *nsp, const char *key, char *reply,
                          size_t replySz) {
-	// "k..." key, null terminated
-	if (strlen(cmd) > USER_KVS_MAX_KEY_LEN) {
-		return KvsResult::Rejected;
-	}
-	nvs_handle_t handle;
-	esp_err_t err = nvs_open_from_partition(partition, nsp, NVS_READONLY, &handle);
-	if (ESP_OK != err) {
-		return kvsResultFromEspErr(err);
-	}
-	err = nvs_get_str(handle, cmd, reply, &replySz);
-	nvs_close(handle);
-	return kvsResultFromEspErr(err);
+	return kvsResultFromEspErr(kvsReadString(partition, nsp, key, reply, replySz));
 }
 
-static KvsResult deleteKey(const char *partition, const char *nsp, const char *cmd) {
-	// "k..." key, null terminated
-	if (strlen(cmd) > USER_KVS_MAX_KEY_LEN) {
+static KvsResult deleteKey(const char *partition, const char *nsp, const char *key) {
+	if (strlen(key) > USER_KVS_MAX_KEY_LEN) {
 		return KvsResult::Rejected;
 	}
 	nvs_handle_t handle;
@@ -118,7 +117,7 @@ static KvsResult deleteKey(const char *partition, const char *nsp, const char *c
 	if (ESP_OK != err) {
 		return kvsResultFromEspErr(err);
 	}
-	err = nvs_erase_key(handle, cmd);
+	err = nvs_erase_key(handle, key);
 	if (ESP_OK == err) {
 		err = nvs_commit(handle);
 	}
