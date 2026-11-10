@@ -344,12 +344,11 @@ static int onTxPowerWrite(uint16_t connHandle, uint16_t attrHandle,
 		return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
 	}
 	os_mbuf_copydata(ctxt->om, 0, sizeof(rPwr), &rPwr);
-	esp_err_t err = esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_DEFAULT, dbmToEspPowerLevel(rPwr.val));
-	if (ESP_OK == err) {
-		return 0;
+	if (ESP_PWR_LVL_INVALID == dbmToEspPowerLevel(rPwr.val)) {
+		return BLE_ATT_ERR_VALUE_NOT_ALLOWED;
 	}
-	return (ESP_ERR_NOT_SUPPORTED == err) ? BLE_ATT_ERR_VALUE_NOT_ALLOWED
-	                                      : BLE_ATT_ERR_INSUFFICIENT_RES;
+	esp_err_t err = esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_DEFAULT, dbmToEspPowerLevel(rPwr.val));
+	return (ESP_OK == err) ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
 }
 
 static int onKvs(uint16_t connHandle, uint16_t attrHandle, struct ble_gatt_access_ctxt *ctxt,
