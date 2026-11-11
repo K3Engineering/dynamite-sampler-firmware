@@ -340,14 +340,15 @@ static int onTxPowerRead(uint16_t connHandle, uint16_t attrHandle,
 static int onTxPowerWrite(uint16_t connHandle, uint16_t attrHandle,
                           struct ble_gatt_access_ctxt *ctxt, void *arg) {
 	TxPowerNetworkData rPwr;
-	if (OS_MBUF_PKTLEN(ctxt->om) == sizeof(rPwr)) {
-		os_mbuf_copydata(ctxt->om, 0, sizeof(rPwr), &rPwr);
-		esp_power_level_t v = dbmToEspPowerLevel(rPwr.val);
-		if (v != ESP_PWR_LVL_INVALID) {
-			esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_DEFAULT, v);
-		}
+	if (OS_MBUF_PKTLEN(ctxt->om) != sizeof(rPwr)) {
+		return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
 	}
-	return 0;
+	os_mbuf_copydata(ctxt->om, 0, sizeof(rPwr), &rPwr);
+	if (ESP_PWR_LVL_INVALID == dbmToEspPowerLevel(rPwr.val)) {
+		return BLE_ATT_ERR_VALUE_NOT_ALLOWED;
+	}
+	esp_err_t err = esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_DEFAULT, dbmToEspPowerLevel(rPwr.val));
+	return (ESP_OK == err) ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
 }
 
 static int onKvs(uint16_t connHandle, uint16_t attrHandle, struct ble_gatt_access_ctxt *ctxt,
