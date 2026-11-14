@@ -186,8 +186,9 @@ static int gapEventHandler(ble_gap_event *event, void *arg) {
 		}
 		if (BLE_ERR_SUCCESS == status) {
 			appContext->connHandle = event->connect.conn_handle;
-			// If this peer supports DLE, DATA_LEN_CHG will overwrite these shortly.
-			appContext->dleInfo = dleInfoDefaults;
+			// Do not initialize DLE info here: DATA_LEN_CHG can arrive before CONNECT and
+			// DLE defaults would overwrite the already-negotiated values.
+
 			// Best case, devices can handle 7.5ms interval connection (android phone)
 			// older iOS might be 15ms, Windows PC might be 30ms. Connection interval is set in
 			// increments of 1.25ms.
@@ -242,8 +243,8 @@ static int gapEventHandler(ble_gap_event *event, void *arg) {
 		l.maxTxTime = r.max_tx_time;
 		l.maxRxTime = r.max_rx_time;
 		l.negotiated = true;
-		ESP_LOGD(TAG, "Gap event data len chg octets Tx,Rx (%u, %u), time Tx,Rx (%u,%u)",
-		         l.maxTxOctets, l.maxRxOctets, l.maxTxTime, l.maxRxTime);
+		ESP_LOGD(TAG, "Data len chg: handle %u, oct Tx,Rx (%u, %u), time Tx,Rx (%u,%u)",
+		         r.conn_handle, l.maxTxOctets, l.maxRxOctets, l.maxTxTime, l.maxRxTime);
 	} break;
 
 	default:
