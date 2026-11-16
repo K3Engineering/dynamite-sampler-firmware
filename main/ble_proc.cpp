@@ -29,6 +29,9 @@ constexpr char TAG[] = "BLE";
 
 static_assert(CONFIG_BT_NIMBLE_MAX_CONNECTIONS == 1);
 
+StreamBufferHandle_t adcStreamBufferHandle = NULL;
+DeviceLock deviceLock = DeviceLock::Open;
+
 struct DleConnInfo {
 	uint16_t maxTxOctets;
 	uint16_t maxRxOctets;
@@ -41,6 +44,7 @@ struct BleGlobal {
 	uint16_t connHandle;
 	DleConnInfo dleInfo;
 	uint16_t adcStreamChrAttr;
+	size_t adcFeedSamplesPerChunk;
 };
 
 constexpr DleConnInfo dleInfoDefaults{
@@ -55,12 +59,8 @@ static BleGlobal bleGlobal{
     .connHandle = BLE_HS_CONN_HANDLE_NONE,
     .dleInfo = dleInfoDefaults,
     .adcStreamChrAttr = 0,
+    .adcFeedSamplesPerChunk = 0,
 };
-
-StreamBufferHandle_t adcStreamBufferHandle = NULL;
-static size_t adcFeedSamplesPerChunk = 0;
-
-DeviceLock deviceLock = DeviceLock::Open;
 
 static int gapEventHandler(ble_gap_event *event, void *arg);
 
@@ -104,7 +104,7 @@ constexpr size_t maxAdcSamplesPerChunk(size_t dle, size_t mtu) {
 	return sz / sizeof(*AdcFeedNetworkPacket::adc);
 }
 
-static void adcOnSubscr(bool subscr, uint16_t maxTxOctets, uint16_t mtu) {
+static void adcOnSubscr(bool subscr, BleGlobal *context) {
 	if (subscr) {
 		if (deviceLock == DeviceLock::Open) {
 			deviceLock = DeviceLock::Streaming;
@@ -112,13 +112,15 @@ static void adcOnSubscr(bool subscr, uint16_t maxTxOctets, uint16_t mtu) {
 			static_assert(AdcFeedNetworkPacket::MAX_NUM_SAMPLES ==
 			              maxAdcSamplesPerChunk(DLE_MAX_SIZE, BLE_ATT_MTU_MAX));
 
-			adcFeedSamplesPerChunk = maxAdcSamplesPerChunk(maxTxOctets, mtu);
-			if (adcFeedSamplesPerChunk > AdcFeedNetworkPacket::MAX_NUM_SAMPLES) {
-				adcFeedSamplesPerChunk = AdcFeedNetworkPacket::MAX_NUM_SAMPLES;
+			uint16_t mtu = ble_att_mtu(context->connHandle);
+			size_t samples = maxAdcSamplesPerChunk(context->dleInfo.maxTxOctets, mtu);
+			if (samples > AdcFeedNetworkPacket::MAX_NUM_SAMPLES) {
+				samples = AdcFeedNetworkPacket::MAX_NUM_SAMPLES;
 			}
-			ESP_LOGI(TAG, "Samples per chunk %u octets %u mtu %u", adcFeedSamplesPerChunk,
-			         maxTxOctets, mtu);
-			if (!startAdcAcquisition(adcFeedSamplesPerChunk)) {
+			context->adcFeedSamplesPerChunk = samples;
+			ESP_LOGI(TAG, "Samples per chunk %u octets %u mtu %u", samples,
+			         context->dleInfo.maxTxOctets, mtu);
+			if (!startAdcAcquisition(samples)) {
 				deviceLock = DeviceLock::Open;
 			}
 		}
@@ -222,8 +224,7 @@ static int gapEventHandler(ble_gap_event *event, void *arg) {
 		         event->subscribe.conn_handle, event->subscribe.attr_handle);
 		if (appContext->adcStreamChrAttr == event->subscribe.attr_handle) {
 			if (boardCfg()) {
-				adcOnSubscr(event->subscribe.cur_notify, appContext->dleInfo.maxTxOctets,
-				            ble_att_mtu(event->subscribe.conn_handle));
+				adcOnSubscr(event->subscribe.cur_notify, appContext);
 			} else {
 				ESP_LOGW(TAG, "ADC not operational");
 			}
@@ -236,15 +237,16 @@ static int gapEventHandler(ble_gap_event *event, void *arg) {
 	} break;
 
 	case BLE_GAP_EVENT_DATA_LEN_CHG: {
-		DleConnInfo &l = appContext->dleInfo;
 		const auto &r = event->data_len_chg;
-		l.maxTxOctets = r.max_tx_octets;
-		l.maxRxOctets = r.max_rx_octets;
-		l.maxTxTime = r.max_tx_time;
-		l.maxRxTime = r.max_rx_time;
-		l.negotiated = true;
-		ESP_LOGI(TAG, "Data_len oct Tx,Rx (%u,%u) time Tx,Rx (%u,%u) handle %u", l.maxTxOctets,
-		         l.maxRxOctets, l.maxTxTime, l.maxRxTime, r.conn_handle);
+		appContext->dleInfo = {
+		    .maxTxOctets = r.max_tx_octets,
+		    .maxRxOctets = r.max_rx_octets,
+		    .maxTxTime = r.max_tx_time,
+		    .maxRxTime = r.max_rx_time,
+		    .negotiated = true,
+		};
+		ESP_LOGI(TAG, "Data_len oct Tx,Rx (%u,%u) time Tx,Rx (%u,%u) handle %u", r.max_tx_octets,
+		         r.max_rx_octets, r.max_tx_time, r.max_rx_time, r.conn_handle);
 	} break;
 
 	default:
@@ -264,10 +266,11 @@ static void IRAM_ATTR taskBlePublishAdcBuffer(void *) {
 		    xStreamBufferReceive(adcStreamBufferHandle, &packet, sizeof(packet), portMAX_DELAY);
 		if (bytesRead == sizeof(packet)) [[likely]] {
 			packet.header.sample_sequence_number = htole16(count);
-			count += adcFeedSamplesPerChunk;
+			count += bleGlobal.adcFeedSamplesPerChunk;
 
 			os_mbuf *om = ble_hs_mbuf_from_flat(
-			    &packet, sizeof(packet.header) + adcFeedSamplesPerChunk * sizeof(*packet.adc));
+			    &packet,
+			    sizeof(packet.header) + bleGlobal.adcFeedSamplesPerChunk * sizeof(*packet.adc));
 			if (om) [[likely]] {
 				ble_gatts_notify_custom(bleGlobal.connHandle, bleGlobal.adcStreamChrAttr, om);
 			}
