@@ -22,8 +22,6 @@ constexpr bool checkAdcDataChecksum = false;
 #endif
 
 struct ADS131M0xIsrData {
-	uint8_t *rxRingBuff;
-	lldesc_t *rxDescArray;
 	spi_dev_t *spiHw;
 	int rxChan;
 	size_t headIndex;
@@ -34,6 +32,12 @@ struct ADS131M0xIsrData {
 
 class ADS131M0x {
   public:
+	ADS131M0x() = default;
+	ADS131M0x(const ADS131M0x &) = delete;
+	ADS131M0x &operator=(const ADS131M0x &) = delete;
+	ADS131M0x(ADS131M0x &&) = delete;
+	ADS131M0x &operator=(ADS131M0x &&) = delete;
+
 	static constexpr size_t NUM_CHANNELS = 4;
 	static_assert((NUM_CHANNELS <= 8) && (0 == NUM_CHANNELS % 2));
 	static constexpr size_t DATA_WORD_LENGTH = 3; // in bytes
@@ -96,9 +100,6 @@ class ADS131M0x {
 	gpio_num_t csPin;
 	gpio_num_t drdyPin;
 	gpio_num_t resetPin;
-
-	RawOutput *txSmallBuff;
-	RawOutput *rxSmallBuff;
 
 	ADS131M0xIsrData isrData;
 };

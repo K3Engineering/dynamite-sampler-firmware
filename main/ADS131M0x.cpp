@@ -3,7 +3,7 @@
 
 #include <driver/gpio.h>
 #include <driver/spi_master.h>
-#include <esp_heap_caps.h>
+#include <esp_attr.h>
 #include <esp_log.h>
 
 #include <hal/gdma_ll.h>
@@ -16,8 +16,29 @@
 
 constexpr char TAG[] = "ADS131";
 
+namespace {
+
 constexpr size_t RING_BUFF_SZ = 64;
 static_assert((RING_BUFF_SZ & (RING_BUFF_SZ - 1)) == 0, "RING_BUFF_SZ must be a power of 2");
+
+constexpr size_t DMA_FRAME_SIZE = ADS131M0x::dmaPaddedSize(ADS131M0x::SPI_FRAME_SIZE);
+static_assert(DMA_FRAME_SIZE % 4 == 0);
+
+struct alignas(4) DmaFrame {
+	ADS131M0x::RawOutput frame;
+	uint8_t padding[DMA_FRAME_SIZE - sizeof(frame)];
+};
+static_assert(sizeof(DmaFrame) == DMA_FRAME_SIZE);
+static_assert(alignof(DmaFrame) >= 4);
+static_assert(alignof(lldesc_t) >= 4);
+static_assert(sizeof(lldesc_t) % alignof(lldesc_t) == 0);
+
+DMA_ATTR DmaFrame rxRing[RING_BUFF_SZ];
+DMA_ATTR lldesc_t rxDescArray[RING_BUFF_SZ];
+DMA_ATTR DmaFrame txSmallBuff;
+DMA_ATTR DmaFrame rxSmallBuff;
+
+} // namespace
 
 static inline void delayMSec(uint32_t ms) { vTaskDelay(ms / portTICK_PERIOD_MS); }
 static void interruptHandlerAdcDrdy(void *param);
@@ -46,28 +67,28 @@ static constexpr uint16_t crc16ccitt(const void *data, size_t count) {
 }
 
 bool ADS131M0x::writeRegister(uint8_t address, uint16_t value) {
-	txSmallBuff->status = htobe16(ADS131M0xReg::CMD_WRITE_REG | (address << 7));
-	*(uint16_t *)txSmallBuff->data = htobe16(value);
+	txSmallBuff.frame.status = htobe16(ADS131M0xReg::CMD_WRITE_REG | (address << 7));
+	*(uint16_t *)txSmallBuff.frame.data = htobe16(value);
 	spi_device_polling_transmit(spiHandle, &transDescr);
 
-	txSmallBuff->status = 0;
+	txSmallBuff.frame.status = 0;
 	spi_device_polling_transmit(spiHandle, &transDescr);
 	if constexpr (checkAdcRwChecksum) {
-		assert(isCrcOk(rxSmallBuff));
+		assert(isCrcOk(&rxSmallBuff.frame));
 	}
-	return rxSmallBuff->status == htobe16(ADS131M0xReg::RSP_WRITE_REG | (address << 7));
+	return rxSmallBuff.frame.status == htobe16(ADS131M0xReg::RSP_WRITE_REG | (address << 7));
 }
 
 uint16_t ADS131M0x::readRegister(uint8_t address) {
-	txSmallBuff->status = htobe16(ADS131M0xReg::CMD_READ_REG | (address << 7));
+	txSmallBuff.frame.status = htobe16(ADS131M0xReg::CMD_READ_REG | (address << 7));
 	spi_device_polling_transmit(spiHandle, &transDescr);
 
-	txSmallBuff->status = 0;
+	txSmallBuff.frame.status = 0;
 	spi_device_polling_transmit(spiHandle, &transDescr);
 	if constexpr (checkAdcRwChecksum) {
-		assert(isCrcOk(rxSmallBuff));
+		assert(isCrcOk(&rxSmallBuff.frame));
 	}
-	return be16toh(rxSmallBuff->status);
+	return be16toh(rxSmallBuff.frame.status);
 }
 
 /**
@@ -160,9 +181,9 @@ bool ADS131M0x::resetAdcHw() {
 	delayMSec(10);
 
 	// check reset was ok, and ADS131 has exactly NUM_CHANNELS
-	rxSmallBuff->status = txSmallBuff->status = 0;
+	rxSmallBuff.frame.status = txSmallBuff.frame.status = 0;
 	spi_device_polling_transmit(spiHandle, &transDescr);
-	return rxSmallBuff->status == htobe16(RSP_RESET_OK);
+	return rxSmallBuff.frame.status == htobe16(RSP_RESET_OK);
 }
 
 void ADS131M0x::init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset,
@@ -181,22 +202,15 @@ void ADS131M0x::init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset,
 	gpio_set_direction(resetPin, GPIO_MODE_OUTPUT);
 	gpio_set_direction(csPin, GPIO_MODE_OUTPUT);
 
-	txSmallBuff = (RawOutput *)heap_caps_malloc(dmaPaddedSize(SPI_FRAME_SIZE), MALLOC_CAP_DMA);
-	rxSmallBuff = (RawOutput *)heap_caps_malloc(dmaPaddedSize(SPI_FRAME_SIZE), MALLOC_CAP_DMA);
-
-	isrData.rxRingBuff =
-	    (uint8_t *)heap_caps_malloc(dmaPaddedSize(SPI_FRAME_SIZE) * RING_BUFF_SZ, MALLOC_CAP_DMA);
-	isrData.rxDescArray =
-	    (lldesc_t *)heap_caps_malloc(sizeof(lldesc_t) * RING_BUFF_SZ, MALLOC_CAP_DMA);
 	for (size_t i = 0; i < RING_BUFF_SZ; i++) {
-		isrData.rxDescArray[i] = {
-		    .size = dmaPaddedSize(SPI_FRAME_SIZE), // Buffer capacity
-		    .length = 0,                           // to be updated by the hw
+		rxDescArray[i] = {
+		    .size = DMA_FRAME_SIZE, // Buffer capacity
+		    .length = 0,            // to be updated by the hw
 		    .offset = 0,
 		    .sosf = 0,  // Start of sub-frame (unused)
 		    .eof = 1,   // End of Frame: DMA stops after this descriptor
 		    .owner = 1, // 1 = Hardware (DMA) owns this
-		    .buf = isrData.rxRingBuff + dmaPaddedSize(SPI_FRAME_SIZE) * i, // Point to data buff
+		    .buf = reinterpret_cast<uint8_t *>(&rxRing[i].frame),
 		    .empty = 0,
 		};
 	}
@@ -208,8 +222,8 @@ void ADS131M0x::init(gpio_num_t pinCs, gpio_num_t pinDrdy, gpio_num_t pinReset,
 	    .rxlength = SPI_FRAME_SIZE * 8,
 	    .override_freq_hz = 0,
 	    .user = nullptr,
-	    .tx_buffer = txSmallBuff,
-	    .rx_buffer = rxSmallBuff,
+	    .tx_buffer = &txSmallBuff.frame,
+	    .rx_buffer = &rxSmallBuff.frame,
 	};
 
 	assert(!spiHandle);
@@ -288,20 +302,12 @@ void ADS131M0x::deinit() {
 	spi_bus_free(spiHostDevice);
 	spiHostDevice = SPI_HOST_MAX;
 
-	heap_caps_free(txSmallBuff);
-	txSmallBuff = nullptr;
-	heap_caps_free(rxSmallBuff);
-	rxSmallBuff = nullptr;
-	heap_caps_free(isrData.rxRingBuff);
-	isrData.rxRingBuff = nullptr;
-	heap_caps_free(isrData.rxDescArray);
-	isrData.rxDescArray = nullptr;
 	// Do not call gpio_uninstall_isr_service(),
 	// The service may be used by other tasks.
 }
 
 const ADS131M0x::RawOutput *IRAM_ATTR ADS131M0x::rawReadAdc(size_t idx) const {
-	return (RawOutput *)(isrData.rxRingBuff + (idx % RING_BUFF_SZ) * dmaPaddedSize(SPI_FRAME_SIZE));
+	return &rxRing[idx % RING_BUFF_SZ].frame;
 }
 
 static void IRAM_ATTR interruptHandlerAdcDrdy(void *param) {
@@ -309,7 +315,7 @@ static void IRAM_ATTR interruptHandlerAdcDrdy(void *param) {
 
 	const size_t idx = ctrl->headIndex++;
 
-	gdma_ll_rx_set_desc_addr(&GDMA, ctrl->rxChan, (uint32_t)&ctrl->rxDescArray[idx % RING_BUFF_SZ]);
+	gdma_ll_rx_set_desc_addr(&GDMA, ctrl->rxChan, (uint32_t)&rxDescArray[idx % RING_BUFF_SZ]);
 	gdma_ll_rx_start(&GDMA, ctrl->rxChan);
 
 	spi_ll_apply_config(ctrl->spiHw);
@@ -380,7 +386,7 @@ bool ADS131M0x::startAcquisition(size_t interval) {
 	}
 	isrData.wakeInterval = interval;
 
-	txSmallBuff->status = 0;
+	txSmallBuff.frame.status = 0;
 	if (ESP_OK != spi_device_polling_start(spiHandle, &transDescr, portMAX_DELAY)) {
 		return false;
 	}
