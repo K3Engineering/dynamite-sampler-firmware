@@ -177,17 +177,18 @@ static int gapEventHandler(ble_gap_event *event, void *arg) {
 	BleGlobal *appContext = (BleGlobal *)arg;
 	switch (event->type) {
 	case BLE_GAP_EVENT_CONNECT: {
-		ESP_LOGI(TAG, "connHandle=%u", event->connect.conn_handle);
+		ESP_LOGI(TAG, "Connect handle %u", event->connect.conn_handle);
 		int status = event->connect.status;
 		if (BLE_ERR_UNSUPP_REM_FEATURE == status) {
-			ESP_LOGW(TAG, "Connect: BLE_ERR_UNSUPP_REM_FEATURE");
+			ESP_LOGW(TAG, "connect ERR_UNSUPP_REM_FEATURE");
 			ble_gap_set_data_len(event->connect.conn_handle, DLE_MAX_SIZE, (DLE_MAX_SIZE + 14) * 8);
 			status = BLE_ERR_SUCCESS;
 		}
 		if (BLE_ERR_SUCCESS == status) {
 			appContext->connHandle = event->connect.conn_handle;
-			// If this peer supports DLE, DATA_LEN_CHG will overwrite these shortly.
-			appContext->dleInfo = dleInfoDefaults;
+			// Do not initialize DLE info here: DATA_LEN_CHG can arrive before CONNECT and
+			// DLE defaults would overwrite the already-negotiated values.
+
 			// Best case, devices can handle 7.5ms interval connection (android phone)
 			// older iOS might be 15ms, Windows PC might be 30ms. Connection interval is set in
 			// increments of 1.25ms.
@@ -208,16 +209,16 @@ static int gapEventHandler(ble_gap_event *event, void *arg) {
 	} break;
 
 	case BLE_GAP_EVENT_DISCONNECT: {
+		ESP_LOGI(TAG, "Disco handle %u", event->disconnect.conn.conn_handle);
 		adcOnDisconnect();
 		otaOnDisconnect();
 		appContext->connHandle = BLE_HS_CONN_HANDLE_NONE;
 		appContext->dleInfo = dleInfoDefaults; // no stale values while disconnected
 		startAdvertising(appContext);
-		ESP_LOGD(TAG, "Server onDisco, core %u", xPortGetCoreID());
 	} break;
 
 	case BLE_GAP_EVENT_SUBSCRIBE: {
-		ESP_LOGI(TAG, "subscr(%u) handles: %u %u", event->subscribe.cur_notify,
+		ESP_LOGI(TAG, "Subscr(%u) handle %u attr %u", event->subscribe.cur_notify,
 		         event->subscribe.conn_handle, event->subscribe.attr_handle);
 		if (appContext->adcStreamChrAttr == event->subscribe.attr_handle) {
 			if (boardCfg()) {
@@ -231,7 +232,7 @@ static int gapEventHandler(ble_gap_event *event, void *arg) {
 	} break;
 
 	case BLE_GAP_EVENT_MTU: {
-		ESP_LOGI(TAG, "mtu=%u", event->mtu.value);
+		ESP_LOGI(TAG, "MTU %u handle %u ", event->mtu.value, event->mtu.conn_handle);
 	} break;
 
 	case BLE_GAP_EVENT_DATA_LEN_CHG: {
@@ -242,8 +243,8 @@ static int gapEventHandler(ble_gap_event *event, void *arg) {
 		l.maxTxTime = r.max_tx_time;
 		l.maxRxTime = r.max_rx_time;
 		l.negotiated = true;
-		ESP_LOGD(TAG, "Gap event data len chg octets Tx,Rx (%u, %u), time Tx,Rx (%u,%u)",
-		         l.maxTxOctets, l.maxRxOctets, l.maxTxTime, l.maxRxTime);
+		ESP_LOGI(TAG, "Data_len oct Tx,Rx (%u,%u) time Tx,Rx (%u,%u) handle %u", l.maxTxOctets,
+		         l.maxRxOctets, l.maxTxTime, l.maxRxTime, r.conn_handle);
 	} break;
 
 	default:
