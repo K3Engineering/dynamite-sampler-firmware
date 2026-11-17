@@ -40,7 +40,7 @@ struct DleConnInfo {
 	bool negotiated;
 };
 
-struct BleGlobal {
+struct AdcBleStreamState {
 	uint16_t connHandle;
 	DleConnInfo dleInfo;
 	uint16_t adcStreamChrAttr;
@@ -55,7 +55,7 @@ constexpr DleConnInfo dleInfoDefaults{
     .negotiated = false,
 };
 
-static BleGlobal bleGlobal{
+static AdcBleStreamState streamState{
     .connHandle = BLE_HS_CONN_HANDLE_NONE,
     .dleInfo = dleInfoDefaults,
     .adcStreamChrAttr = 0,
@@ -102,7 +102,7 @@ constexpr size_t maxAdcSamplesPerChunk(size_t dle, size_t mtu) {
 	return (sz - sizeof(AdcFeedNetworkPacket::header)) / sizeof(*AdcFeedNetworkPacket::adc);
 }
 
-static void adcOnSubscr(bool subscr, BleGlobal *context) {
+static void adcOnSubscr(bool subscr, AdcBleStreamState *context) {
 	if (subscr) {
 		if (deviceLock == DeviceLock::Open) {
 			deviceLock = DeviceLock::Streaming;
@@ -174,7 +174,7 @@ static void startAdvertising(void *context) {
 }
 
 static int gapEventHandler(ble_gap_event *event, void *arg) {
-	BleGlobal *appContext = (BleGlobal *)arg;
+	AdcBleStreamState *appContext = (AdcBleStreamState *)arg;
 	switch (event->type) {
 	case BLE_GAP_EVENT_CONNECT: {
 		ESP_LOGI(TAG, "Connect handle %u", event->connect.conn_handle);
@@ -264,13 +264,13 @@ static void IRAM_ATTR taskBlePublishAdcBuffer(void *) {
 		    xStreamBufferReceive(adcStreamBufferHandle, &packet, sizeof(packet), portMAX_DELAY);
 		if (bytesRead == sizeof(packet)) [[likely]] {
 			packet.header.sample_sequence_number = htole16(count);
-			count += bleGlobal.adcFeedSamplesPerChunk;
+			count += streamState.adcFeedSamplesPerChunk;
 
 			os_mbuf *om = ble_hs_mbuf_from_flat(
 			    &packet,
-			    sizeof(packet.header) + bleGlobal.adcFeedSamplesPerChunk * sizeof(*packet.adc));
+			    sizeof(packet.header) + streamState.adcFeedSamplesPerChunk * sizeof(*packet.adc));
 			if (om) [[likely]] {
-				ble_gatts_notify_custom(bleGlobal.connHandle, bleGlobal.adcStreamChrAttr, om);
+				ble_gatts_notify_custom(streamState.connHandle, streamState.adcStreamChrAttr, om);
 			}
 		}
 	}
@@ -279,7 +279,7 @@ static void IRAM_ATTR taskBlePublishAdcBuffer(void *) {
 
 static void onSync() {
 	// ble_hs_util_ensure_addr(0); // Optional in case we strictly using a public address
-	startAdvertising(&bleGlobal);
+	startAdvertising(&streamState);
 }
 
 static void bleHostTask(void *) {
@@ -425,7 +425,7 @@ constexpr ble_gatt_chr_def deviceInfoChr[] = {
 
 constexpr ble_gatt_chr_def adcNotifyChr[] = {
     defineCharacteristic(ADC_FEED_CHR_UUID128, dummyAccessCb, nullptr, BLE_GATT_CHR_F_NOTIFY,
-                         &bleGlobal.adcStreamChrAttr),
+                         &streamState.adcStreamChrAttr),
     defineCharacteristic(USER_KVS_CHR_UUID128, onKvs, nullptr,
                          BLE_GATT_CHR_F_NOTIFY | BLE_GATT_CHR_F_WRITE, nullptr),
     defineCharacteristic(ADC_CONF_CHR_UUID128, onAdcConfig, nullptr, BLE_GATT_CHR_F_READ, nullptr),
