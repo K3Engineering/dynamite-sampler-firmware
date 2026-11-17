@@ -244,7 +244,7 @@ constexpr ble_gatt_chr_def otaGattChr[] = {
                          BLE_GATT_CHR_F_NOTIFY | BLE_GATT_CHR_F_WRITE,
                          &otaControlData.otaControlChrAttr),
     defineCharacteristic(OTA_DATA_CHR_UUID128, onOtaDataWrite, &otaControlData,
-                         BLE_GATT_CHR_F_WRITE, nullptr),
+                         BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_NO_RSP, nullptr),
     {},
 };
 
