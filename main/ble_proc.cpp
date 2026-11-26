@@ -327,8 +327,8 @@ static int onSwRev(uint16_t connHandle, uint16_t attrHandle, ble_gatt_access_ctx
 	           : 0;
 }
 
-static int onTxPowerRead(uint16_t connHandle, uint16_t attrHandle,
-                         struct ble_gatt_access_ctxt *ctxt, void *arg) {
+static int onTxPowerRead(uint16_t connHandle, uint16_t attrHandle, ble_gatt_access_ctxt *ctxt,
+                         void *arg) {
 	esp_power_level_t level = esp_ble_tx_power_get(ESP_BLE_PWR_TYPE_DEFAULT);
 	if (!isValidLvl(level)) {
 		return BLE_ATT_ERR_UNLIKELY;
@@ -339,8 +339,8 @@ static int onTxPowerRead(uint16_t connHandle, uint16_t attrHandle,
 	return os_mbuf_append(ctxt->om, &rPwr, sizeof(rPwr)) ? BLE_ATT_ERR_INSUFFICIENT_RES : 0;
 }
 
-static int onTxPowerWrite(uint16_t connHandle, uint16_t attrHandle,
-                          struct ble_gatt_access_ctxt *ctxt, void *arg) {
+static int onTxPowerWrite(uint16_t connHandle, uint16_t attrHandle, ble_gatt_access_ctxt *ctxt,
+                          void *arg) {
 	TxPowerNetworkData rPwr;
 	if (OS_MBUF_PKTLEN(ctxt->om) != sizeof(rPwr)) {
 		return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
@@ -353,8 +353,7 @@ static int onTxPowerWrite(uint16_t connHandle, uint16_t attrHandle,
 	return (ESP_OK == err) ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
 }
 
-static int onKvs(uint16_t connHandle, uint16_t attrHandle, struct ble_gatt_access_ctxt *ctxt,
-                 void *arg) {
+static int onKvs(uint16_t connHandle, uint16_t attrHandle, ble_gatt_access_ctxt *ctxt, void *arg) {
 	char buff[USER_KVS_NETWORK_FRAME_LENGTH + 1]{0};
 	size_t rqLength = OS_MBUF_PKTLEN(ctxt->om);
 	if (rqLength + 2 >= sizeof(buff)) {
@@ -390,14 +389,14 @@ static int onKvs(uint16_t connHandle, uint16_t attrHandle, struct ble_gatt_acces
 	return 0;
 }
 
-static int onAdcConfig(uint16_t connHandle, uint16_t attrHandle, struct ble_gatt_access_ctxt *ctxt,
+static int onAdcConfig(uint16_t connHandle, uint16_t attrHandle, ble_gatt_access_ctxt *ctxt,
                        void *arg) {
 	AdcConfigNetworkData data{getAdcConfig()};
 	return os_mbuf_append(ctxt->om, &data, sizeof(data)) ? BLE_ATT_ERR_INSUFFICIENT_RES : 0;
 }
 
-static int dummyAccessCb(uint16_t connHandle, uint16_t attrHandle,
-                         struct ble_gatt_access_ctxt *ctxt, void *arg) {
+static int dummyAccessCb(uint16_t connHandle, uint16_t attrHandle, ble_gatt_access_ctxt *ctxt,
+                         void *arg) {
 	return BLE_ATT_ERR_UNLIKELY;
 }
 

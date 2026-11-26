@@ -29,14 +29,14 @@ static_assert(!factoryResetCfg.connected(), "Menu config != board config");
 
 bool startupDiagnosticIsOk = true;
 
-typedef struct {
+struct OtaControlData {
 	const esp_partition_t *updatePartition;
 	esp_ota_handle_t updateHandle;
 	uint16_t otaControlChrAttr;
 
 	size_t numBytesReceived;
 	size_t fileSize;
-} OtaControlData;
+};
 
 static OtaControlData otaControlData{
     .updatePartition = nullptr,
@@ -147,8 +147,8 @@ void otaOnSubscribe(uint16_t attrHandle) {
 	control->numBytesReceived = 0;
 }
 
-static int onOtaControlWrite(uint16_t connHandle, uint16_t attrHandle,
-                             struct ble_gatt_access_ctxt *ctxt, void *arg) {
+static int onOtaControlWrite(uint16_t connHandle, uint16_t attrHandle, ble_gatt_access_ctxt *ctxt,
+                             void *arg) {
 	OtaControlData *control = (OtaControlData *)arg;
 	const size_t omLen = OS_MBUF_PKTLEN(ctxt->om);
 	OtaRequestType code = 0;
@@ -188,8 +188,8 @@ static int onOtaControlWrite(uint16_t connHandle, uint16_t attrHandle,
 	return 0;
 }
 
-static int onOtaDataWrite(uint16_t connHandle, uint16_t attrHandle,
-                          struct ble_gatt_access_ctxt *ctxt, void *arg) {
+static int onOtaDataWrite(uint16_t connHandle, uint16_t attrHandle, ble_gatt_access_ctxt *ctxt,
+                          void *arg) {
 	if (deviceLock != DeviceLock::Ota) {
 		return 0;
 	}
